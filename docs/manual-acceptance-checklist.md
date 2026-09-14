@@ -2,11 +2,19 @@
 
 此清单只在可以完全关闭 ChatGPT Desktop 的合适时间执行。当前开发会话中不要执行真实模式切换。
 
+## 0.9.0 公测封存状态（2026-09-14）
+
+- 已由用户真机确认：OpenAI → Local、本地模型 GPU 加载与 token 输出、Codex 原生自动压缩、Local → OpenAI 恢复及持续稳定使用。
+- 已由自动化确认：配置事务、恢复、端口迁移、进程所有权、凭据剥离、模型扫描、Profile、BAT、监控解析、缓存保护和下载状态解析。
+- 模型搜索可返回仓库和 GGUF 元数据；下载仍为实验性，当前网络环境下的失败不阻断核心公测。
+- AMD/Vulkan、无官方账户的全新 ChatGPT Desktop，以及不同 llama.cpp 构建仍属于跨设备复测项。
+- Codex 工具执行质量取决于所选模型、上下文、Chat Template、项目权限与客户端策略，不能仅用文本推理成功推导。
+
 ## 测试前
 
 1. 保存当前工作，完全退出 ChatGPT Desktop，并在任务管理器确认没有 `ChatGPT` 进程。
 2. 不要移动、删除或手工覆盖 `%USERPROFILE%\.codex`；Launcher 只会修改受管理字段并在 `%LOCALAPPDATA%\ChatGPTLocalLauncher` 保存恢复信息和当前 Windows 用户 DPAPI 加密的备份。若出现“保护旧版配置备份”，推荐选择“是”：Launcher 会先加密并回读校验旧明文备份，再删除对应明文；它不会改当前配置或读取 `auth.json`。选择“否”只会保留旧明文并稍后再提示。
-3. 首次测试使用不重要的项目和任务。当前本地模型的文本请求已通过，但 shell/apply_patch 工具可靠性尚未验收。
+3. 首次测试使用不重要的项目和任务。本地文本与上下文压缩链路已通过；shell、apply_patch、浏览器等工具仍应按每个模型单独验收。
 4. 确认 llama.cpp Runtime 与 GGUF 来自可信来源，并记录测试前的显存占用、官方模型、思考强度和权限模式。
 
 ## 模型搜索与原生下载

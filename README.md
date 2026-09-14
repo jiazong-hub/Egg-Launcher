@@ -7,7 +7,25 @@
 
 Windows 10 22H2 / Windows 11 上的开源 ChatGPT Desktop 与 llama.cpp 双环境启动器。
 
-Phase 0 的可验证、可恢复最小集成闭环已经建立，并进入真实客户端验收阶段。单模型 Catalog、llama.cpp Router 生命周期、回环安全代理、真实本地模型推理和字段级配置事务已实现；WPF 界面可验证 Runtime、扫描 GGUF、由用户手动添加独立模型 Profile，并以选择控件编辑基础启动参数。保存 Profile 时会生成可迁移的独立 BAT。真机测试已经确认 Desktop 请求可到达 llama.cpp 并加载 GPU。Launcher 不实现推理、工具协议或上下文摘要；llama.cpp 负责模型推理与硬性窗口，Codex 负责监控 token、触发原生本地 compaction 并重建历史。代码不会读取或替换账户凭据。
+0.9.0 公测版核心功能已经冻结并通过多轮真实客户端测试：OpenAI / Local 切换、本地 GPU 推理、项目与历史共享、官方配置恢复、Codex 原生本地上下文压缩、每模型参数、运行监控、立即加载/释放和受控缓存管理均已工作。模型在线下载仍标记为实验性，不作为核心切换与推理的发布门禁。
+
+Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负责模型加载、推理、KV Cache 与硬性窗口，Codex 负责监控 token、选择安全节点、触发本地 compaction 并重建历史。Launcher 只解决路径、配置、切换、进程协调和安全边界，代码不会读取或替换账户凭据。
+
+## 当前发布状态
+
+- 版本：`0.9.0` 公测版；核心功能冻结，下一阶段以 UI 与交互打磨为主。
+- 当前真机结论：CUDA 环境下 Local 推理和自动压缩已连续通过，切回 OpenAI 后官方账户、模型和权限配置可恢复。
+- 跨设备边界：Runtime 与模型路径可重新扫描；AMD/Vulkan 依赖所选 llama.cpp 构建及驱动，代码路径已覆盖但仍需更多真机验证。
+- 客户端边界：Local 模式复用已安装的 ChatGPT Desktop；如果客户端自身强制要求登录，Launcher 不绕过该要求。
+- 实验边界：公开 GGUF 搜索可用；下载结果受 llama.cpp 构建、网络、代理、TLS 和 Hugging Face 可访问性影响。
+
+使用与发布资料：
+
+- [用户功能说明](docs/user-guide.md)
+- [0.9.0 公测版发布说明](docs/release-notes-0.9.0-beta.md)
+- [真机验收清单](docs/manual-acceptance-checklist.md)
+- [当前安全复核](docs/release-security-review-0.9.0-beta.md)
+- [变更记录](CHANGELOG.md)
 
 ## 产品边界
 
@@ -109,9 +127,12 @@ Phase 0 的可验证、可恢复最小集成闭环已经建立，并进入真实
 - `Launcher.ChatGPT`：ChatGPT Desktop 集成、备份与恢复边界
 - `Launcher.Orchestration`：模式切换事务与后台 Router 监督
 - `Launcher.Tests`：自动化测试
+- `docs/user-guide.md`：页面、按钮、参数、状态与对话框说明
+- `docs/release-notes-0.9.0-beta.md`：当前公测版已验证范围与已知限制
+- `docs/research`：历史探索记录，不作为当前实现规范
 
 ## 安全原则
 
-不读取或复制 `auth.json` 内容；不整目录覆盖 `.codex`；不按进程名批量终止 llama-server；不在代理中实现模型能力或改写对话语义；所有真实 Provider 切换都要求客户端已关闭并由用户明确确认。登录启动只接受不允许普通用户组修改的 Agent 安装位置。启动 llama 子进程前会移除常见云端 API key/token 环境变量；原生 stdout/stderr 日志限制为每文件 32 MiB，但其内容由 llama.cpp 决定，排障后应按需清理。当前开发会话没有执行真实切换。
+不读取或复制 `auth.json` 内容；不整目录覆盖 `.codex`；不按进程名批量终止 llama-server；不在代理中实现模型能力或改写对话语义；所有真实 Provider 切换都要求客户端已关闭并由用户明确确认。登录启动只接受不允许普通用户组修改的 Agent 安装位置。启动 llama 子进程前会移除常见云端 API key/token 环境变量；原生 stdout/stderr 日志限制为每文件 32 MiB，但其内容由 llama.cpp 决定，排障后应按需清理。自动化构建与封存不会修改用户的真实 ChatGPT Provider；真实模式切换由用户按验收清单执行。
 
 当前实现边界见 [架构决策 0002：Launcher 保持为 llama.cpp 的薄管理壳](docs/architecture/0002-thin-launcher-boundary.md)。`docs/research` 中的早期实测记录仅用于追溯，里面已经废弃的兼容代理方案不是当前实现依据，也不会放入发布包。

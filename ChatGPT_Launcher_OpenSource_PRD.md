@@ -6,6 +6,8 @@
 > 硬性首发环境：Windows 10 22H2 x64；同时保持 Windows 11 x64 兼容。  
 > 当前首个验证环境：Windows 10 22H2、AMD Ryzen 7 5800X、64GB RAM、Radeon RX 7900 XT 20GB、llama.cpp + Vulkan。  
 > 当前首个验证模型：Qwen3.8-27B-Opus-Distill-v2 Q4_K_M。  
+
+> **0.9.0 公测版封存说明（2026-09-14）**：本文保留最初需求、阶段设计和早期验证记录，用于追溯产品意图。当前实现边界以 [ADR 0002](docs/architecture/0002-thin-launcher-boundary.md) 为准；实际页面与操作以 [用户功能说明](docs/user-guide.md) 为准；已验证范围和已知限制以 [0.9.0 公测版发布说明](docs/release-notes-0.9.0-beta.md) 为准。文中早期硬件、模型、开发阶段和未来规划不代表 0.9.0 已承诺能力。
 > 注意：本项目必须设计为通用软件，不允许把上述硬件、路径、显卡品牌、模型名称或参数硬编码为唯一适配对象。
 
 ## 0.1 已确认的产品边界（2026-09-10）

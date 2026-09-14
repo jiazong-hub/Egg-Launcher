@@ -311,6 +311,7 @@ try {
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $stagingPackage
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingPackage
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'ChatGPT_Launcher_OpenSource_PRD.md') -Destination $stagingPackage
+    Copy-Item -LiteralPath (Join-Path $repositoryRoot 'CHANGELOG.md') -Destination $stagingPackage
     $packageDocsPath = Join-Path $stagingPackage 'docs'
     $packageArchitecturePath = Join-Path $packageDocsPath 'architecture'
     New-Item -ItemType Directory -Path $packageArchitecturePath -Force | Out-Null
@@ -319,6 +320,15 @@ try {
         -Destination $packageDocsPath
     Copy-Item `
         -LiteralPath (Join-Path $repositoryRoot 'docs\signing-policy.md') `
+        -Destination $packageDocsPath
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\user-guide.md') `
+        -Destination $packageDocsPath
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.0-beta.md') `
+        -Destination $packageDocsPath
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-security-review-0.9.0-beta.md') `
         -Destination $packageDocsPath
     Copy-Item `
         -LiteralPath (Join-Path $repositoryRoot 'docs\architecture\0002-thin-launcher-boundary.md') `
