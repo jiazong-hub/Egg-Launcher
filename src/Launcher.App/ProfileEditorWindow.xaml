@@ -1,0 +1,161 @@
+<Window x:Class="Launcher.App.ProfileEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="编辑本地模型 Profile"
+        Height="720"
+        Width="820"
+        MinHeight="560"
+        MinWidth="760"
+        Background="{StaticResource WindowBackgroundBrush}"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel>
+            <TextBlock FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource PrimaryBrush}"
+                       Text="模型参数" />
+            <TextBlock Margin="0,6,0,0" Foreground="{StaticResource SecondaryBrush}" TextWrapping="Wrap"
+                       Text="参数与默认快照只属于当前模型；保存后也不会立即加载模型。" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" Margin="0,20,0,18" VerticalScrollBarVisibility="Auto">
+            <Border Padding="22" CornerRadius="14" Background="{StaticResource CardBackgroundBrush}">
+                <StackPanel>
+                    <TextBlock FontWeight="SemiBold" Text="显示名称" />
+                    <TextBox x:Name="DisplayNameTextBox" Margin="0,6,0,14" Padding="9,7"
+                             ToolTip="仅影响 Launcher 与 ChatGPT 中显示的模型名称。" />
+
+                    <TextBlock FontWeight="SemiBold" Text="模型 Alias" />
+                    <TextBox x:Name="AliasTextBox" Margin="0,6,0,14" Padding="9,7" IsReadOnly="True"
+                             ToolTip="Local Provider 请求使用的稳定模型标识。创建后不在基础界面修改。" />
+
+                    <TextBlock FontWeight="SemiBold" Text="模型文件" />
+                    <TextBox x:Name="ModelPathTextBox" Margin="0,6,0,18" Padding="9,7" IsReadOnly="True"
+                             ToolTip="相对于 llama.cpp Runtime Root 的 GGUF 路径。" />
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="18" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Text="Context" />
+                            <ComboBox x:Name="ContextSizeComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectionChanged="ContextSizeComboBox_SelectionChanged"
+                                      ToolTip="请按模型声明的上下文能力和本机可用显存/内存选择；Launcher 不提供硬件无关的推荐值。" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="压缩安全余量" />
+                            <ComboBox x:Name="CompactionSafetyReserveComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="Codex 在下一次推理前至少保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1">
+                            <TextBlock FontWeight="SemiBold" Text="GPU Offload" />
+                            <ComboBox x:Name="GpuLayersComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="Auto 交给 llama.cpp 决定；All 尝试把全部可卸载层放入 GPU；0 使用 CPU。" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="Flash Attention" />
+                            <ComboBox x:Name="FlashAttentionComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="支持时可减少注意力计算的显存带宽开销；不确定时使用 Auto。" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="2">
+                            <TextBlock FontWeight="SemiBold" Text="K Cache" />
+                            <ComboBox x:Name="CacheTypeKComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="量化 KV Cache 可节省显存，但可能影响质量或兼容性；请按模型和硬件自行选择。" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="2" Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="V Cache" />
+                            <ComboBox x:Name="CacheTypeVComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="Flash Attention 对部分 V Cache 类型有要求；请按模型和硬件自行选择。" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="3">
+                            <TextBlock FontWeight="SemiBold" Text="Batch Size" />
+                            <ComboBox x:Name="BatchSizeComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="提示词批处理大小。Default 使用 llama.cpp 默认值。" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="3" Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="Micro Batch" />
+                            <ComboBox x:Name="MicroBatchSizeComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="每次实际计算的微批大小，不应大于 Batch Size。" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="4">
+                            <TextBlock FontWeight="SemiBold" Text="并发槽位" />
+                            <ComboBox x:Name="ParallelComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="并发越高，KV Cache 占用越大；-1 由 llama.cpp 自动决定。" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="4" Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="空闲释放显存" />
+                            <ComboBox x:Name="IdleSleepSecondsComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="使用 llama.cpp 原生空闲休眠：卸载模型和 KV Cache；下一次请求会自动重新加载。" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock x:Name="ContextRiskTextBlock" Margin="0,0,0,10"
+                               Foreground="#B45309" FontWeight="SemiBold" TextWrapping="Wrap"
+                               Visibility="Collapsed"
+                               Text="⚠ 当前 Context 低于 16K，可能无法完整容纳 Codex 的系统指令、项目上下文和工具定义，容易在首次对话或工具执行时出现上下文不足。建议使用 16K 或更高；这只是提醒，不会阻止保存或启动。" />
+
+                    <TextBlock Margin="0,0,0,10" Foreground="{StaticResource SecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Text="压缩安全余量只决定 Codex 何时在安全节点触发原生上下文压缩，不会限制一次完整回答、工具调用或命令执行的 token 数。" />
+
+                    <CheckBox x:Name="JinjaCheckBox" Margin="0,2,0,0" FontWeight="SemiBold"
+                              Content="启用 Jinja chat template"
+                              ToolTip="Codex/Responses 模式通常需要由 llama.cpp 应用模型聊天模板。" />
+
+                    <TextBlock Margin="0,14,0,0" FontWeight="SemiBold" Text="Chat Template 文件（可选）" />
+                    <TextBox x:Name="ChatTemplatePathTextBox" Margin="0,6,0,0" Padding="9,7"
+                             ToolTip="相对于 Runtime Root 的 .jinja 文件。留空时使用 GGUF 内置模板；检测到严格模板不兼容 Codex 时，Launcher 会生成模型专用兼容文件，并由 llama.cpp 的 --chat-template-file 加载。" />
+                </StackPanel>
+            </Border>
+        </ScrollViewer>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Orientation="Horizontal">
+                <Button x:Name="RestoreModelDefaultsButton" Padding="14,9" Content="恢复此模型默认"
+                        ToolTip="载入当前模型已经保存的专用默认参数。尚未保存模型默认时不可用。"
+                        Click="RestoreModelDefaultsButton_Click" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Padding="18,9" Content="取消" IsCancel="True" />
+                <Button Padding="18,9" Content="保存" IsDefault="True"
+                        Click="SaveButton_Click" />
+                <Button Margin="0" Padding="16,9" Content="保存并设为此模型默认"
+                        ToolTip="只更新当前模型的默认参数；其他模型不会继承或改变。"
+                        Click="SaveAsModelDefaultButton_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

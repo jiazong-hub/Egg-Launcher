@@ -1,0 +1,21 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Version>0.9.0</Version>
+    <AssemblyVersion>0.9.0.0</AssemblyVersion>
+    <FileVersion>0.9.0.0</FileVersion>
+    <InformationalVersion>0.9.0</InformationalVersion>
+    <Authors>甲总不是贾总</Authors>
+    <Company>甲总不是贾总</Company>
+    <Product>ChatGPT Local Launcher</Product>
+    <Description>ChatGPT Desktop 与 llama.cpp 双环境管理启动器</Description>
+    <Copyright>Copyright © 2026 甲总不是贾总</Copyright>
+  </PropertyGroup>
+</Project>

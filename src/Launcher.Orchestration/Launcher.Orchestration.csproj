@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Launcher.ChatGPT\Launcher.ChatGPT.csproj" />
+    <ProjectReference Include="..\Launcher.Core\Launcher.Core.csproj" />
+    <ProjectReference Include="..\Launcher.Models\Launcher.Models.csproj" />
+    <ProjectReference Include="..\Launcher.Runtime\Launcher.Runtime.csproj" />
+    <ProjectReference Include="..\Launcher.Scripts\Launcher.Scripts.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

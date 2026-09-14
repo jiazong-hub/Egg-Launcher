@@ -1,0 +1,33 @@
+.tools/
+.vs/
+**/bin/
+**/obj/
+artifacts/
+publish/
+*.user
+*.suo
+*.log
+*.dmp
+*.tmp
+*.bak
+TestResults/
+
+# Release archives and generated verification output are sealed separately.
+*.zip
+*.7z
+*.sha256
+
+# Never commit private signing material.
+*.pfx
+*.p12
+*.pvk
+*.key
+*.snk
+*password*.txt
+*secret*.txt
+
+# Never commit user credentials, live state, or recovery snapshots.
+auth.json
+managed-config-snapshot.json
+recovery.json
+runtime-state.json

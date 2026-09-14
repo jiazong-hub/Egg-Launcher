@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0-windows10.0.19041": {
+      "Tomlyn": {
+        "type": "Transitive",
+        "resolved": "2.10.1",
+        "contentHash": "ykjOY3IpYmC4SpPcAZRTl/w2jTmhPMDydHq8xcV7tTBAQ22nKBsOkPqauIrZlMjHm03cmKfV23UOPscKp+J4Og=="
+      },
+      "ZstdSharp.Port": {
+        "type": "Transitive",
+        "resolved": "0.8.8",
+        "contentHash": "UIDFkA5DC3en3tOJ3Mof11yBx9kUQLsaeo/oFdvN6Bbkr9E9+VCqfIadHci8cu+I51K2Sl7XYWVl2R/mA75NBQ=="
+      },
+      "launcher.chatgpt": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.Core": "[1.0.0, )",
+          "Tomlyn": "[2.10.1, )"
+        }
+      },
+      "launcher.core": {
+        "type": "Project"
+      },
+      "launcher.models": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.Core": "[1.0.0, )"
+        }
+      },
+      "launcher.orchestration": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.ChatGPT": "[1.0.0, )",
+          "Launcher.Core": "[1.0.0, )",
+          "Launcher.Models": "[1.0.0, )",
+          "Launcher.Runtime": "[1.0.0, )",
+          "Launcher.Scripts": "[1.0.0, )"
+        }
+      },
+      "launcher.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.Core": "[1.0.0, )",
+          "ZstdSharp.Port": "[0.8.8, )"
+        }
+      },
+      "launcher.scripts": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.Core": "[1.0.0, )",
+          "Launcher.Models": "[1.0.0, )"
+        }
+      }
+    },
+    "net10.0-windows10.0.19041/win-x64": {}
+  }
+}

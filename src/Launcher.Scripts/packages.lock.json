@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "launcher.core": {
+        "type": "Project"
+      },
+      "launcher.models": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.Core": "[1.0.0, )"
+        }
+      }
+    }
+  }
+}
