@@ -6,6 +6,38 @@ namespace Launcher.Tests;
 public sealed class JsonModelProfileStoreTests
 {
     [Fact]
+    public async Task RecreateMissingProfilesFromBackups_WhenModelExists_UsesCurrentDefaults()
+    {
+        var root = CreateRuntimeRoot();
+        try
+        {
+            var candidate = CreateCandidate(root, "recover-me.gguf");
+            var profile = ModelProfileFactory.CreateDefault(candidate, root) with
+            {
+                ContextSize = 32_768,
+                GpuLayers = "7",
+            };
+            var store = new JsonModelProfileStore();
+            await store.SaveAsync(root, profile);
+            await store.SaveAsync(root, profile);
+            File.Delete(Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profile.Id + ".json"));
+
+            var recreated = await store.RecreateMissingProfilesFromBackupsAsync(root);
+            var loaded = await store.LoadAsync(root);
+
+            Assert.Equal(1, recreated);
+            var actual = Assert.Single(loaded.Profiles);
+            Assert.Equal(profile.Id, actual.Id);
+            Assert.Equal(16_384, actual.ContextSize);
+            Assert.Equal("auto", actual.GpuLayers);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task SaveAndLoad_RoundTripsProfileInRuntimeScriptsDirectory()
     {
         var root = CreateRuntimeRoot();
@@ -19,6 +51,11 @@ public sealed class JsonModelProfileStoreTests
                     CacheTypeK = "q8_0",
                     CacheTypeV = "q8_0",
                     ChatTemplateRelativePath = Path.Combine("scripts", "templates", "coder.jinja"),
+                    MtpEnabled = true,
+                    MtpSource = MtpSourceKind.Embedded,
+                    MtpCapabilityStatus = MtpCapabilityStatus.EmbeddedCandidate,
+                    MtpDraftMaxTokens = 4,
+                    MtpDraftMinimumProbability = 0.2,
                 });
             var store = new JsonModelProfileStore();
 
@@ -40,8 +77,13 @@ public sealed class JsonModelProfileStoreTests
             Assert.Equal(profile.Jinja, loaded.Jinja);
             Assert.Equal(profile.IdleSleepSeconds, loaded.IdleSleepSeconds);
             Assert.Equal(profile.ChatTemplateRelativePath, loaded.ChatTemplateRelativePath);
+            Assert.True(loaded.MtpEnabled);
+            Assert.Equal(MtpSourceKind.Embedded, loaded.MtpSource);
+            Assert.Equal(4, loaded.MtpDraftMaxTokens);
+            Assert.Equal(0.2, loaded.MtpDraftMinimumProbability);
             Assert.Empty(loaded.ExtraArguments);
             Assert.NotNull(loaded.DefaultParameters);
+            Assert.True(loaded.DefaultParameters.MtpEnabled);
             Assert.Equal(32768, loaded.DefaultParameters.ContextSize);
             Assert.Equal(8192, loaded.DefaultParameters.CompactionSafetyReserve);
             Assert.Equal("q8_0", loaded.DefaultParameters.CacheTypeK);
@@ -162,6 +204,8 @@ public sealed class JsonModelProfileStoreTests
             Assert.Equal(ModelProfile.CurrentSchemaVersion, loaded.SchemaVersion);
             Assert.Equal(ModelSourceKind.LocalFile, loaded.SourceKind);
             Assert.Equal(4096, loaded.CompactionSafetyReserve);
+            Assert.Equal(ModelType.Unknown, loaded.ModelType);
+            Assert.Equal(ModelTypeSource.Legacy, loaded.ModelTypeSource);
             Assert.Empty(result.Diagnostics);
         }
         finally
@@ -202,6 +246,78 @@ public sealed class JsonModelProfileStoreTests
             Assert.NotNull(loaded.DefaultParameters);
             Assert.Equal(4096, loaded.DefaultParameters.CompactionSafetyReserve);
             Assert.Empty(result.Diagnostics);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Load_V3Profile_DoesNotRescanAndRequiresManualTypeSelection()
+    {
+        var root = CreateRuntimeRoot();
+        try
+        {
+            var profileDirectory = Path.Combine(root, "scripts", "profiles");
+            Directory.CreateDirectory(profileDirectory);
+            await File.WriteAllTextAsync(
+                Path.Combine(profileDirectory, "legacy-v3.json"),
+                """
+                {
+                  "SchemaVersion": 3,
+                  "Id": "legacy-v3",
+                  "DisplayName": "Legacy V3 MoE Name",
+                  "ModelRelativePath": "models/Legacy-MoE.gguf",
+                  "Alias": "legacy-v3",
+                  "ContextSize": 32768,
+                  "CompactionSafetyReserve": 8192
+                }
+                """);
+
+            var loaded = Assert.Single((await new JsonModelProfileStore().LoadAsync(root)).Profiles);
+
+            Assert.Equal(ModelType.Unknown, loaded.ModelType);
+            Assert.Equal(ModelTypeSource.Legacy, loaded.ModelTypeSource);
+            Assert.Equal(32768, loaded.ContextSize);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Load_V4Profile_PreservesModelTypeAndAddsDisabledMtpDefaults()
+    {
+        var root = CreateRuntimeRoot();
+        try
+        {
+            var profileDirectory = Path.Combine(root, "scripts", "profiles");
+            Directory.CreateDirectory(profileDirectory);
+            await File.WriteAllTextAsync(
+                Path.Combine(profileDirectory, "legacy-v4.json"),
+                """
+                {
+                  "SchemaVersion": 4,
+                  "Id": "legacy-v4",
+                  "DisplayName": "Legacy V4",
+                  "ModelRelativePath": "models/Legacy.gguf",
+                  "Alias": "legacy-v4",
+                  "ModelType": 2,
+                  "ModelTypeSource": 1,
+                  "ContextSize": 32768,
+                  "CompactionSafetyReserve": 4096
+                }
+                """);
+
+            var loaded = Assert.Single((await new JsonModelProfileStore().LoadAsync(root)).Profiles);
+
+            Assert.Equal(ModelProfile.CurrentSchemaVersion, loaded.SchemaVersion);
+            Assert.Equal(ModelType.MoE, loaded.ModelType);
+            Assert.Equal(4096, loaded.CompactionSafetyReserve);
+            Assert.False(loaded.MtpEnabled);
+            Assert.Equal(MtpCapabilityStatus.Unknown, loaded.MtpCapabilityStatus);
         }
         finally
         {
@@ -276,14 +392,14 @@ public sealed class JsonModelProfileStoreTests
     }
 
     [Fact]
-    public void CreateDefault_UsesLlamaNativeValuesWithoutClaimingHardwareRecommendation()
+    public void CreateDefault_UsesSafeInitialValuesWithoutClaimingHardwareRecommendation()
     {
         var root = CreateRuntimeRoot();
         try
         {
             var profile = ModelProfileFactory.CreateDefault(CreateCandidate(root, "Coder.gguf"), root);
 
-            Assert.Equal(0, profile.ContextSize);
+            Assert.Equal(16384, profile.ContextSize);
             Assert.Equal(8192, profile.CompactionSafetyReserve);
             Assert.Equal("auto", profile.GpuLayers);
             Assert.Null(profile.Device);
@@ -348,6 +464,36 @@ public sealed class JsonModelProfileStoreTests
         Assert.Equal("q8_0", restoredSecond.CacheTypeK);
         Assert.Equal("second", restoredSecond.Id);
         Assert.Null(restoredSecond.DefaultParameters);
+    }
+
+    [Fact]
+    public async Task MissingMarker_PersistsUntilExplicitlyCleared_AndMetadataDeletionRemovesIt()
+    {
+        var root = CreateRuntimeRoot();
+        try
+        {
+            var store = new JsonModelProfileStore();
+            var profile = ModelProfileFactory.CreateDefault(CreateCandidate(root, "missing.gguf"), root);
+            await store.SaveAsync(root, profile);
+
+            store.MarkMissing(root, profile.Id);
+            Assert.True(store.IsMarkedMissing(root, profile.Id));
+
+            store.ClearMissingMarker(root, profile.Id);
+            Assert.False(store.IsMarkedMissing(root, profile.Id));
+
+            store.MarkMissing(root, profile.Id);
+            store.DeleteOwnedProfileFiles(root, profile.Id);
+            Assert.False(store.IsMarkedMissing(root, profile.Id));
+            Assert.False(File.Exists(Path.Combine(
+                JsonModelProfileStore.GetProfilesDirectory(root),
+                profile.Id + ".json")));
+            Assert.True(File.Exists(Path.Combine(root, profile.ModelRelativePath)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     private static string CreateRuntimeRoot()

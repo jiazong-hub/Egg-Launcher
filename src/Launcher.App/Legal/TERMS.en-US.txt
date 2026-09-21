@@ -1,0 +1,58 @@
+Egg Launcher Terms of Use and Disclaimer
+
+Document version: 0.9.1
+Effective date: September 19, 2026
+
+1. Nature of the Software
+
+Egg Launcher is an independently developed open-source Windows tool that coordinates ChatGPT Desktop online environments with llama.cpp local inference environments. It does not provide artificial intelligence models or online AI services, perform model inference itself, or bypass third-party accounts, licenses, access restrictions, or security mechanisms.
+
+2. Open-Source License
+
+Egg Launcher is released under the MIT License. Anyone may use, copy, modify, merge, publish, distribute, sublicense, or sell copies of the software subject to the MIT License. Redistributions of the software or substantial portions of it must retain the original copyright and license notices.
+
+If this notice differs from the LICENSE file distributed with the software, the LICENSE file controls.
+
+3. Free Use
+
+Egg Launcher itself is provided free of charge and has no software license fee. Model downloads, network traffic, electricity, hardware, third-party software, or third-party online services may incur costs and remain subject to their respective terms. Free availability is not a promise of permanent maintenance, continuous updates, or compatibility with every third-party version.
+
+4. Third-Party Software, Services, and Models
+
+The Egg Launcher package does not bundle llama.cpp, CUDA Runtime, GGUF models, or other user-selected inference runtimes. Open-source dependencies that form part of Egg Launcher are listed in the distributed THIRD-PARTY-NOTICES.md. Third-party software, models, datasets, and services acquired, installed, or selected by the user remain subject to their respective owners' licenses, privacy policies, and terms of use.
+
+The Egg Launcher MIT License grants no rights to third-party software, models, datasets, content, or trademarks. Users are responsible for confirming the permitted scope of use, including personal use, commercial use, redistribution, and generated-content use.
+
+5. User Responsibilities
+
+Users must operate the software lawfully, in compliance with applicable requirements, and with appropriate authorization. Users are responsible for:
+
+- Selecting and configuring the llama.cpp Runtime, local models, and related parameters;
+- Verifying license conditions for models, templates, data, and generated content;
+- Keeping necessary backups before changing configuration, deleting caches, or adjusting models;
+- Evaluating the impact of local inference on RAM, VRAM, storage, electricity use, and system stability; and
+- Determining whether AI-generated content is accurate, safe, and suitable for its intended use.
+
+6. Configuration and Runtime Boundaries
+
+Egg Launcher modifies only its managed ChatGPT/Codex Provider configuration fields after the user explicitly selects the corresponding action, and it retains local backups for recovery. It does not read or copy account credentials and does not replace the entire configuration directory through bulk overwrite.
+
+Public-beta and experimental features may be affected by changes to Windows, ChatGPT Desktop, llama.cpp, graphics drivers, networks, and third-party interfaces. Users should operate them in a recoverable environment and verify the results of important actions.
+
+7. No Warranty and Limitation of Liability
+
+The software is provided “as is,” without warranty of any kind, express or implied, including warranties of merchantability, fitness for a particular purpose, and noninfringement. To the maximum extent permitted by applicable law, the copyright holders or contributors are not liable for claims, damages, or other liability arising from or related to the software or its use.
+
+The complete and binding warranty disclaimer and limitation of liability are stated in the MIT License distributed with the software.
+
+8. Independence and Trademarks
+
+Egg Launcher is an independently developed open-source project and is not affiliated with, partnered with, sponsored by, or endorsed by OpenAI, ChatGPT, llama.cpp, ggml, Hugging Face, or their respective owners. Related names, trademarks, software, and copyrights belong to their respective owners.
+
+9. Document Updates
+
+This notice may be updated as features, distribution methods, or applicable requirements change. New versions identify their document version and effective date. Material changes involving accounts, cloud services, paid features, or outbound data transmission will be explained before the related feature is enabled and will include appropriate choices.
+
+10. Feedback
+
+The public source-code repository and issue-reporting address will be added when the project is ready. The license and privacy files distributed with the current version are available from the About Egg Launcher window.

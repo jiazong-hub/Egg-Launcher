@@ -94,6 +94,46 @@ public sealed class RouterModelDownloadClientTests
     }
 
     [Fact]
+    public async Task DownloadAsync_AcceptsNativeCacheRegistrationWithoutPath()
+    {
+        var getModelsCount = 0;
+        using var httpClient = new HttpClient(new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/models/sse")
+            {
+                return EventResponse("""
+                    data: {"model":"org/model:Q4_K_M","event":"download_finished"}
+
+                    """);
+            }
+
+            if (request.Method == HttpMethod.Post && request.RequestUri!.AbsolutePath == "/models")
+            {
+                return JsonResponse("{\"success\":true}");
+            }
+
+            if (request.Method == HttpMethod.Get && request.RequestUri!.AbsolutePath == "/models")
+            {
+                getModelsCount++;
+                return getModelsCount == 1
+                    ? JsonResponse("{\"data\":[]}")
+                    : JsonResponse("{\"data\":[{\"id\":\"org/model:Q4_K_M\",\"source\":\"cache\"}]}");
+            }
+
+            throw new InvalidOperationException($"Unexpected request: {request.Method} {request.RequestUri}");
+        }));
+        var client = new RouterModelDownloadClient(httpClient);
+
+        var result = await client.DownloadAsync(
+            new Uri("http://127.0.0.1:8080/"),
+            "org/model:Q4_K_M");
+
+        Assert.False(result.WasAlreadyCached);
+        Assert.True(result.RegistrationObserved);
+        Assert.Null(result.ModelPath);
+    }
+
+    [Fact]
     public async Task DownloadAsync_WhenNativeEventStreamStalls_FailsInsteadOfWaitingForever()
     {
         using var httpClient = new HttpClient(new StubHandler(request =>

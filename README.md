@@ -1,20 +1,22 @@
-# ChatGPT Local Launcher
+# Egg Launcher
 
-版本：0.9.0（公测版）  
+版本：0.9.1（公测版）
 开发者：甲总不是贾总
 
 签名方式与当前作者证书指纹见 [Code signing policy](docs/signing-policy.md)。
 
 Windows 10 22H2 / Windows 11 上的开源 ChatGPT Desktop 与 llama.cpp 双环境启动器。
 
-0.9.0 公测版核心功能已经冻结并通过多轮真实客户端测试：OpenAI / Local 切换、本地 GPU 推理、项目与历史共享、官方配置恢复、Codex 原生本地上下文压缩、每模型参数、运行监控、立即加载/释放和受控缓存管理均已工作。模型在线下载仍标记为实验性，不作为核心切换与推理的发布门禁。
+0.9.1 在 0.9.0 稳定核心之上完成界面、模型能力管理和并发可靠性升级：OpenAI / Local 切换、本地 GPU 推理、项目与历史共享、官方配置恢复、Codex 原生本地上下文压缩、Dense/MoE 独立参数、MTP、视觉模块、模型下载与自动登记、运行监控及托盘控制均已接入。模型在线下载仍标记为实验性，不作为核心切换与推理的发布门禁。
 
 Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负责模型加载、推理、KV Cache 与硬性窗口，Codex 负责监控 token、选择安全节点、触发本地 compaction 并重建历史。Launcher 只解决路径、配置、切换、进程协调和安全边界，代码不会读取或替换账户凭据。
 
 ## 当前发布状态
 
-- 版本：`0.9.0` 公测版；核心功能冻结，下一阶段以 UI 与交互打磨为主。
+- 版本：`0.9.1` 公测版；核心切换逻辑保持稳定，本版完成全局 UI、双语、能力关联和主要高概率竞态修复。
 - 当前真机结论：CUDA 环境下 Local 推理和自动压缩已连续通过，切回 OpenAI 后官方账户、模型和权限配置可恢复。
+- 模型管理：新模型只在首次添加时识别 Dense/MoE；类型未知时要求用户指定。MTP、视觉和思考档位均按模型保存能力状态，未验证或不支持的能力不能误开启。
+- 界面状态：支持深色/浅色主题、中英文及跟随系统语言、托盘菜单与按需状态提示；主窗口后台或最小化时停止无意义的高频状态探测。
 - 跨设备边界：Runtime 与模型路径可重新扫描；AMD/Vulkan 依赖所选 llama.cpp 构建及驱动，代码路径已覆盖但仍需更多真机验证。
 - 客户端边界：Local 模式复用已安装的 ChatGPT Desktop；如果客户端自身强制要求登录，Launcher 不绕过该要求。
 - 实验边界：公开 GGUF 搜索可用；下载结果受 llama.cpp 构建、网络、代理、TLS 和 Hugging Face 可访问性影响。
@@ -22,9 +24,9 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 使用与发布资料：
 
 - [用户功能说明](docs/user-guide.md)
-- [0.9.0 公测版发布说明](docs/release-notes-0.9.0-beta.md)
+- [0.9.1 公测版发布说明](docs/release-notes-0.9.1.md)
 - [真机验收清单](docs/manual-acceptance-checklist.md)
-- [当前安全复核](docs/release-security-review-0.9.0-beta.md)
+- [当前安全复核](docs/release-security-review-0.9.1.md)
 - [变更记录](CHANGELOG.md)
 
 ## 产品边界
@@ -39,7 +41,7 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - Context、压缩安全余量、KV Cache、GPU Offload 等参数最终由用户按模型决定；可选的“由 llama 自动适配”直接调用同一 Runtime 的 `llama-fit-params`，先展示结果、经确认后才应用，且不会覆盖其他模型。Launcher 不提供硬件无关的内置推荐。Local 客户端、后台 Agent 或当前 Runtime 的 llama 服务运行期间，所有模型的参数编辑与自动适配均被禁止；服务完全停止后允许编辑。若修改当前 Local 模型，保存事务会立即同步 Profile、BAT、Catalog、Codex 配置和 Router preset；非当前模型在下次切换时同步。
 - Context 低于 16K 时，参数窗口、模型列表和 Local 启动确认会显示非阻断风险提醒；用户仍可保存、生成 BAT 和启动。Launcher 不自动提高 Context，也不改变用户设置的压缩安全余量。
 - 参数文件只校验缓存类型等原生参数的安全格式，不用固定枚举阻止未来 llama.cpp 新增的合法值；最终支持性与错误信息仍由所选 Runtime 决定。
-- 首页每秒刷新 ChatGPT 进程状态；本地模型页的嵌套列表在到达自身滚动边界后会继续滚动整个页面。
+- 主窗口位于前台时以低频率刷新运行状态；最小化、隐藏到托盘或退出过程中停止周期探测。进入模型管理、打开托盘菜单或请求托盘状态时按需刷新一次，避免重复昂贵检测。本地模型页的嵌套列表在到达自身滚动边界后会继续滚动整个页面。
 - 权限模式由 ChatGPT Desktop 输入框下方的原生控件管理。Launcher 不替用户选择或覆盖 Local 权限，但切回 OpenAI 时仍恢复进入 Local 前保存的官方权限字段。
 - 配置切换使用模式级与配置级跨进程锁、提交前文件版本校验和可恢复事务；原官方配置按当前 Windows 用户使用 DPAPI 加密备份。启动时会收敛中断事务，受管字段冲突或 `config.toml` 在读取后被外部改写时停止而不是覆盖。
 - Launcher 与 Agent 均为单实例；Agent 通过 Windows Job Object 约束自有 llama-server 进程树，异常退出时不会遗留模型进程长期占用显存。
@@ -51,6 +53,8 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - 当前 Local 模型可通过 llama 原生 `/models/load` 立即加载、通过 `/models/unload` 立即释放。监控不会为了取数唤醒已经休眠的模型。
 - 缓存删除由临时 llama Router 的 `DELETE /models` 完成。只有新版下载记录与 llama 原生 `can_remove` 同时确认的缓存才显示；Local 模式、正在运行的 Runtime、手动 GGUF 和来源不明的旧 Profile 都禁止删除。
 - 已管理模型可查看来源、路径、大小、分片、参数、专用默认值以及 llama 在已运行时返回的架构/参数量/训练上下文/模态信息。性能基准测试不在当前版本范围内。
+- 已管理模型按 `Dense`、`MoE` 或未指定类型区分；变更类型会重建该模型参数配置，防止不同结构复用不兼容参数。模型文件被用户从磁盘移走后条目会变灰；“从列表中移除”只删除 Launcher Profile 与受管生成物，不删除模型数据。
+- MTP 与视觉模块支持内置能力标识和外置 GGUF/mmproj 的显式关联、隔离验证、取消关联与失效检测；能力标识不等同于已启用。所有未调整参数继续使用 llama.cpp 默认值。
 - 若 GGUF 内置 Qwen Chat Template 含有已知的严格系统消息守卫，Launcher 从该模型自身的元数据生成独立兼容模板，并只通过 llama.cpp 原生 `--chat-template-file` 加载。请求正文仍透明转发，Launcher 不承担对话协议转换。
 - 关闭 Launcher 时，OpenAI 模式会正常结束无用 Agent；Local 模式可选择只关闭窗口并保留服务，或停止回环代理、llama.cpp Router 与 Agent 后完整退出。完整退出不切换持久化模式。
 - App 会校验后台 Agent 的协议版本、PID、程序路径、进程启动时间和状态心跳，拒绝把新版界面和旧版 Agent 混用；无法确认归属的同名进程绝不会被强制结束。
@@ -128,7 +132,7 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - `Launcher.Orchestration`：模式切换事务与后台 Router 监督
 - `Launcher.Tests`：自动化测试
 - `docs/user-guide.md`：页面、按钮、参数、状态与对话框说明
-- `docs/release-notes-0.9.0-beta.md`：当前公测版已验证范围与已知限制
+- `docs/release-notes-0.9.1.md`：当前公测版已验证范围、升级内容与已知限制
 - `docs/research`：历史探索记录，不作为当前实现规范
 
 ## 安全原则

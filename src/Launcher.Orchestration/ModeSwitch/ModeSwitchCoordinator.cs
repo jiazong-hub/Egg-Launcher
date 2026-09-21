@@ -337,6 +337,16 @@ public sealed class ModeSwitchCoordinator(
                 Slug = profile.Alias,
                 DisplayName = profile.DisplayName,
                 ContextWindow = profile.ContextSize,
+                SupportsImageInput = profile.VisionEnabled
+                                     && profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified,
+                SupportedReasoningLevels = profile.ExposeReasoningEffortInChatGpt
+                    && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
+                        ? profile.SupportedReasoningLevels
+                        : Array.Empty<string>(),
+                DefaultReasoningLevel = profile.ExposeReasoningEffortInChatGpt
+                    && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
+                        ? profile.DefaultReasoningLevel
+                        : null,
             },
             cancellationToken).ConfigureAwait(false);
         await WriteTextAtomicallyAsync(

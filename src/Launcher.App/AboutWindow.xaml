@@ -1,0 +1,237 @@
+<Window x:Class="Launcher.App.AboutWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Launcher.App"
+        Title="{DynamicResource AboutTitle}"
+        Icon="Assets/egg-mark.png"
+        Width="820"
+        Height="700"
+        MinWidth="620"
+        MinHeight="500"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+    <Window.Resources>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Width" Value="116" />
+            <Setter Property="Height" Value="42" />
+            <Setter Property="Padding" Value="16,8" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <Border x:Name="HeaderChrome"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Border>
+                            <Border x:Name="SelectionIndicator"
+                                    Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Opacity="0" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="HeaderChrome" Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="HeaderChrome" Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="HeaderChrome" Property="Background" Value="Transparent" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard><Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="SelectionIndicator" Storyboard.TargetProperty="Opacity" To="1" Duration="{local:MotionDuration Milliseconds=160}" />
+                                    </Storyboard></BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard><Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="SelectionIndicator" Storyboard.TargetProperty="Opacity" To="0" Duration="{local:MotionDuration Milliseconds=100}" />
+                                    </Storyboard></BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Border Width="78" Height="78" Padding="10" CornerRadius="18"
+                    Background="{DynamicResource CardSurfaceBrush}"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+                <Image Source="Assets/egg-mark-display.png" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality" />
+            </Border>
+            <StackPanel Grid.Column="1" Margin="20,0,0,0" VerticalAlignment="Center">
+                <TextBlock FontSize="28" FontWeight="SemiBold" Text="Egg Launcher" />
+                <TextBlock x:Name="VersionText" Margin="0,5,0,0" FontSize="14"
+                           Foreground="{DynamicResource SecondaryBrush}" />
+                <TextBlock x:Name="CopyrightText" Margin="0,3,0,0" FontSize="13"
+                           Foreground="{DynamicResource MutedBrush}" />
+            </StackPanel>
+        </Grid>
+
+        <TabControl x:Name="AboutTabs" Grid.Row="1" Margin="0,24,0,20"
+                    Background="Transparent" BorderThickness="0"
+                    SelectionChanged="AboutTabs_SelectionChanged">
+            <TabItem Header="{DynamicResource AboutProductTab}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource IndependentOpenLocal}" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource AboutProductBody}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource ReleaseBoundary}" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource ReleaseBoundaryBody}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock FontWeight="SemiBold" Text="{DynamicResource Developer}" />
+                                <TextBlock Grid.Column="1" Margin="24,0,0,0" Text="甲总不是贾总" />
+                                <TextBlock Grid.Row="1" Margin="0,10,0,0" FontWeight="SemiBold" Text="{DynamicResource SoftwareLicense}" />
+                                <TextBlock Grid.Row="1" Grid.Column="1" Margin="24,10,0,0" Text="MIT License" />
+                                <TextBlock Grid.Row="2" Margin="0,10,0,0" FontWeight="SemiBold" Text="{DynamicResource DataHandling}" />
+                                <TextBlock Grid.Row="2" Grid.Column="1" Margin="24,10,0,0" Text="{DynamicResource DataHandlingValue}" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource UsePrivacyTab}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource FreeAndUse}" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource FreeAndUseBody}" />
+                                <Button Margin="0,16,0,0" HorizontalAlignment="Left" Padding="16,9"
+                                        Content="{DynamicResource ViewTerms}" Click="OpenTermsButton_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource PrivacySummary}" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource PrivacySummaryBody}" />
+                                <Button Margin="0,16,0,0" HorizontalAlignment="Left" Padding="16,9"
+                                        Content="{DynamicResource ViewPrivacy}" Click="OpenPrivacyButton_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource LocalDataDirectory}" />
+                                <TextBlock Margin="0,10,0,0" FontFamily="Consolas" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="%LOCALAPPDATA%\ChatGPTLocalLauncher" />
+                                <TextBlock Margin="0,8,0,0" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource MutedBrush}"
+                                           Text="{DynamicResource LocalDataBody}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource OpenSourceTab}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0"
+                              VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <Border Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="Egg Launcher · MIT License" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource EggMitBody}" />
+                                <Button Margin="0,16,0,0" HorizontalAlignment="Left" Padding="16,9"
+                                        Content="{DynamicResource ViewMitLicense}" Click="OpenLicenseButton_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource ThirdPartyNotices}" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource ThirdPartyBody}" />
+                                <Button Margin="0,16,0,0" HorizontalAlignment="Left" Padding="16,9"
+                                        Content="{DynamicResource ViewThirdParty}" Click="OpenThirdPartyButton_Click" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource IndependenceTrademark}" />
+                                <TextBlock Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="23"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           Text="{DynamicResource IndependenceTrademarkBody}" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <WrapPanel Grid.Row="2" HorizontalAlignment="Right">
+            <Button Padding="16,9" Content="{DynamicResource CopyVersionInfo}" Click="CopyVersionButton_Click" />
+            <Button Margin="0" Padding="20,9" Content="{DynamicResource Close}" IsDefault="True" IsCancel="True" />
+        </WrapPanel>
+    </Grid>
+</Window>

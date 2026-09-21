@@ -1,6 +1,6 @@
 # ChatGPT Desktop Local 真机测试与修正记录
 
-> 历史记录：本文保留首次测试事实。后续加入的请求改写和本地 compaction 方案已于 2026-09-11 废弃并从程序删除；当前实现只保留透明安全转发，见 [架构决策 0002](../architecture/0002-thin-launcher-boundary.md)。
+> 历史记录：本文保留首次测试事实。后续加入的请求改写和本地 compaction 方案已于 2026-09-11 废弃并从程序删除；当前实现只保留透明安全转发，见 [架构决策 0002](../architecture/0002-thin-launcher-boundary.md)。v0.9.1 的现状、测试门禁与限制见[当前发布说明](../release-notes-0.9.1.md)。
 
 日期：2026-09-10—2026-09-11
 

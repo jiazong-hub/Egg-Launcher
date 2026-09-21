@@ -4,19 +4,34 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Launcher.ChatGPT.Processes;
 
-public sealed class ChatGptClientDetector(
-    ChatGptClientInstallationLocator? installationLocator = null) : IChatGptClientDetector
+public sealed class ChatGptClientDetector : IChatGptClientDetector
 {
     private const uint ProcessQueryLimitedInformation = 0x1000;
     private const int ErrorInsufficientBuffer = 122;
-    private readonly ChatGptClientInstallationLocator _installationLocator =
-        installationLocator ?? new ChatGptClientInstallationLocator();
+    private static readonly TimeSpan DefaultInstallationCacheDuration = TimeSpan.FromMinutes(1);
+    private readonly ChatGptClientInstallationLocator _installationLocator;
+    private readonly TimeSpan _installationCacheDuration;
+    private readonly object _installationCacheGate = new();
+    private IReadOnlyList<ChatGptClientInstallation> _cachedInstallations = [];
+    private DateTimeOffset _installationCacheExpiresAtUtc = DateTimeOffset.MinValue;
+
+    public ChatGptClientDetector(
+        ChatGptClientInstallationLocator? installationLocator = null,
+        TimeSpan? installationCacheDuration = null)
+    {
+        _installationLocator = installationLocator ?? new ChatGptClientInstallationLocator();
+        _installationCacheDuration = installationCacheDuration ?? DefaultInstallationCacheDuration;
+        if (_installationCacheDuration <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(installationCacheDuration),
+                "安装信息缓存时间必须大于零。");
+        }
+    }
 
     public bool IsRunning()
     {
-        var installations = OperatingSystem.IsWindows()
-            ? _installationLocator.LocateAll()
-            : [];
+        var installations = GetInstallations();
         var processNames = installations
             .Select(installation => Path.GetFileNameWithoutExtension(installation.ExecutablePath))
             .Append("ChatGPT")
@@ -83,6 +98,36 @@ public sealed class ChatGptClientDetector(
         }
 
         return false;
+    }
+
+    public void InvalidateInstallationCache()
+    {
+        lock (_installationCacheGate)
+        {
+            _cachedInstallations = [];
+            _installationCacheExpiresAtUtc = DateTimeOffset.MinValue;
+        }
+    }
+
+    private IReadOnlyList<ChatGptClientInstallation> GetInstallations()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return [];
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        lock (_installationCacheGate)
+        {
+            if (now < _installationCacheExpiresAtUtc)
+            {
+                return _cachedInstallations;
+            }
+
+            _cachedInstallations = _installationLocator.LocateAll();
+            _installationCacheExpiresAtUtc = now + _installationCacheDuration;
+            return _cachedInstallations;
+        }
     }
 
     private static bool IsTrustedAppUserModelId(string appUserModelId) =>

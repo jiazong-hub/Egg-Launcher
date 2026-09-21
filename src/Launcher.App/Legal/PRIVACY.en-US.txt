@@ -1,0 +1,77 @@
+Egg Launcher Privacy Notice
+
+Document version: 0.9.1
+Effective date: September 19, 2026
+
+1. Scope
+
+This notice applies to the Egg Launcher desktop application itself. ChatGPT Desktop, OpenAI services, llama.cpp, Hugging Face, GitHub, local models, and other third-party software or services have their own privacy policies and data-processing rules and are outside Egg Launcher's control.
+
+2. No Developer Server or Outbound Telemetry
+
+The current version has no Egg Launcher account system or developer server. It contains no advertising, outbound usage analytics, behavior tracking, or crash reporting, and it does not automatically send local diagnostics or performance samples to the developer or third parties.
+
+Egg Launcher does not sell user data or process data for advertising or profiling.
+
+3. Data Processed Locally
+
+To perform user-requested functions, Egg Launcher processes or stores the following information on the local device:
+
+- Application settings, theme, startup option, language, and selected mode;
+- llama.cpp Runtime path, model paths, model profiles, and inference parameters;
+- Mode-switch state, managed configuration snapshots, and recovery records;
+- Runtime status, process information, and local CPU, RAM, GPU, and VRAM performance data;
+- llama runtime metrics read through the local loopback interface, such as generation speed and context use;
+- Local diagnostic logs produced by the Agent, proxy, and llama.cpp; and
+- Local backups used to restore official configuration.
+
+Egg Launcher does not read or copy account authentication credentials. Protected official-configuration backups use Windows DPAPI encryption and can be decrypted only by the current Windows user.
+
+Local performance data and llama runtime metrics are used only for the current interface and are not automatically sent to the developer or third parties as telemetry.
+
+4. Network Access
+
+Egg Launcher has no developer-operated network service. Network access occurs only for the relevant feature or user action:
+
+- When the user searches for or downloads public GGUF models, the application or selected llama.cpp Runtime accesses Hugging Face;
+- When the user opens the llama.cpp download page or a future project link, the default browser accesses the corresponding website;
+- OpenAI-mode service communication is handled by ChatGPT Desktop and its services, not as Egg Launcher telemetry or data collection; and
+- Local mode communicates with the local Agent, proxy, and llama.cpp through loopback addresses.
+
+The current version has no automatic update check. If a future release adds update checks or other network features, this notice will be updated before activation and the feature will be clearly identified in the interface.
+
+5. Logs and Sensitive Information
+
+Egg Launcher's structured proxy logs do not record prompt text, response text, authentication headers, cookies, or complete account metadata. The contents of native llama.cpp logs depend on the Runtime selected by the user and may include model names, file paths, parameters, hardware information, and runtime errors.
+
+Before publicly sharing logs, screenshots, or configuration files, users should review and remove personal paths, account information, private model details, and any other information they do not want to disclose.
+
+6. Storage Location and Retention
+
+Egg Launcher's primary application data is stored for the current Windows user in:
+
+%LOCALAPPDATA%\ChatGPTLocalLauncher
+
+Model files, profiles, scripts, templates, and Router presets may be stored in the user-selected llama.cpp Runtime directory. The application does not automatically upload these local files to the developer.
+
+Local data is generally retained until the user deletes it, uninstalls it, or uses a related cleanup function. Removing the application files does not automatically remove user data, the Runtime, or models; users should clean them separately as needed.
+
+7. System Permissions and Startup
+
+The application registers startup for the current Windows user only after the user explicitly enables it. Disabling the option removes the managed startup registration. Administrator privileges are not required for normal configuration and use.
+
+8. User Choices
+
+Users can avoid external network requests from model search and download by not using those features. Users can also disable startup, remove local logs, or stop Local background services. The user controls the choice between Local and OpenAI modes.
+
+9. Children's Privacy
+
+Egg Launcher does not offer accounts or online services directed to children and does not actively collect age information. Users of third-party models or services must follow the relevant age requirements and parental-consent rules.
+
+10. Updates to This Notice
+
+This notice may be updated as features and data-processing practices change. New versions identify their document version and effective date. If a future release adds outbound telemetry, a developer server, accounts, cloud synchronization, or other material data processing, a clear explanation and appropriate choice will be provided before activation.
+
+11. Contact and Feedback
+
+The public source-code repository and issue-reporting address will be added when the project is ready. The privacy notice distributed with the current version is available from the About Egg Launcher window.

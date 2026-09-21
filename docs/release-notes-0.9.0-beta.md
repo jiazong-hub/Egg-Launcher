@@ -1,4 +1,6 @@
-# ChatGPT Local Launcher 0.9.0 公测版发布说明
+# Egg Launcher 0.9.0 公测版发布说明
+
+> 历史发布记录：当前版本为 0.9.1，最新说明见 [Egg Launcher 0.9.1 公测版发布说明](release-notes-0.9.1.md)。本文保留 0.9.0 当时的范围与结论，不作为当前界面和能力说明。
 
 发布日期：2026-09-14  
 开发者：甲总不是贾总  
@@ -51,4 +53,3 @@
 - 发布包随附 `SHA256SUMS.txt`，外部另提供 ZIP 的 `.sha256` 文件。
 - Launcher 自有 EXE/DLL 使用项目自签名 Authenticode 证书签署。
 - 证书指纹见 [签名策略](signing-policy.md)；自签名不代表第三方公共信任。
-

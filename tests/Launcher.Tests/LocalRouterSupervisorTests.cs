@@ -14,6 +14,40 @@ namespace Launcher.Tests;
 public sealed class LocalRouterSupervisorTests
 {
     [Fact]
+    public async Task Reconcile_LocalModeWithoutModel_RemainsStoppedInsteadOfThrowing()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var runtimeRoot = Path.Combine(root, "llama.cpp");
+            Directory.CreateDirectory(runtimeRoot);
+            await using var supervisor = new LocalRouterSupervisor(
+                new MutableSettingsStore(new LauncherSettings
+                {
+                    SelectedMode = ProviderMode.Local,
+                    SelectedModelId = null,
+                    PendingSelectionInitialized = true,
+                    LlamaRoot = runtimeRoot,
+                }),
+                new FakeProcessManager(),
+                new FakeSafetyProxy(),
+                new FakeRouterControlClient(),
+                paths);
+
+            var result = await supervisor.ReconcileAsync();
+
+            Assert.Equal(ProviderMode.Local, result.SelectedMode);
+            Assert.Equal(LocalRouterReconcileAction.None, result.Action);
+            Assert.Null(result.RouterProcessId);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Reconcile_WhenRuntimeStateCannotBeWritten_LogsAndContinuesSupervision()
     {
         var root = CreateTemporaryDirectory();

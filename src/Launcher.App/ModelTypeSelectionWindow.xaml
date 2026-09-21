@@ -1,0 +1,31 @@
+<Window x:Class="Launcher.App.ModelTypeSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource ModelTypeTitle}" Icon="Assets/egg-mark.png"
+        Width="460" Height="300" MinWidth="420" MinHeight="280"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" ResizeMode="NoResize">
+    <Grid Margin="28">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock FontSize="23" FontWeight="SemiBold" Text="{DynamicResource SpecifyModelType}" />
+            <TextBlock x:Name="ModelNameText" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Margin="0,22,0,0">
+            <RadioButton x:Name="DenseRadioButton" Margin="0,0,0,14" FontSize="16" Content="{DynamicResource DenseModelOption}"
+                         ToolTip="{DynamicResource DenseModelToolTip}" />
+            <RadioButton x:Name="MoeRadioButton" FontSize="16" Content="{DynamicResource MoeModelOption}"
+                         ToolTip="{DynamicResource MoeModelToolTip}" />
+            <TextBlock Margin="0,20,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap"
+                       Text="{DynamicResource ModelTypeResetWarning}" />
+        </StackPanel>
+        <WrapPanel Grid.Row="2" HorizontalAlignment="Right">
+            <Button Padding="18,9" Content="{DynamicResource Cancel}" IsCancel="True" />
+            <Button Margin="0" Padding="18,9" Content="{DynamicResource Confirm}" IsDefault="True" Click="ConfirmButton_Click" />
+        </WrapPanel>
+    </Grid>
+</Window>

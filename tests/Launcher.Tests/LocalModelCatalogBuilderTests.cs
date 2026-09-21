@@ -58,6 +58,52 @@ public sealed class LocalModelCatalogBuilderTests
     }
 
     [Fact]
+    public void BuildJson_WithVerifiedReasoningLevels_AdvertisesOnlyThoseLevels()
+    {
+        var json = LocalModelCatalogBuilder.BuildJson(CreateOptions() with
+        {
+            SupportedReasoningLevels = ["low", "medium", "high"],
+            DefaultReasoningLevel = "medium",
+        });
+        using var document = JsonDocument.Parse(json);
+        var model = document.RootElement.GetProperty("models")[0];
+
+        Assert.Equal(
+            ["low", "medium", "high"],
+            model.GetProperty("supported_reasoning_levels")
+                .EnumerateArray()
+                .Select(value => value.GetProperty("effort").GetString()!)
+                .ToArray());
+        Assert.Equal("medium", model.GetProperty("default_reasoning_level").GetString());
+    }
+
+    [Fact]
+    public void BuildJson_WhenDefaultIsNotSupported_RejectsCatalog()
+    {
+        var options = CreateOptions() with
+        {
+            SupportedReasoningLevels = ["low", "high"],
+            DefaultReasoningLevel = "medium",
+        };
+
+        Assert.Throws<ArgumentException>(() => LocalModelCatalogBuilder.BuildJson(options));
+    }
+
+    [Fact]
+    public void BuildJson_WhenVisionIsVerified_AdvertisesImageInput()
+    {
+        var json = LocalModelCatalogBuilder.BuildJson(CreateOptions() with { SupportsImageInput = true });
+        using var document = JsonDocument.Parse(json);
+        var modalities = document.RootElement.GetProperty("models")[0]
+            .GetProperty("input_modalities")
+            .EnumerateArray()
+            .Select(value => value.GetString()!)
+            .ToArray();
+
+        Assert.Equal(["text", "image"], modalities);
+    }
+
+    [Fact]
     public async Task ValidateSingleModelAsync_RejectsMultipleModels()
     {
         var root = CreateTemporaryDirectory();

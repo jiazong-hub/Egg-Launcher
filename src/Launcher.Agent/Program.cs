@@ -42,6 +42,7 @@ static async Task RunAsync(string[] args)
     }
 
     var awaitInitialLocalSwitch = args.Contains("--await-local-switch", StringComparer.OrdinalIgnoreCase);
+    var expectedInitialModelId = GetOptionValue(args, "--await-model");
     var paths = LauncherDataPaths.ForCurrentUser();
     var agentLog = new JsonLineDiagnosticLog(paths.AgentLogFile);
     using var settingsStore = new JsonSettingsStore(paths.SettingsFile);
@@ -157,20 +158,41 @@ static async Task RunAsync(string[] args)
         controlCancellation.Token);
     string? lastSupervisorMessage = null;
 
-    Console.WriteLine("Agent 正在监督持久化模式。按 Ctrl+C 退出。");
+    Console.WriteLine("Agent 正在监督本次 Local 客户端会话。按 Ctrl+C 退出。");
     try
     {
-        var reconcileResult = await ReconcileSupervisorAsync();
-        if (reconcileResult?.SelectedMode == ProviderMode.OpenAI && awaitInitialLocalSwitch)
+        var initialSwitchReady = true;
+        if (awaitInitialLocalSwitch)
         {
             var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(15);
-            while (reconcileResult?.SelectedMode == ProviderMode.OpenAI
-                && DateTimeOffset.UtcNow < deadline)
+            initialSwitchReady = false;
+            while (DateTimeOffset.UtcNow < deadline && !shutdown.IsCancellationRequested)
             {
+                var settings = await settingsStore.LoadAsync(shutdown.Token);
+                if (settings.SelectedMode == ProviderMode.Local
+                    && (string.IsNullOrWhiteSpace(expectedInitialModelId)
+                        || string.Equals(
+                            settings.SelectedModelId,
+                            expectedInitialModelId,
+                            StringComparison.Ordinal)))
+                {
+                    initialSwitchReady = true;
+                    break;
+                }
+
                 await Task.Delay(TimeSpan.FromMilliseconds(250), shutdown.Token);
-                reconcileResult = await ReconcileSupervisorAsync();
             }
         }
+
+        if (!initialSwitchReady)
+        {
+            await WriteAgentLogAsync("warning", "Local configuration was not committed within the startup window; Agent is exiting without starting llama.");
+            shutdown.Cancel();
+        }
+
+        var reconcileResult = shutdown.IsCancellationRequested
+            ? null
+            : await ReconcileSupervisorAsync();
 
         if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
         {
@@ -178,14 +200,52 @@ static async Task RunAsync(string[] args)
         }
         else
         {
-            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
-            while (await timer.WaitForNextTickAsync(shutdown.Token))
+            var clientStartDeadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(60);
+            var lastReconcileAt = DateTimeOffset.UtcNow;
+            while (!clientDetector.IsRunning()
+                   && DateTimeOffset.UtcNow < clientStartDeadline
+                   && !shutdown.IsCancellationRequested)
             {
+                await Task.Delay(TimeSpan.FromMilliseconds(250), shutdown.Token);
+                if (DateTimeOffset.UtcNow - lastReconcileAt < TimeSpan.FromSeconds(2))
+                {
+                    continue;
+                }
+
                 reconcileResult = await ReconcileSupervisorAsync();
+                lastReconcileAt = DateTimeOffset.UtcNow;
                 if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
                 {
-                    await WriteAgentLogAsync("info", "Local mode ended; resident Agent is exiting.");
                     break;
+                }
+            }
+
+            if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
+            {
+                await WriteAgentLogAsync("info", "Local mode ended before the client started; Agent is exiting.");
+            }
+            else if (!clientDetector.IsRunning())
+            {
+                await WriteAgentLogAsync("warning", "ChatGPT did not start within the Local session window; stopping Local services.");
+            }
+            else
+            {
+                await WriteAgentLogAsync("info", "ChatGPT client detected; Local session supervision is active.");
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+                while (await timer.WaitForNextTickAsync(shutdown.Token))
+                {
+                    if (!clientDetector.IsRunning())
+                    {
+                        await WriteAgentLogAsync("info", "ChatGPT client closed; stopping Local services.");
+                        break;
+                    }
+
+                    reconcileResult = await ReconcileSupervisorAsync();
+                    if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
+                    {
+                        await WriteAgentLogAsync("info", "Local mode ended; Agent is exiting.");
+                        break;
+                    }
                 }
             }
         }

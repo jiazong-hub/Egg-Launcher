@@ -13,6 +13,95 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Copy-DotNetRuntimeNotices {
+    param(
+        [Parameter(Mandatory = $true)] [string]$PackagePath,
+        [Parameter(Mandatory = $true)] [string]$RepositoryRoot
+    )
+
+    $depsPath = Join-Path $PackagePath 'Launcher.App.deps.json'
+    if (-not (Test-Path -LiteralPath $depsPath -PathType Leaf)) {
+        throw "自包含发布缺少依赖清单：$depsPath"
+    }
+
+    $deps = Get-Content -LiteralPath $depsPath -Raw | ConvertFrom-Json -Depth 100
+    $runtimePackPattern = '^runtimepack\.(Microsoft\.(?:NETCore|AspNetCore|WindowsDesktop)\.App\.Runtime\.win-x64)/([^/]+)$'
+    $runtimePacks = @(
+        $deps.libraries.PSObject.Properties.Name |
+            Where-Object { $_ -match $runtimePackPattern } |
+            Sort-Object -Unique
+    )
+    if ($runtimePacks.Count -eq 0) {
+        throw '自包含发布的依赖清单中未发现受支持的 .NET Runtime Pack。'
+    }
+
+    $noticeRequirements = @{
+        'Microsoft.NETCore.App.Runtime.win-x64' = @('LICENSE.TXT', 'THIRD-PARTY-NOTICES.TXT')
+        'Microsoft.AspNetCore.App.Runtime.win-x64' = @('LICENSE.txt', 'THIRD-PARTY-NOTICES.TXT')
+        'Microsoft.WindowsDesktop.App.Runtime.win-x64' = @('LICENSE')
+    }
+    $licensesPath = Join-Path $PackagePath 'licenses\dotnet'
+    New-Item -ItemType Directory -Path $licensesPath -Force | Out-Null
+
+    $manifestLines = @(
+        'Bundled Microsoft .NET runtime components',
+        '',
+        'The following Runtime Packs were resolved from Launcher.App.deps.json.',
+        'The accompanying license and third-party notice files are copied from the exact NuGet packages used for this release.',
+        ''
+    )
+    $resolvedRuntimePacks = @()
+    foreach ($runtimePack in $runtimePacks) {
+        if ($runtimePack -notmatch $runtimePackPattern) {
+            throw "无法解析 Runtime Pack：$runtimePack"
+        }
+
+        $packageId = $Matches[1]
+        $version = $Matches[2]
+        if (-not $noticeRequirements.ContainsKey($packageId)) {
+            throw "缺少 Runtime Pack 许可规则：$packageId"
+        }
+
+        $packageRoot = Join-Path `
+            (Join-Path $RepositoryRoot '.tools\nuget-packages') `
+            (Join-Path $packageId.ToLowerInvariant() $version)
+        if (-not (Test-Path -LiteralPath $packageRoot -PathType Container)) {
+            throw "找不到 Runtime Pack 缓存目录：$packageRoot"
+        }
+
+        $copiedFiles = @()
+        foreach ($noticeName in $noticeRequirements[$packageId]) {
+            $sourcePath = Join-Path $packageRoot $noticeName
+            if (-not (Test-Path -LiteralPath $sourcePath -PathType Leaf)) {
+                throw "Runtime Pack 缺少必须随包分发的许可文件：$sourcePath"
+            }
+
+            $noticeKind = if ($noticeName.StartsWith('LICENSE', [StringComparison]::OrdinalIgnoreCase)) {
+                'LICENSE.txt'
+            }
+            else {
+                'THIRD-PARTY-NOTICES.txt'
+            }
+            $destinationName = "$packageId-$version-$noticeKind"
+            Copy-Item -LiteralPath $sourcePath -Destination (Join-Path $licensesPath $destinationName)
+            $copiedFiles += $destinationName
+        }
+
+        $resolvedRuntimePack = "$packageId/$version"
+        $resolvedRuntimePacks += $resolvedRuntimePack
+        $manifestLines += "- $resolvedRuntimePack"
+        foreach ($copiedFile in $copiedFiles) {
+            $manifestLines += "  - $copiedFile"
+        }
+    }
+
+    [System.IO.File]::WriteAllLines(
+        (Join-Path $licensesPath 'RUNTIME-COMPONENTS.txt'),
+        $manifestLines,
+        [System.Text.UTF8Encoding]::new($false))
+    return $resolvedRuntimePacks
+}
+
 function Invoke-CodeSigning {
     param(
         [Parameter(Mandatory = $true)] [string]$PackagePath,
@@ -307,6 +396,13 @@ try {
         $selfTestProcess.Dispose()
     }
 
+    $bundledDotNetRuntimePacks = @()
+    if ($SelfContained) {
+        $bundledDotNetRuntimePacks = @(
+            Copy-DotNetRuntimeNotices -PackagePath $stagingPackage -RepositoryRoot $repositoryRoot
+        )
+    }
+
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'README.md') -Destination $stagingPackage
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'LICENSE') -Destination $stagingPackage
     Copy-Item -LiteralPath (Join-Path $repositoryRoot 'THIRD-PARTY-NOTICES.md') -Destination $stagingPackage
@@ -325,10 +421,10 @@ try {
         -LiteralPath (Join-Path $repositoryRoot 'docs\user-guide.md') `
         -Destination $packageDocsPath
     Copy-Item `
-        -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.0-beta.md') `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.1.md') `
         -Destination $packageDocsPath
     Copy-Item `
-        -LiteralPath (Join-Path $repositoryRoot 'docs\release-security-review-0.9.0-beta.md') `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-security-review-0.9.1.md') `
         -Destination $packageDocsPath
     Copy-Item `
         -LiteralPath (Join-Path $repositoryRoot 'docs\architecture\0002-thin-launcher-boundary.md') `
@@ -363,6 +459,7 @@ try {
         "SigningCertificateSha256=$signatureCertificateSha256",
         'RuntimeIdentifier=win-x64',
         "SelfContained=$selfContainedValue",
+        "BundledDotNetRuntimePacks=$(if ($bundledDotNetRuntimePacks.Count -gt 0) { $bundledDotNetRuntimePacks -join ',' } else { 'none' })",
         'MinimumWindowsApi=10.0.19041.0',
         'ValidatedWindowsTarget=Windows 10 22H2 x64',
         'LlamaRequirement=health, models, and OpenAI-compatible POST /v1/responses',

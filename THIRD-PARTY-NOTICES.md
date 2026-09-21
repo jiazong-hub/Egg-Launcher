@@ -1,5 +1,16 @@
 # Third-party notices
 
+This notice applies to Egg Launcher 0.9.1. The release adds no bundled model,
+llama.cpp binary, MTP file, vision projector, or Hugging Face repository
+content. Users supply those components separately under their own licenses.
+
+## Microsoft .NET runtime components
+
+Self-contained release packages include the Microsoft .NET, ASP.NET Core, and
+Windows Desktop runtime components needed to run Egg Launcher. Their exact
+package IDs, versions, licenses, and third-party notices are included under
+`licenses/dotnet/` in each self-contained release package.
+
 ## ZstdSharp.Port
 
 Copyright Oleg Stepanischev 2026

@@ -31,11 +31,17 @@ public sealed partial class GgufModelScanner
         foreach (var path in Directory.EnumerateFiles(root, "*.gguf", enumerationOptions))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (IsInsideHuggingFaceCache(root, path))
+            {
+                // Cache snapshots need dedicated link-target and revision validation below.
+                continue;
+            }
+
             var fileName = Path.GetFileName(path);
 
-            if (IsMmproj(fileName))
+            if (GgufAuxiliaryFileClassifier.IsAuxiliaryModel(path))
             {
-                excluded.Add(new GgufExcludedFile(path, "mmproj 不是可独立加载的主模型。"));
+                excluded.Add(new GgufExcludedFile(path, GgufAuxiliaryFileClassifier.Describe(path)));
                 continue;
             }
 
@@ -93,14 +99,26 @@ public sealed partial class GgufModelScanner
                 group.ExpectedCount));
         }
 
+        var cacheScan = new HuggingFaceCacheResolver().Scan(root, cancellationToken);
+        models.AddRange(cacheScan.Models);
+        excluded.AddRange(cacheScan.ExcludedFiles);
+
         return new GgufScanResult(
-            models.OrderBy(model => model.RelativePath, StringComparer.OrdinalIgnoreCase).ToArray(),
+            models
+                .GroupBy(model => Path.GetFullPath(model.PrimaryPath), StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(model => model.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToArray(),
             excluded.OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
-    private static bool IsMmproj(string fileName) =>
-        fileName.StartsWith("mmproj-", StringComparison.OrdinalIgnoreCase)
-        || fileName.Contains(".mmproj.", StringComparison.OrdinalIgnoreCase);
+    private static bool IsInsideHuggingFaceCache(string root, string path)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        var separator = relative.IndexOfAny([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar]);
+        var firstSegment = separator < 0 ? relative : relative[..separator];
+        return firstSegment.StartsWith("models--", StringComparison.OrdinalIgnoreCase);
+    }
 
     [GeneratedRegex("^(?<prefix>.+)-(?<index>\\d{5})-of-(?<count>\\d{5})\\.gguf$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ShardFileRegex();

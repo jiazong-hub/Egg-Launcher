@@ -7,6 +7,9 @@ public partial class LocalServiceCloseDialog : Window
     public LocalServiceCloseDialog()
     {
         InitializeComponent();
+        UiMotion.AttachWindowEntrance(this);
+        SourceInitialized += (_, _) =>
+            AdaptiveWindowSizing.FitDialog(this, 560, 330, 460, 280);
     }
 
     public LocalServiceCloseChoice Choice { get; private set; } = LocalServiceCloseChoice.Cancel;

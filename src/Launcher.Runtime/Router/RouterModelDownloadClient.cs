@@ -39,7 +39,11 @@ public sealed class RouterModelDownloadClient
         var existing = await FindModelAsync(baseUri, modelId, reload: false, cancellationToken).ConfigureAwait(false);
         if (existing is not null)
         {
-            return new RouterModelDownloadResult(modelId, existing, WasAlreadyCached: true);
+            return new RouterModelDownloadResult(
+                modelId,
+                existing.Path,
+                WasAlreadyCached: true,
+                RegistrationObserved: true);
         }
 
         using var streamRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(baseUri, "models/sse"));
@@ -94,9 +98,18 @@ public sealed class RouterModelDownloadClient
 
             activity?.Report(new RouterModelDownloadActivity(
                 RouterModelDownloadPhase.VerifyingCache,
-                "llama.cpp 已结束下载事件，正在核对原生缓存路径。"));
-            var path = await WaitForModelPathAsync(baseUri, modelId, cancellationToken).ConfigureAwait(false);
-            return new RouterModelDownloadResult(modelId, path, WasAlreadyCached: false);
+                "llama.cpp 已结束下载事件，正在核对原生缓存登记与模型文件。"));
+            var registration = await FindModelAsync(
+                    baseUri,
+                    modelId,
+                    reload: true,
+                    cancellationToken)
+                .ConfigureAwait(false);
+            return new RouterModelDownloadResult(
+                modelId,
+                registration?.Path,
+                WasAlreadyCached: false,
+                RegistrationObserved: registration is not null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -113,28 +126,7 @@ public sealed class RouterModelDownloadClient
         }
     }
 
-    private async Task<string> WaitForModelPathAsync(
-        Uri baseUri,
-        string modelId,
-        CancellationToken cancellationToken)
-    {
-        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(15);
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var path = await FindModelAsync(baseUri, modelId, reload: true, cancellationToken).ConfigureAwait(false);
-            if (!string.IsNullOrWhiteSpace(path))
-            {
-                return path;
-            }
-
-            await Task.Delay(250, cancellationToken).ConfigureAwait(false);
-        }
-
-        throw new InvalidOperationException("下载已完成，但 llama.cpp 没有返回缓存模型路径。");
-    }
-
-    private async Task<string?> FindModelAsync(
+    private async Task<RouterModelRegistration?> FindModelAsync(
         Uri baseUri,
         string modelId,
         bool reload,
@@ -165,10 +157,9 @@ public sealed class RouterModelDownloadClient
             }
 
             var path = ReadString(model, "path");
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-            {
-                return Path.GetFullPath(path);
-            }
+            return new RouterModelRegistration(
+                string.IsNullOrWhiteSpace(path) || !File.Exists(path) ? null : Path.GetFullPath(path),
+                ReadString(model, "source"));
         }
 
         return null;
@@ -394,8 +385,11 @@ public sealed class RouterModelDownloadClient
 
 public sealed record RouterModelDownloadResult(
     string ModelId,
-    string ModelPath,
-    bool WasAlreadyCached);
+    string? ModelPath,
+    bool WasAlreadyCached,
+    bool RegistrationObserved = true);
+
+internal sealed record RouterModelRegistration(string? Path, string? Source);
 
 public sealed record RouterFileDownloadProgress(
     string Source,

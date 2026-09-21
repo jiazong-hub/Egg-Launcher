@@ -80,6 +80,45 @@ public sealed class LoopbackSafetyProxyTests
         }
     }
 
+    [Fact]
+    public async Task SafetyProxy_RejectsRemoteImageUrlsWithoutForwardingThem()
+    {
+        var upstreamPort = ReserveAvailableLoopbackPort();
+        var proxyPort = ReserveAvailableLoopbackPort();
+        var forwarded = 0;
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, upstreamPort));
+        await using var upstream = builder.Build();
+        upstream.MapPost("/v1/responses", () =>
+        {
+            Interlocked.Increment(ref forwarded);
+            return Results.Ok();
+        });
+        await upstream.StartAsync();
+        try
+        {
+            await using var proxy = new LoopbackSafetyProxy();
+            await proxy.StartAsync(
+                new Uri($"http://127.0.0.1:{proxyPort}/"),
+                new Uri($"http://127.0.0.1:{upstreamPort}/"));
+            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+            using var response = await client.PostAsync(
+                new Uri($"http://127.0.0.1:{proxyPort}/v1/responses"),
+                new StringContent(
+                    "{\"input\":[{\"role\":\"user\",\"content\":[{\"type\":\"input_image\",\"image_url\":\"https://example.com/a.png\"}]}]}",
+                    Encoding.UTF8,
+                    "application/json"));
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal(0, Volatile.Read(ref forwarded));
+        }
+        finally
+        {
+            await upstream.StopAsync();
+        }
+    }
+
 
     [Theory]
     [InlineData("gzip")]
@@ -210,7 +249,7 @@ public sealed class LoopbackSafetyProxyTests
             await proxy.StartAsync(
                 new Uri($"http://127.0.0.1:{proxyPort}/"),
                 new Uri($"http://127.0.0.1:{upstreamPort}/"));
-            var oversizedBody = new byte[(16 * 1024 * 1024) + 1];
+            var oversizedBody = new byte[(32 * 1024 * 1024) + 1];
             var compressed = await CompressAsync(oversizedBody, "zstd");
             using var request = new HttpRequestMessage(
                 HttpMethod.Post,
@@ -230,7 +269,7 @@ public sealed class LoopbackSafetyProxyTests
             Assert.Contains("local_safety_proxy_error", responseBody, StringComparison.Ordinal);
             var diagnostics = await File.ReadAllTextAsync(diagnosticPath);
             Assert.Contains("\"stage\":\"decode_transport_body\"", diagnostics, StringComparison.Ordinal);
-            Assert.Contains("16 MiB", diagnostics, StringComparison.Ordinal);
+            Assert.Contains("32 MiB", diagnostics, StringComparison.Ordinal);
         }
         finally
         {

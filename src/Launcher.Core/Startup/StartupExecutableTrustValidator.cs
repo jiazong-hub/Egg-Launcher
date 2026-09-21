@@ -12,7 +12,7 @@ public static class StartupExecutableTrustValidator
         var fullPath = Path.GetFullPath(executablePath);
         if (!File.Exists(fullPath))
         {
-            throw new FileNotFoundException("找不到 Launcher.Agent 可执行文件。", fullPath);
+            throw new FileNotFoundException("找不到要注册的启动程序。", fullPath);
         }
 
         if (!OperatingSystem.IsWindows())
@@ -44,7 +44,7 @@ public static class StartupExecutableTrustValidator
         EnsureRulesAreNotBroadlyWritable(fileSecurity, broadSids, dangerousRights);
 
         var directoryPath = Path.GetDirectoryName(fullPath)
-            ?? throw new InvalidOperationException("Launcher.Agent 必须位于一个目录中。");
+            ?? throw new InvalidOperationException("启动程序必须位于一个目录中。");
         var directorySecurity = new DirectoryInfo(directoryPath).GetAccessControl(AccessControlSections.Access);
         var dangerousDirectoryRights = dangerousRights
             | FileSystemRights.CreateFiles
@@ -69,7 +69,7 @@ public static class StartupExecutableTrustValidator
                 && (rule.FileSystemRights & dangerousRights) != 0)
             {
                 throw new InvalidOperationException(
-                    "Launcher.Agent 所在位置允许普通用户修改，拒绝注册登录启动。请将程序放入仅当前用户可写的安装目录。");
+                    "启动程序所在位置允许普通用户修改，拒绝注册登录启动。请将程序放入受保护的安装目录。");
             }
         }
     }

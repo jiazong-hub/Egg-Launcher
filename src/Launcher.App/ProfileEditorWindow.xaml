@@ -1,14 +1,79 @@
 <Window x:Class="Launcher.App.ProfileEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="编辑本地模型 Profile"
+        xmlns:local="clr-namespace:Launcher.App"
+        Title="{DynamicResource ProfileEditorTitle}"
+        Icon="Assets/egg-mark.png"
         Height="720"
         Width="820"
-        MinHeight="560"
-        MinWidth="760"
-        Background="{StaticResource WindowBackgroundBrush}"
+        MinHeight="480"
+        MinWidth="640"
+        Background="{DynamicResource WindowBackgroundBrush}"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
+    <Window.Resources>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="MinWidth" Value="96" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid Background="Transparent" SnapsToDevicePixels="True">
+                            <Border x:Name="HeaderChrome"
+                                    Background="{TemplateBinding Background}"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter ContentSource="Header"
+                                                  RecognizesAccessKey="True"
+                                                  HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Border>
+                            <Border x:Name="SelectionIndicator"
+                                    Height="2"
+                                    VerticalAlignment="Bottom"
+                                    Background="{DynamicResource AccentBrush}"
+                                    Opacity="0" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="HeaderChrome" Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="HeaderChrome" Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="HeaderChrome" Property="Background" Value="Transparent" />
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard><Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="SelectionIndicator" Storyboard.TargetProperty="Opacity" To="1" Duration="{local:MotionDuration Milliseconds=160}" />
+                                    </Storyboard></BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard><Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="SelectionIndicator" Storyboard.TargetProperty="Opacity" To="0" Duration="{local:MotionDuration Milliseconds=100}" />
+                                    </Storyboard></BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid Margin="28">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -17,26 +82,19 @@
         </Grid.RowDefinitions>
 
         <StackPanel>
-            <TextBlock FontSize="24" FontWeight="SemiBold" Foreground="{StaticResource PrimaryBrush}"
-                       Text="模型参数" />
-            <TextBlock Margin="0,6,0,0" Foreground="{StaticResource SecondaryBrush}" TextWrapping="Wrap"
-                       Text="参数与默认快照只属于当前模型；保存后也不会立即加载模型。" />
+            <TextBlock FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}"
+                       Text="{DynamicResource ModelParameters}" />
+            <TextBlock Margin="0,6,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap"
+                       Text="{DynamicResource ModelParametersHint}" />
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Margin="0,20,0,18" VerticalScrollBarVisibility="Auto">
-            <Border Padding="22" CornerRadius="14" Background="{StaticResource CardBackgroundBrush}">
-                <StackPanel>
-                    <TextBlock FontWeight="SemiBold" Text="显示名称" />
-                    <TextBox x:Name="DisplayNameTextBox" Margin="0,6,0,14" Padding="9,7"
-                             ToolTip="仅影响 Launcher 与 ChatGPT 中显示的模型名称。" />
-
-                    <TextBlock FontWeight="SemiBold" Text="模型 Alias" />
-                    <TextBox x:Name="AliasTextBox" Margin="0,6,0,14" Padding="9,7" IsReadOnly="True"
-                             ToolTip="Local Provider 请求使用的稳定模型标识。创建后不在基础界面修改。" />
-
-                    <TextBlock FontWeight="SemiBold" Text="模型文件" />
-                    <TextBox x:Name="ModelPathTextBox" Margin="0,6,0,18" Padding="9,7" IsReadOnly="True"
-                             ToolTip="相对于 llama.cpp Runtime Root 的 GGUF 路径。" />
+        <TabControl x:Name="ProfileEditorTabs" Grid.Row="1" Margin="0,20,0,18"
+                    Background="Transparent" BorderThickness="0"
+                    SelectionChanged="ProfileEditorTabs_SelectionChanged">
+            <TabItem Header="{DynamicResource BasicParameters}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                        <StackPanel>
 
                     <Grid>
                         <Grid.ColumnDefinitions>
@@ -56,106 +114,299 @@
                             <ComboBox x:Name="ContextSizeComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
                                       SelectionChanged="ContextSizeComboBox_SelectionChanged"
-                                      ToolTip="请按模型声明的上下文能力和本机可用显存/内存选择；Launcher 不提供硬件无关的推荐值。" />
+                                      ToolTip="{DynamicResource ContextSelectionTip}" />
+                            <TextBox x:Name="CustomContextSizeTextBox" Margin="0,-6,0,10" Padding="9,7"
+                                     Visibility="Collapsed" TextChanged="CustomContextSizeTextBox_TextChanged"
+                                     ToolTip="{DynamicResource CustomContextTip}" />
+                            <TextBlock x:Name="ContextLimitTextBlock" Margin="0,-4,0,12"
+                                       Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="ContextRiskTextBlock" Margin="0,-4,0,12"
+                                       Foreground="{DynamicResource ProfileWarningBrush}" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Visibility="Collapsed"
+                                       Text="{DynamicResource LowContextWarning}" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
-                            <TextBlock FontWeight="SemiBold" Text="压缩安全余量" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource CompactionReserve}" />
                             <ComboBox x:Name="CompactionSafetyReserveComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="Codex 在下一次推理前至少保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。" />
+                                      ToolTip="{DynamicResource CompactionReserveTip}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="1">
                             <TextBlock FontWeight="SemiBold" Text="GPU Offload" />
                             <ComboBox x:Name="GpuLayersComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="Auto 交给 llama.cpp 决定；All 尝试把全部可卸载层放入 GPU；0 使用 CPU。" />
+                                      SelectionChanged="GpuLayersComboBox_SelectionChanged"
+                                      ToolTip="{DynamicResource GpuLayersTip}" />
+                            <TextBox x:Name="CustomGpuLayersTextBox" Margin="0,-6,0,10" Padding="9,7" Visibility="Collapsed"
+                                     ToolTip="{DynamicResource GpuLayersCustomTip}" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="Flash Attention" />
                             <ComboBox x:Name="FlashAttentionComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="支持时可减少注意力计算的显存带宽开销；不确定时使用 Auto。" />
+                                      ToolTip="{DynamicResource FlashAttentionTip}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="2">
                             <TextBlock FontWeight="SemiBold" Text="K Cache" />
                             <ComboBox x:Name="CacheTypeKComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="量化 KV Cache 可节省显存，但可能影响质量或兼容性；请按模型和硬件自行选择。" />
+                                      ToolTip="{DynamicResource KvCacheTip}" />
                         </StackPanel>
                         <StackPanel Grid.Row="2" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="V Cache" />
                             <ComboBox x:Name="CacheTypeVComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="Flash Attention 对部分 V Cache 类型有要求；请按模型和硬件自行选择。" />
+                                      ToolTip="{DynamicResource VCacheTip}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="3">
                             <TextBlock FontWeight="SemiBold" Text="Batch Size" />
                             <ComboBox x:Name="BatchSizeComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="提示词批处理大小。Default 使用 llama.cpp 默认值。" />
+                                      ToolTip="{DynamicResource BatchSizeTip}" />
                         </StackPanel>
                         <StackPanel Grid.Row="3" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="Micro Batch" />
                             <ComboBox x:Name="MicroBatchSizeComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="每次实际计算的微批大小，不应大于 Batch Size。" />
+                                      ToolTip="{DynamicResource MicroBatchTip}" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="4">
-                            <TextBlock FontWeight="SemiBold" Text="并发槽位" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ParallelSlots}" />
                             <ComboBox x:Name="ParallelComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="并发越高，KV Cache 占用越大；-1 由 llama.cpp 自动决定。" />
+                                      ToolTip="{DynamicResource ParallelSlotsTip}" />
                         </StackPanel>
                         <StackPanel Grid.Row="4" Grid.Column="2">
-                            <TextBlock FontWeight="SemiBold" Text="空闲释放显存" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource IdleReleaseVram}" />
                             <ComboBox x:Name="IdleSleepSecondsComboBox" Margin="0,6,0,14" Padding="7"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="使用 llama.cpp 原生空闲休眠：卸载模型和 KV Cache；下一次请求会自动重新加载。" />
+                                      ToolTip="{DynamicResource IdleReleaseVramTip}" />
                         </StackPanel>
                     </Grid>
 
-                    <TextBlock x:Name="ContextRiskTextBlock" Margin="0,0,0,10"
-                               Foreground="#B45309" FontWeight="SemiBold" TextWrapping="Wrap"
-                               Visibility="Collapsed"
-                               Text="⚠ 当前 Context 低于 16K，可能无法完整容纳 Codex 的系统指令、项目上下文和工具定义，容易在首次对话或工具执行时出现上下文不足。建议使用 16K 或更高；这只是提醒，不会阻止保存或启动。" />
-
-                    <TextBlock Margin="0,0,0,10" Foreground="{StaticResource SecondaryBrush}"
+                    <TextBlock Margin="0,0,0,10" Foreground="{DynamicResource SecondaryBrush}"
                                TextWrapping="Wrap"
-                               Text="压缩安全余量只决定 Codex 何时在安全节点触发原生上下文压缩，不会限制一次完整回答、工具调用或命令执行的 token 数。" />
+                               Text="{DynamicResource CompactionExplanation}" />
 
                     <CheckBox x:Name="JinjaCheckBox" Margin="0,2,0,0" FontWeight="SemiBold"
-                              Content="启用 Jinja chat template"
-                              ToolTip="Codex/Responses 模式通常需要由 llama.cpp 应用模型聊天模板。" />
+                              Content="{DynamicResource EnableJinja}"
+                              ToolTip="{DynamicResource EnableJinjaTip}" />
 
-                    <TextBlock Margin="0,14,0,0" FontWeight="SemiBold" Text="Chat Template 文件（可选）" />
+                    <TextBlock Margin="0,14,0,0" FontWeight="SemiBold" Text="{DynamicResource ChatTemplateFile}" />
                     <TextBox x:Name="ChatTemplatePathTextBox" Margin="0,6,0,0" Padding="9,7"
-                             ToolTip="相对于 Runtime Root 的 .jinja 文件。留空时使用 GGUF 内置模板；检测到严格模板不兼容 Codex 时，Launcher 会生成模型专用兼容文件，并由 llama.cpp 的 --chat-template-file 加载。" />
-                </StackPanel>
-            </Border>
-        </ScrollViewer>
+                             ToolTip="{DynamicResource ChatTemplateFileTip}" />
+                    <Grid x:Name="MoeBasicPanel" Margin="0,18,0,0" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/><ColumnDefinition Width="18"/><ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ExpertPlacement}" />
+                            <ComboBox x:Name="MoePlacementComboBox" Margin="0,6,0,14" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectionChanged="MoePlacementComboBox_SelectionChanged"
+                                      ToolTip="{DynamicResource ExpertPlacementTip}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuExpertLayers}" />
+                            <TextBox x:Name="CpuMoeLayersTextBox" Margin="0,6,0,14" Padding="9,7"
+                                     ToolTip="{DynamicResource CpuExpertLayersTip}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1">
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource LoadMode}" />
+                            <ComboBox x:Name="MoeLoadModeComboBox" Margin="0,6,0,0" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="{DynamicResource LoadModeTip}" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Grid.Column="2">
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource AutoMemoryFit}" />
+                            <ComboBox x:Name="MoeFitComboBox" Margin="0,6,0,0" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      ToolTip="{DynamicResource AutoMemoryFitTip}" />
+                        </StackPanel>
+                    </Grid>
 
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <StackPanel Orientation="Horizontal">
-                <Button x:Name="RestoreModelDefaultsButton" Padding="14,9" Content="恢复此模型默认"
-                        ToolTip="载入当前模型已经保存的专用默认参数。尚未保存模型默认时不可用。"
+                    <Border Margin="0,18,0,0" Padding="0,16,0,0"
+                            BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0">
+                        <StackPanel>
+                            <CheckBox x:Name="ReasoningEffortCheckBox"
+                                      Style="{StaticResource StartupToggleStyle}"
+                                      FontWeight="SemiBold"
+                                      Content="{DynamicResource ExposeReasoningEffort}"
+                                      ToolTip="{DynamicResource ExposeReasoningEffortTip}" />
+                            <TextBlock x:Name="ReasoningCapabilityStatusTextBlock" Margin="0,8,64,0"
+                                       Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource VisionParameters}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                        <StackPanel>
+                            <TextBlock x:Name="VisionStatusTextBlock" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                            <CheckBox x:Name="VisionEnableCheckBox" Style="{StaticResource StartupToggleStyle}" FontWeight="SemiBold"
+                                      Content="{DynamicResource EnableVision}" ToolTip="{DynamicResource EnableVisionTip}"
+                                      Checked="VisionEnableCheckBox_Changed" Unchecked="VisionEnableCheckBox_Changed" />
+                            <StackPanel x:Name="VisionSettingsPanel" Margin="0,16,0,0">
+                                <TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionSource}" />
+                                <TextBlock x:Name="VisionSourceValueTextBlock" Margin="0,6,0,14" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                                <StackPanel x:Name="VisionExternalProjectorPanel" Visibility="Collapsed">
+                                    <TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionProjectorFile}" />
+                                    <TextBox x:Name="VisionProjectorPathTextBox" Margin="0,6,0,16" Padding="9,7" IsReadOnly="True" IsTabStop="False" />
+                                </StackPanel>
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionProjectorOffload}"/><ComboBox x:Name="VisionOffloadComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionProjectorOffloadTip}"/></StackPanel>
+                                    <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="Device"/><TextBox x:Name="VisionDeviceTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionDeviceTip}"/></StackPanel>
+                                    <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="Image Min Tokens"/><TextBox x:Name="VisionImageMinTokensTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionImageMinTokensTip}"/></StackPanel>
+                                    <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="Image Max Tokens"/><TextBox x:Name="VisionImageMaxTokensTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionImageMaxTokensTip}"/></StackPanel>
+                                    <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="MTMD Batch Max Tokens"/><TextBox x:Name="VisionBatchMaxTokensTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionBatchMaxTokensTip}"/></StackPanel>
+                                </UniformGrid>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource MtpParameters}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                        <StackPanel>
+                            <TextBlock x:Name="MtpStatusTextBlock" Margin="0,0,0,12"
+                                       Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                            <CheckBox x:Name="MtpEnableCheckBox" Style="{StaticResource StartupToggleStyle}"
+                                      FontWeight="SemiBold" Content="{DynamicResource EnableMtp}"
+                                      ToolTip="{DynamicResource EnableMtpTip}"
+                                      Checked="MtpEnableCheckBox_Changed" Unchecked="MtpEnableCheckBox_Changed" />
+
+                            <StackPanel x:Name="MtpSettingsPanel" Margin="0,16,0,0">
+                                <TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpSource}" />
+                                <TextBlock x:Name="MtpSourceValueTextBlock" Margin="0,6,0,14"
+                                           Foreground="{DynamicResource SecondaryBrush}"
+                                           TextWrapping="Wrap" ToolTip="{DynamicResource MtpSourceTip}" />
+
+                                <StackPanel x:Name="MtpExternalModelPanel" Visibility="Collapsed">
+                                    <TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpCompanionFile}" />
+                                    <TextBox x:Name="MtpDraftModelPathTextBox" Margin="0,6,0,16" Padding="9,7"
+                                             IsReadOnly="True" IsTabStop="False"
+                                             ToolTip="{DynamicResource MtpCompanionFileTip}" />
+                                </StackPanel>
+
+                                <TextBlock Margin="0,2,0,10" FontWeight="SemiBold"
+                                           Text="{DynamicResource MtpCommonParameters}" />
+                                <UniformGrid Columns="2">
+                                    <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="N Max"/><TextBox x:Name="MtpNMaxTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpNMaxTip}"/></StackPanel>
+                                    <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="P Min"/><TextBox x:Name="MtpPMinTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpPMinTip}"/></StackPanel>
+                                    <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="N Min"/><TextBox x:Name="MtpNMinTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpNMinTip}"/></StackPanel>
+                                    <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="P Split"/><TextBox x:Name="MtpPSplitTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpPSplitTip}"/></StackPanel>
+                                    <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpBackendSampling}"/><ComboBox x:Name="MtpBackendSamplingComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpBackendSamplingTip}"/></StackPanel>
+                                </UniformGrid>
+
+                                <StackPanel x:Name="MtpExternalResourcesPanel" Visibility="Collapsed">
+                                    <Border Margin="0,2,0,14" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" />
+                                    <TextBlock Margin="0,0,0,10" FontWeight="SemiBold"
+                                               Text="{DynamicResource MtpExternalResources}" />
+                                    <UniformGrid Columns="2">
+                                        <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="GPU Offload"/><TextBox x:Name="MtpGpuLayersTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpGpuLayersTip}"/></StackPanel>
+                                        <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="Device"/><TextBox x:Name="MtpDeviceTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpDeviceTip}"/></StackPanel>
+                                        <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="K Cache"/><ComboBox x:Name="MtpCacheTypeKComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpCacheTip}"/></StackPanel>
+                                        <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="V Cache"/><ComboBox x:Name="MtpCacheTypeVComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpCacheTip}"/></StackPanel>
+                                        <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="Threads"/><TextBox x:Name="MtpThreadsTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpThreadsTip}"/></StackPanel>
+                                        <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="Batch Threads"/><TextBox x:Name="MtpBatchThreadsTextBox" Margin="0,6,0,14" Padding="9,7" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpThreadsTip}"/></StackPanel>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource AdvancedParameters}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap"
+                                       Text="{DynamicResource AdvancedParametersHint}" />
+                            <UniformGrid Columns="2">
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource ComputeDevice}"/><TextBox x:Name="DeviceTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource ComputeDeviceTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource KvGpuOffload}"/><ComboBox x:Name="KvOffloadComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource KvGpuOffloadTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuGenerationThreads}"/><TextBox x:Name="ThreadsTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource CpuGenerationThreadsTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuBatchThreads}"/><TextBox x:Name="ThreadsBatchTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource CpuBatchThreadsTip}"/></StackPanel>
+                                <StackPanel x:Name="DenseLoadModePanel" Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource LoadMode}"/><ComboBox x:Name="DenseLoadModeComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource DenseLoadModeTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource LazyMode}"/><ComboBox x:Name="LazyModeComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource LazyModeTip}"/></StackPanel>
+                                <StackPanel x:Name="DenseFitPanel" Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource AutoMemoryFitFull}"/><ComboBox x:Name="DenseFitComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource DenseFitTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource FitVramReserve}"/><TextBox x:Name="FitTargetTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource FitVramReserveTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource FitMinimumContext}"/><TextBox x:Name="FitContextTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource FitMinimumContextTip}"/></StackPanel>
+                                <StackPanel x:Name="DenseCpuFfnPanel" Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuDenseFfnLayers}"/><TextBox x:Name="CpuFfnLayersTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource CpuDenseFfnLayersTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource MultiGpuSplitMode}"/><ComboBox x:Name="SplitModeComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource MultiGpuSplitModeTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="Tensor Split"/><TextBox x:Name="TensorSplitTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource TensorSplitTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource MainGpu}"/><TextBox x:Name="MainGpuTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource MainGpuTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource NumaMode}"/><ComboBox x:Name="NumaComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource NumaModeTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource SwaFullCache}"/><ComboBox x:Name="SwaFullComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource SwaFullCacheTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource WeightRepack}"/><ComboBox x:Name="RepackComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource WeightRepackTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="Operation Offload"/><ComboBox x:Name="OpOffloadComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource OperationOffloadTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource BypassHostBuffer}"/><ComboBox x:Name="NoHostComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource BypassHostBufferTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource RopeScalingMode}"/><ComboBox x:Name="RopeScalingComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource RopeScalingModeTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="RoPE Scale"/><TextBox x:Name="RopeScaleTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeScaleTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Base"/><TextBox x:Name="RopeFreqBaseTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeFrequencyBaseTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Scale"/><TextBox x:Name="RopeFreqScaleTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeFrequencyScaleTip}"/></StackPanel>
+                            </UniformGrid>
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource YarnParameters}"/>
+                            <TextBox x:Name="YarnArgumentsTextBox" Margin="0,6,0,14" Padding="9,7"
+                                     ToolTip="{DynamicResource YarnParametersTip}"/>
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource TensorPlacement}"/>
+                            <TextBox x:Name="OverrideTensorTextBox" Margin="0,6,0,0" Padding="9,7" TextWrapping="Wrap"
+                                     ToolTip="{DynamicResource TensorPlacementTip}"/>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource ModelInformation}">
+                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                        <StackPanel>
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource DisplayName}" />
+                            <TextBox x:Name="DisplayNameTextBox" Margin="0,6,0,14" Padding="9,7"
+                                     ToolTip="{DynamicResource DisplayNameTip}" />
+
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ModelAlias}" />
+                            <TextBox x:Name="AliasTextBox" Margin="0,6,0,14" Padding="9,7" IsReadOnly="True"
+                                     ToolTip="{DynamicResource ModelAliasTip}" />
+
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ModelFile}" />
+                            <TextBox x:Name="ModelPathTextBox" Margin="0,6,0,18" Padding="9,7" IsReadOnly="True"
+                                     ToolTip="{DynamicResource ModelFileTip}" />
+
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ModelType}" />
+                            <TextBlock x:Name="ModelTypeTextBlock" Margin="0,6,0,0" Padding="9,7"
+                                       Background="{DynamicResource CardBackgroundBrush}" TextWrapping="Wrap"
+                                       ToolTip="{DynamicResource ModelTypeEditorTip}" />
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <Grid x:Name="ProfileEditorActionsHost" Grid.Row="2" HorizontalAlignment="Left">
+            <WrapPanel HorizontalAlignment="Right">
+                <Button x:Name="RestoreModelDefaultsButton" Padding="14,9" Content="{DynamicResource RestoreModelDefaults}"
+                        ToolTip="{DynamicResource RestoreModelDefaultsTip}"
                         Click="RestoreModelDefaultsButton_Click" />
-            </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal">
-                <Button Padding="18,9" Content="取消" IsCancel="True" />
-                <Button Padding="18,9" Content="保存" IsDefault="True"
+                <Button Padding="18,9" Content="{DynamicResource Cancel}" IsCancel="True" />
+                <Button Padding="18,9" Content="{DynamicResource Save}" IsDefault="True"
                         Click="SaveButton_Click" />
-                <Button Margin="0" Padding="16,9" Content="保存并设为此模型默认"
-                        ToolTip="只更新当前模型的默认参数；其他模型不会继承或改变。"
+                <Button Margin="0" Padding="16,9" Content="{DynamicResource SaveAsModelDefault}"
+                        ToolTip="{DynamicResource SaveAsModelDefaultTip}"
                         Click="SaveAsModelDefaultButton_Click" />
-            </StackPanel>
+            </WrapPanel>
         </Grid>
     </Grid>
 </Window>

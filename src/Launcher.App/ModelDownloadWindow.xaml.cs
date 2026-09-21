@@ -1,16 +1,15 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
 using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Net.Sockets;
-using System.Security.Cryptography;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using Launcher.Models.Remote;
-using Launcher.Models.Scanning;
-using Launcher.Runtime.Router;
+using WpfButtonBase = System.Windows.Controls.Primitives.ButtonBase;
+using WpfScrollBar = System.Windows.Controls.Primitives.ScrollBar;
+using WpfTextBoxBase = System.Windows.Controls.Primitives.TextBoxBase;
 
 namespace Launcher.App;
 
@@ -21,14 +20,14 @@ public partial class ModelDownloadWindow : Window
     private readonly HttpClient _catalogHttpClient;
     private readonly HuggingFaceModelCatalogClient _catalogClient;
     private readonly Func<string?> _getDownloadBlockReason;
-    private CancellationTokenSource? _operationCancellation;
-    private LlamaRouterProcessManager? _downloadRouter;
     private bool _busy;
-    private readonly Queue<(DateTimeOffset Time, long Bytes)> _speedSamples = new();
 
     public ModelDownloadWindow(string runtimeRoot, Func<string?>? getDownloadBlockReason = null)
     {
         InitializeComponent();
+        UiMotion.AttachWindowEntrance(this);
+        SourceInitialized += (_, _) =>
+            AdaptiveWindowSizing.FitDialog(this, 820, 720, 640, 480);
         _runtimeRoot = Path.GetFullPath(runtimeRoot);
         _modelsRoot = Path.Combine(_runtimeRoot, "models");
         _getDownloadBlockReason = getDownloadBlockReason ?? (() => null);
@@ -40,11 +39,15 @@ public partial class ModelDownloadWindow : Window
         _catalogClient = new HuggingFaceModelCatalogClient(_catalogHttpClient);
     }
 
-    public GgufModelCandidate? DownloadedModel { get; private set; }
+    public HuggingFaceGgufVariant? SelectedDownload { get; private set; }
+
+    public HuggingFaceMtpFile? SelectedMtpDownload { get; private set; }
+
+    public HuggingFaceVisionFile? SelectedVisionDownload { get; private set; }
 
     private async void SearchButton_Click(object sender, RoutedEventArgs e) => await SearchAsync();
 
-    private async void SearchTextBox_KeyDown(object sender, KeyEventArgs e)
+    private async void SearchTextBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
         if (e.Key != Key.Enter)
         {
@@ -65,27 +68,31 @@ public partial class ModelDownloadWindow : Window
         SetBusy(true, downloading: false);
         SearchResultsList.ItemsSource = null;
         VariantsList.ItemsSource = null;
-        DownloadButton.IsEnabled = false;
-        ModelDetailsText.Text = "正在读取公开模型目录…";
-        StatusText.Text = "正在搜索 Hugging Face 的 GGUF 模型。";
+        MtpFilesList.ItemsSource = null;
+        VisionFilesList.ItemsSource = null;
+        UpdateSelectionActions();
+        ModelDetailsText.Text = AppLanguageManager.Choose("正在读取公开模型目录…", "Reading the public model catalog…");
+        StatusText.Text = AppLanguageManager.Choose("正在搜索 Hugging Face 的 GGUF 模型。", "Searching Hugging Face for GGUF models.");
         try
         {
             using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var results = await _catalogClient.SearchAsync(SearchTextBox.Text, cancellation.Token);
             SearchResultsList.ItemsSource = results.Select(RemoteModelListItem.FromModel).ToArray();
             ModelDetailsText.Text = results.Count == 0
-                ? "没有找到带 GGUF 标记的公开模型。请尝试输入更准确的名称。"
-                : "请选择一个模型仓库以读取量化版本和准确大小。";
-            StatusText.Text = $"搜索完成：找到 {results.Count} 个相关 GGUF 仓库。";
+                ? AppLanguageManager.Choose("没有找到带 GGUF 标记的公开模型。请尝试输入更准确的名称。", "No public models tagged GGUF were found. Try a more precise name.")
+                : AppLanguageManager.Choose("请选择一个模型仓库以读取量化版本和准确大小。", "Select a model repository to read quantizations and exact sizes.");
+            StatusText.Text = AppLanguageManager.Choose(
+                $"搜索完成：找到 {results.Count} 个相关 GGUF 仓库。",
+                $"Search complete: found {results.Count} related GGUF repositories.");
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "模型搜索超时，请检查网络后重试。";
+            StatusText.Text = AppLanguageManager.Choose("模型搜索超时，请检查网络后重试。", "Model search timed out. Check the network and try again.");
             ModelDetailsText.Text = StatusText.Text;
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"模型搜索失败：{exception.Message}";
+            StatusText.Text = AppLanguageManager.Choose($"模型搜索失败：{exception.Message}", $"Model search failed: {exception.Message}");
             ModelDetailsText.Text = StatusText.Text;
         }
         finally
@@ -96,32 +103,49 @@ public partial class ModelDownloadWindow : Window
 
     private async void SearchResultsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_busy || SearchResultsList.SelectedItem is not RemoteModelListItem selected)
+        if (_busy)
         {
+            UpdateSelectionActions();
             return;
         }
 
+        if (SearchResultsList.SelectedItem is not RemoteModelListItem selected)
+        {
+            UpdateSelectionActions();
+            return;
+        }
+
+        VariantsList.SelectedItem = null;
+        MtpFilesList.SelectedItem = null;
+        VisionFilesList.SelectedItem = null;
         SetBusy(true, downloading: false);
         VariantsList.ItemsSource = null;
-        DownloadButton.IsEnabled = false;
-        ModelDetailsText.Text = FormatModelDetails(selected.Model) + "\n\n正在读取 GGUF 文件列表…";
+        MtpFilesList.ItemsSource = null;
+        VisionFilesList.ItemsSource = null;
+        UpdateSelectionActions();
+        ModelDetailsText.Text = FormatModelDetails(selected.Model);
+        StatusText.Text = AppLanguageManager.Choose("正在读取所选仓库的 GGUF 文件列表…", "Reading the selected repository's GGUF file list…");
         try
         {
             using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var details = await _catalogClient.GetDetailsAsync(selected.Model, cancellation.Token);
             VariantsList.ItemsSource = details.Variants.Select(RemoteVariantListItem.FromVariant).ToArray();
+            MtpFilesList.ItemsSource = details.ExternalMtpFiles.Select(RemoteMtpFileListItem.FromFile).ToArray();
+            VisionFilesList.ItemsSource = details.ExternalVisionFiles.Select(RemoteVisionFileListItem.FromFile).ToArray();
             ModelDetailsText.Text = FormatModelDetails(selected.Model);
-            StatusText.Text = details.Variants.Count == 0
-                ? "该仓库没有可由 llama 原生量化标识选择的主 GGUF 文件。"
-                : $"已识别 {details.Variants.Count} 个可下载量化版本。";
+            StatusText.Text = details.Variants.Count == 0 && details.ExternalMtpFiles.Count == 0 && details.ExternalVisionFiles.Count == 0
+                ? AppLanguageManager.Choose("该仓库没有可由 llama 原生量化标识选择的主 GGUF 文件。", "This repository has no primary GGUF file selectable by a native llama quantization identifier.")
+                : AppLanguageManager.Choose(
+                    $"已识别 {details.Variants.Count} 个主模型量化版本、{details.ExternalMtpFiles.Count} 个 MTP 候选、{details.ExternalVisionFiles.Count} 个视觉模块。辅助文件仍需与具体主模型联合验证。",
+                    $"Identified {details.Variants.Count} main-model quantizations, {details.ExternalMtpFiles.Count} MTP candidates, and {details.ExternalVisionFiles.Count} vision modules. Auxiliary files still require validation with a specific main model.");
         }
         catch (OperationCanceledException)
         {
-            StatusText.Text = "读取模型文件列表超时。";
+            StatusText.Text = AppLanguageManager.Choose("读取模型文件列表超时。", "Reading the model file list timed out.");
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"读取模型详情失败：{exception.Message}";
+            StatusText.Text = AppLanguageManager.Choose($"读取模型详情失败：{exception.Message}", $"Failed to read model details: {exception.Message}");
         }
         finally
         {
@@ -131,12 +155,111 @@ public partial class ModelDownloadWindow : Window
 
     private void VariantsList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        DownloadButton.IsEnabled = CanDownloadSelection();
+        if (VariantsList.SelectedItem is not null)
+        {
+            MtpFilesList.SelectedItem = null;
+            VisionFilesList.SelectedItem = null;
+        }
+
+        UpdateSelectionActions();
     }
 
-    private async void DownloadButton_Click(object sender, RoutedEventArgs e)
+    private void MtpFilesList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
-        if (_busy || VariantsList.SelectedItem is not RemoteVariantListItem selected)
+        if (MtpFilesList.SelectedItem is not null)
+        {
+            VariantsList.SelectedItem = null;
+            VisionFilesList.SelectedItem = null;
+        }
+
+        UpdateSelectionActions();
+    }
+
+    private void VisionFilesList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (VisionFilesList.SelectedItem is not null)
+        {
+            VariantsList.SelectedItem = null;
+            MtpFilesList.SelectedItem = null;
+        }
+
+        UpdateSelectionActions();
+    }
+
+    private void OpenRepositoryButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SearchResultsList.SelectedItem is not RemoteModelListItem selected)
+        {
+            return;
+        }
+
+        OpenInDefaultBrowser(
+            HuggingFaceWebUriBuilder.BuildRepositoryUri(selected.Model.RepositoryId),
+            AppLanguageManager.Choose("当前模型仓库", "current model repository"));
+    }
+
+    private void OpenVariantButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SearchResultsList.SelectedItem is not RemoteModelListItem model
+            || VariantsList.SelectedItem is not RemoteVariantListItem variant)
+        {
+            return;
+        }
+
+        OpenInDefaultBrowser(
+            HuggingFaceWebUriBuilder.BuildVariantUri(model.Model, variant.Variant),
+            AppLanguageManager.Choose("当前模型版本", "current model version"));
+    }
+
+    private void OpenInDefaultBrowser(Uri uri, string targetName)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = uri.AbsoluteUri,
+                UseShellExecute = true,
+            });
+            StatusText.Text = AppLanguageManager.Choose($"已在默认浏览器中打开{targetName}。", $"Opened the {targetName} in the default browser.");
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = AppLanguageManager.Choose($"无法打开{targetName}：{exception.Message}", $"Unable to open the {targetName}: {exception.Message}");
+        }
+    }
+
+    private void Window_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source
+            || FindAncestor<WpfButtonBase>(source) is not null
+            || FindAncestor<WpfTextBoxBase>(source) is not null
+            || FindAncestor<WpfScrollBar>(source) is not null
+            || FindAncestor<ListBoxItem>(source) is not null)
+        {
+            return;
+        }
+
+        SearchResultsList.SelectedItem = null;
+        VariantsList.SelectedItem = null;
+        MtpFilesList.SelectedItem = null;
+        VisionFilesList.SelectedItem = null;
+        ModelDetailsText.Text = SearchResultsList.Items.Count == 0
+            ? AppLanguageManager.Text("SelectRepositoryHint")
+            : AppLanguageManager.Choose("请选择一个模型仓库以查看详细信息。", "Select a model repository to view details.");
+        UpdateSelectionActions();
+    }
+
+    private void DownloadButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        var selectedVariant = VariantsList.SelectedItem as RemoteVariantListItem;
+        var selectedMtp = MtpFilesList.SelectedItem as RemoteMtpFileListItem;
+        var selectedVision = VisionFilesList.SelectedItem as RemoteVisionFileListItem;
+        if (selectedVariant is null && selectedMtp is null && selectedVision is null)
         {
             return;
         }
@@ -147,7 +270,7 @@ public partial class ModelDownloadWindow : Window
             MessageBox.Show(
                 this,
                 blockReason,
-                "暂时不能启动下载服务",
+                AppLanguageManager.Choose("暂时不能启动下载服务", "Download Service Unavailable"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             StatusText.Text = blockReason;
@@ -158,209 +281,48 @@ public partial class ModelDownloadWindow : Window
         {
             MessageBox.Show(
                 this,
-                "该模型需要 Hugging Face 授权。本版本不读取或保存访问令牌，请选择公开模型。",
-                "暂不支持 gated 模型",
+                AppLanguageManager.Choose("该模型需要 Hugging Face 授权。本版本不读取或保存访问令牌，请选择公开模型。", "This model requires Hugging Face authorization. This release does not read or store access tokens; select a public model."),
+                AppLanguageManager.Choose("暂不支持 gated 模型", "Gated Models Are Not Supported"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
             return;
         }
 
-        if (selected.Variant.TotalSizeBytes > 0 && !HasEnoughFreeSpace(selected.Variant.TotalSizeBytes, out var freeSpace))
+        var requiredBytes = selectedVariant?.Variant.TotalSizeBytes ?? selectedMtp?.File.SizeBytes ?? selectedVision?.File.SizeBytes ?? 0;
+        if (requiredBytes > 0 && !HasEnoughFreeSpace(requiredBytes, out var freeSpace))
         {
             MessageBox.Show(
                 this,
-                $"磁盘可用空间不足。模型约为 {FormatSize(selected.Variant.TotalSizeBytes)}，当前可用 {FormatSize(freeSpace)}。",
-                "无法开始下载",
+                AppLanguageManager.Choose($"磁盘可用空间不足。文件约为 {FormatSize(requiredBytes)}，当前可用 {FormatSize(freeSpace)}。", $"Insufficient disk space. The file is approximately {FormatSize(requiredBytes)}; {FormatSize(freeSpace)} is available."),
+                AppLanguageManager.Choose("无法开始下载", "Unable to Start Download"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
-        _operationCancellation = new CancellationTokenSource();
-        _speedSamples.Clear();
-        DownloadProgressBar.Value = 0;
-        DownloadProgressText.Text = "正在启动 llama.cpp 下载服务…";
-        StatusText.Text = $"准备由 llama.cpp 下载 {selected.Variant.DownloadId}。";
-        SetBusy(true, downloading: true);
-        var downloadSucceeded = false;
-        LlamaRouterProcessInfo? downloadRouterInfo = null;
-
-        try
-        {
-            var lateBlockReason = _getDownloadBlockReason();
-            if (!string.IsNullOrWhiteSpace(lateBlockReason))
-            {
-                throw new InvalidOperationException(lateBlockReason);
-            }
-
-            Directory.CreateDirectory(_modelsRoot);
-            var port = GetAvailableLoopbackPort();
-            var apiKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            using var healthHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
-            healthHttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            var healthClient = new RouterHealthClient(healthHttpClient);
-            _downloadRouter = new LlamaRouterProcessManager(healthClient);
-            var router = await _downloadRouter.StartAsync(
-                new LlamaRouterStartRequest
-                {
-                    ExecutablePath = Path.Combine(_runtimeRoot, "llama-server.exe"),
-                    WorkingDirectory = _runtimeRoot,
-                    LogDirectory = Path.Combine(_runtimeRoot, "logs"),
-                    ModelCacheDirectory = _modelsRoot,
-                    Options = new LlamaRouterOptions
-                    {
-                        Host = IPAddress.Loopback.ToString(),
-                        Port = port,
-                        ModelsDirectory = _modelsRoot,
-                        ModelsPresetPath = null,
-                        MaximumLoadedModels = 1,
-                        AutoloadModels = false,
-                        ApiKey = apiKey,
-                        DisableMultimodalProjectorAutoDownload = true,
-                    },
-                    StartupTimeout = TimeSpan.FromSeconds(20),
-                },
-                _operationCancellation.Token);
-            downloadRouterInfo = router;
-            DownloadProgressText.Text = "llama.cpp 下载服务已启动，正在连接原生状态流…";
-            StatusText.Text = "正在由 llama.cpp 连接 Hugging Face；首次出现字节进度前可能需要解析仓库元数据。";
-
-            using var downloadHttpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
-            downloadHttpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-            var downloader = new RouterModelDownloadClient(downloadHttpClient);
-            var progress = new Progress<RouterModelDownloadProgress>(UpdateDownloadProgress);
-            var activity = new Progress<RouterModelDownloadActivity>(UpdateDownloadActivity);
-            var result = await downloader.DownloadAsync(
-                router.BaseUri,
-                selected.Variant.DownloadId,
-                progress,
-                _operationCancellation.Token,
-                activity);
-
-            var fullPath = Path.GetFullPath(result.ModelPath);
-            if (!IsUnderDirectory(fullPath, _modelsRoot))
-            {
-                throw new InvalidOperationException("llama.cpp 返回的模型路径不在指定 models 目录内。");
-            }
-
-            DownloadedModel = new GgufModelCandidate(
-                fullPath,
-                Path.GetRelativePath(_modelsRoot, fullPath),
-                $"{selected.Variant.RepositoryId.Split('/')[1]}-{selected.Variant.Quantization}",
-                selected.Variant.TotalSizeBytes > 0
-                    ? selected.Variant.TotalSizeBytes
-                    : new FileInfo(fullPath).Length,
-                selected.Variant.ShardCount,
-                selected.Variant.DownloadId,
-                selected.Variant.RepositoryId,
-                selected.Variant.Quantization);
-            DownloadProgressBar.Value = 100;
-            DownloadProgressText.Text = result.WasAlreadyCached
-                ? "模型已经存在于 llama.cpp 缓存中。"
-                : $"下载完成 · {FormatSize(DownloadedModel.TotalSizeBytes)}";
-            StatusText.Text = "下载完成，正在返回启动器并登记模型。";
-            downloadSucceeded = true;
-        }
-        catch (OperationCanceledException) when (_operationCancellation?.IsCancellationRequested == true)
-        {
-            StatusText.Text = "下载已取消；临时文件如何保留或恢复由 llama.cpp 处理。";
-            DownloadProgressText.Text = StatusText.Text;
-        }
-        catch (Exception exception)
-        {
-            var nativeFailure = RouterModelDownloadLogInspector.FindFailure(downloadRouterInfo);
-            StatusText.Text = nativeFailure is null
-                ? $"下载失败：{exception.Message}"
-                : $"下载失败：{nativeFailure}";
-            DownloadProgressText.Text = StatusText.Text;
-        }
-        finally
-        {
-            if (_downloadRouter is not null)
-            {
-                try
-                {
-                    await _downloadRouter.DisposeAsync();
-                }
-                catch (Exception cleanupException)
-                {
-                    downloadSucceeded = false;
-                    StatusText.Text = $"下载服务未能完整停止：{cleanupException.Message}";
-                    DownloadProgressText.Text = StatusText.Text;
-                }
-                finally
-                {
-                    _downloadRouter = null;
-                }
-            }
-
-            _operationCancellation?.Dispose();
-            _operationCancellation = null;
-            SetBusy(false, downloading: false);
-        }
-
-        if (downloadSucceeded)
-        {
-            DialogResult = true;
-        }
-    }
-
-    private void UpdateDownloadProgress(RouterModelDownloadProgress progress)
-    {
-        var now = DateTimeOffset.UtcNow;
-        _speedSamples.Enqueue((now, progress.DownloadedBytes));
-        while (_speedSamples.Count > 1 && now - _speedSamples.Peek().Time > TimeSpan.FromSeconds(3))
-        {
-            _speedSamples.Dequeue();
-        }
-
-        var oldest = _speedSamples.Peek();
-        var elapsed = (now - oldest.Time).TotalSeconds;
-        var bytesPerSecond = elapsed > 0.2
-            ? Math.Max(0, progress.DownloadedBytes - oldest.Bytes) / elapsed
-            : 0;
-        var percent = progress.Fraction * 100;
-        DownloadProgressBar.Value = percent;
-        var currentFile = progress.Files.LastOrDefault()?.FileName ?? "GGUF";
-        DownloadProgressText.Text =
-            $"{currentFile}\n{percent:0.0}% · {FormatSize(progress.DownloadedBytes)} / {FormatSize(progress.TotalBytes)}" +
-            (bytesPerSecond > 0 ? $" · {FormatSize((long)bytesPerSecond)}/s" : string.Empty);
-    }
-
-    private void UpdateDownloadActivity(RouterModelDownloadActivity activity)
-    {
-        StatusText.Text = activity.Message;
-        if (activity.Phase != RouterModelDownloadPhase.Transferring
-            || DownloadProgressBar.Value <= 0)
-        {
-            DownloadProgressText.Text = activity.Message;
-        }
+        SelectedDownload = selectedVariant?.Variant;
+        SelectedMtpDownload = selectedMtp?.File;
+        SelectedVisionDownload = selectedVision?.File;
+        var downloadId = SelectedDownload?.DownloadId ?? SelectedMtpDownload?.DownloadId ?? SelectedVisionDownload!.DownloadId;
+        StatusText.Text = SelectedDownload is not null
+            ? AppLanguageManager.Choose($"已创建主模型下载任务：{downloadId}", $"Main model download task created: {downloadId}")
+            : SelectedMtpDownload is not null
+                ? AppLanguageManager.Choose($"已创建单文件 MTP 下载任务：{downloadId}", $"Single-file MTP download task created: {downloadId}")
+                : AppLanguageManager.Choose($"已创建单文件视觉模块下载任务：{downloadId}", $"Single-file vision module download task created: {downloadId}");
+        DialogResult = true;
     }
 
     private void CancelDownloadButton_Click(object sender, RoutedEventArgs e)
     {
         CancelDownloadButton.IsEnabled = false;
-        StatusText.Text = "正在请求 llama.cpp 取消下载…";
-        _operationCancellation?.Cancel();
+        StatusText.Text = AppLanguageManager.Choose("下载任务请在主界面的下载管理卡片中取消。", "Cancel downloads from the Download Management card on the main page.");
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e) => Close();
 
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
-        if (!_busy || _operationCancellation is null)
-        {
-            _catalogHttpClient.Dispose();
-            return;
-        }
-
-        e.Cancel = true;
-        MessageBox.Show(
-            this,
-            "模型正在下载。请先点击“取消下载”，等待 llama.cpp 停止后再关闭窗口。",
-            "下载尚未结束",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        _catalogHttpClient.Dispose();
     }
 
     private void SetBusy(bool busy, bool downloading)
@@ -370,34 +332,46 @@ public partial class ModelDownloadWindow : Window
         SearchButton.IsEnabled = !busy;
         SearchResultsList.IsEnabled = !busy;
         VariantsList.IsEnabled = !busy;
-        DownloadButton.IsEnabled = !busy && CanDownloadSelection();
+        MtpFilesList.IsEnabled = !busy;
+        VisionFilesList.IsEnabled = !busy;
         CancelDownloadButton.IsEnabled = busy && downloading;
         CloseButton.IsEnabled = !(busy && downloading);
+        UpdateSelectionActions();
+    }
+
+    private void UpdateSelectionActions()
+    {
+        OpenRepositoryButton.IsEnabled = SearchResultsList.SelectedItem is RemoteModelListItem;
+        OpenVariantButton.IsEnabled = SearchResultsList.SelectedItem is RemoteModelListItem
+            && VariantsList.SelectedItem is RemoteVariantListItem;
+        DownloadButton.IsEnabled = CanDownloadSelection();
     }
 
     private bool CanDownloadSelection() =>
         !_busy
-        && VariantsList.SelectedItem is RemoteVariantListItem
+        && (VariantsList.SelectedItem is RemoteVariantListItem
+            || MtpFilesList.SelectedItem is RemoteMtpFileListItem
+            || VisionFilesList.SelectedItem is RemoteVisionFileListItem)
         && SearchResultsList.SelectedItem is RemoteModelListItem { Model.IsGated: false };
 
-    private static int GetAvailableLoopbackPort()
+    private static T? FindAncestor<T>(DependencyObject? value)
+        where T : DependencyObject
     {
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        try
+        while (value is not null)
         {
-            return ((IPEndPoint)listener.LocalEndpoint).Port;
-        }
-        finally
-        {
-            listener.Stop();
-        }
-    }
+            if (value is T match)
+            {
+                return match;
+            }
 
-    private static bool IsUnderDirectory(string path, string directory)
-    {
-        var root = Path.GetFullPath(directory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-        return path.StartsWith(root, StringComparison.OrdinalIgnoreCase);
+            value = value switch
+            {
+                FrameworkContentElement content => content.Parent,
+                _ => VisualTreeHelper.GetParent(value),
+            };
+        }
+
+        return null;
     }
 
     private bool HasEnoughFreeSpace(long requiredBytes, out long freeSpace)
@@ -427,22 +401,18 @@ public partial class ModelDownloadWindow : Window
 
     private static string FormatModelDetails(HuggingFaceModelSearchResult model)
     {
-        var updated = model.LastModified?.ToLocalTime().ToString("yyyy-MM-dd") ?? "未知";
-        return
-            $"仓库：{model.RepositoryId}\n" +
-            $"作者：{model.Author}\n" +
-            $"用途：{model.PipelineTag ?? "未标注"}\n" +
-            $"许可证：{model.License ?? "未标注"}\n" +
-            $"下载量：{model.Downloads:N0}\n" +
-            $"更新时间：{updated}\n" +
-            $"访问：{(model.IsGated ? "需要授权（本版本不下载）" : "公开")}";
+        var updated = model.LastModified?.ToLocalTime().ToString("yyyy-MM-dd")
+            ?? AppLanguageManager.Choose("未知", "Unknown");
+        return AppLanguageManager.IsEnglish
+            ? $"Repository: {model.RepositoryId}\nAuthor: {model.Author}\nPurpose: {model.PipelineTag ?? "Not specified"}\nLicense: {model.License ?? "Not specified"}\nDownloads: {model.Downloads:N0}\nUpdated: {updated}\nAccess: {(model.IsGated ? "Authorization required (not downloaded by this release)" : "Public")}"
+            : $"仓库：{model.RepositoryId}\n作者：{model.Author}\n用途：{model.PipelineTag ?? "未标注"}\n许可证：{model.License ?? "未标注"}\n下载量：{model.Downloads:N0}\n更新时间：{updated}\n访问：{(model.IsGated ? "需要授权（本版本不下载）" : "公开")}";
     }
 
     private static string FormatSize(long bytes)
     {
         if (bytes <= 0)
         {
-            return "大小未知";
+            return AppLanguageManager.Choose("大小未知", "Size unknown");
         }
 
         const double gibibyte = 1024d * 1024d * 1024d;
@@ -454,7 +424,7 @@ public partial class ModelDownloadWindow : Window
     private sealed record RemoteModelListItem(string Summary, HuggingFaceModelSearchResult Model)
     {
         public static RemoteModelListItem FromModel(HuggingFaceModelSearchResult model) => new(
-            $"{model.RepositoryId} · ↓ {model.Downloads:N0}" + (model.IsGated ? " · 需授权" : string.Empty),
+            $"{model.RepositoryId} · ↓ {model.Downloads:N0}" + (model.IsGated ? AppLanguageManager.Choose(" · 需授权", " · Gated") : string.Empty),
             model);
     }
 
@@ -462,7 +432,21 @@ public partial class ModelDownloadWindow : Window
     {
         public static RemoteVariantListItem FromVariant(HuggingFaceGgufVariant variant) => new(
             $"{variant.Quantization} · {FormatSize(variant.TotalSizeBytes)}" +
-            (variant.ShardCount > 1 ? $" · {variant.ShardCount} 分片" : string.Empty),
+            (variant.ShardCount > 1 ? AppLanguageManager.Choose($" · {variant.ShardCount} 分片", $" · {variant.ShardCount} shards") : string.Empty),
             variant);
+    }
+
+    private sealed record RemoteMtpFileListItem(string Summary, HuggingFaceMtpFile File)
+    {
+        public static RemoteMtpFileListItem FromFile(HuggingFaceMtpFile file) => new(
+            $"{file.Path} · {FormatSize(file.SizeBytes)}",
+            file);
+    }
+
+    private sealed record RemoteVisionFileListItem(string Summary, HuggingFaceVisionFile File)
+    {
+        public static RemoteVisionFileListItem FromFile(HuggingFaceVisionFile file) => new(
+            $"{file.Path} · {FormatSize(file.SizeBytes)}",
+            file);
     }
 }

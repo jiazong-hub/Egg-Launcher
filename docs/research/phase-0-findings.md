@@ -1,6 +1,6 @@
 # Phase 0 实测记录
 
-> 历史记录：本文记录了早期兼容性探索。其中的请求正文正规化、工具过滤和本地 compaction 方案已于 2026-09-11 废弃并从程序删除；当前边界见 [0002：Launcher 保持为 llama.cpp 的薄管理壳](../architecture/0002-thin-launcher-boundary.md)。
+> 历史记录：本文记录了早期兼容性探索。其中的请求正文正规化、工具过滤和本地 compaction 方案已于 2026-09-11 废弃并从程序删除；当前边界见 [0002：Launcher 保持为 llama.cpp 的薄管理壳](../architecture/0002-thin-launcher-boundary.md)，v0.9.1 的用户可见行为见[当前功能说明](../user-guide.md)。
 
 日期：2026-09-10—2026-09-11
 

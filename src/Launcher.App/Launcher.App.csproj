@@ -9,6 +9,27 @@
     <ProjectReference Include="..\Launcher.ChatGPT\Launcher.ChatGPT.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Resource Include="Assets\egg-mark.png" />
+    <Resource Include="Assets\egg-mark-display.png" />
+    <Resource Include="Assets\egg-mark-title.png" />
+    <Resource Include="Assets\egg-launcher.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Legal\*.txt"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\LICENSE"
+             Link="LICENSE"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md"
+             Link="THIRD-PARTY-NOTICES.md"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
@@ -17,6 +38,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\egg-launcher.ico</ApplicationIcon>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
 
 </Project>

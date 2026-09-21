@@ -1,6 +1,6 @@
 # Code signing policy
 
-ChatGPT Local Launcher 0.9.0 public beta is signed with a project-controlled,
+Egg Launcher 0.9.1 public beta uses the project-controlled,
 self-signed Authenticode code-signing certificate. The signature establishes
 continuity between releases made by the holder of the same private key and
 detects changes made after signing. It is not a third-party identity validation
@@ -22,3 +22,7 @@ required and should never be requested merely to run the portable application.
 The password-protected PFX private key is not stored in this repository or in
 release packages. Only the project maintainer controls the private key.
 
+Unsigned internal test archives are permitted, but `BUILD-INFO.txt` must state
+`Signature=unsigned`. A package must not be described as signed merely because
+it includes SHA-256 manifests. Public v0.9.1 distribution should use the
+certificate above or document a deliberate certificate rotation.

@@ -2,7 +2,7 @@ namespace Launcher.Core.Configuration;
 
 public sealed record RuntimeState
 {
-    public const int CurrentAgentProtocolVersion = 8;
+    public const int CurrentAgentProtocolVersion = 9;
 
     public int AgentProtocolVersion { get; init; }
 

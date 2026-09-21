@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="560" viewBox="0 0 760 560">
+  <defs>
+    <linearGradient id="sheet-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07182a"/>
+      <stop offset="1" stop-color="#0b2943"/>
+    </linearGradient>
+    <linearGradient id="egg-outline-sheet" x1="15" y1="10" x2="49" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#42e8ff"/>
+      <stop offset="0.5" stop-color="#168cff"/>
+      <stop offset="1" stop-color="#6854ff"/>
+    </linearGradient>
+    <symbol id="egg-icon" viewBox="0 0 64 64">
+      <path d="M32 5.5 C23.8 5.5 15.6 18.8 13.1 33.6 C10.7 47.6 17.5 58.5 31.9 58.5 C46.3 58.5 53.1 47.6 50.9 33.6 C48.4 18.8 40.2 5.5 32 5.5 Z"
+            fill="none" stroke="#071a2d" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M32 5.5 C23.8 5.5 15.6 18.8 13.1 33.6 C10.7 47.6 17.5 58.5 31.9 58.5 C46.3 58.5 53.1 47.6 50.9 33.6 C48.4 18.8 40.2 5.5 32 5.5 Z"
+            fill="none" stroke="url(#egg-outline-sheet)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+  <rect width="760" height="560" fill="url(#sheet-bg)"/>
+  <text x="28" y="39" fill="#f1f8ff" font-family="Microsoft YaHei UI, sans-serif" font-size="22" font-weight="600">蛋形轮廓托盘图标</text>
+  <text x="28" y="64" fill="#9ebbd4" font-family="Microsoft YaHei UI, sans-serif" font-size="14">无中间光带 · 无内部高光 · 蓝青渐变轮廓</text>
+
+  <rect x="28" y="88" width="338" height="286" rx="15" fill="#0a2138" stroke="#2a6c9b"/>
+  <use href="#egg-icon" x="117" y="118" width="160" height="160"/>
+  <text x="197" y="342" text-anchor="middle" fill="#f1f8ff" font-family="Microsoft YaHei UI, sans-serif" font-size="16" font-weight="600">深色任务栏</text>
+
+  <rect x="394" y="88" width="338" height="286" rx="15" fill="#eef3f7" stroke="#b8ccdc"/>
+  <use href="#egg-icon" x="483" y="118" width="160" height="160"/>
+  <text x="563" y="342" text-anchor="middle" fill="#173149" font-family="Microsoft YaHei UI, sans-serif" font-size="16" font-weight="600">浅色任务栏</text>
+
+  <rect x="28" y="398" width="704" height="130" rx="13" fill="#0a2138" stroke="#2a6c9b"/>
+  <text x="50" y="427" fill="#f1f8ff" font-family="Microsoft YaHei UI, sans-serif" font-size="15" font-weight="600">实际输出尺寸</text>
+  <g fill="#9ebbd4" font-family="Microsoft YaHei UI, sans-serif" font-size="13" text-anchor="middle">
+    <use href="#egg-icon" x="92" y="454" width="16" height="16"/><text x="100" y="501">16 px</text>
+    <use href="#egg-icon" x="200" y="452" width="20" height="20"/><text x="210" y="501">20 px</text>
+    <use href="#egg-icon" x="310" y="450" width="24" height="24"/><text x="322" y="501">24 px</text>
+    <use href="#egg-icon" x="420" y="446" width="32" height="32"/><text x="436" y="501">32 px</text>
+    <use href="#egg-icon" x="540" y="438" width="48" height="48"/><text x="564" y="501">48 px</text>
+    <use href="#egg-icon" x="662" y="430" width="64" height="64"/><text x="694" y="515">64 px</text>
+  </g>
+</svg>

@@ -20,7 +20,10 @@ namespace Launcher.Runtime.Transport;
 /// </summary>
 public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
 {
-    private const int MaximumRequestBodyBytes = 16 * 1024 * 1024;
+    // Base64 image input is larger than the source image. Keep the boundary bounded,
+    // but leave enough room for a normal desktop screenshot plus prompt/tool metadata.
+    private const int MaximumRequestBodyBytes = 32 * 1024 * 1024;
+    private const int MaximumDecodedRequestBodyBytes = 32 * 1024 * 1024;
     private const long MaximumDiagnosticLogBytes = 8L * 1024 * 1024;
 
     private static readonly HashSet<string> HopByHopHeaders = new(StringComparer.OrdinalIgnoreCase)
@@ -457,6 +460,16 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 durationMs = stopwatch.ElapsedMilliseconds,
             }).ConfigureAwait(false);
         }
+        catch (UnsafeMediaReferenceException exception) when (!context.Response.HasStarted)
+        {
+            await RejectRequestAsync(
+                context,
+                requestId,
+                stopwatch,
+                StatusCodes.Status400BadRequest,
+                "unsafe_image_reference",
+                exception.Message).ConfigureAwait(false);
+        }
         catch (Exception exception) when (!context.Response.HasStarted)
         {
             var safeMessage = SafeExceptionMessage(exception);
@@ -518,6 +531,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             }
 
             destination.Content = new ByteArrayContent(body);
+            ValidateImageReferences(body, source.ContentType);
             setStage("copy_request_headers");
             CopyAllowedRequestHeaders(source, destination, decoded);
             return new RequestCopySummary(
@@ -563,6 +577,59 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             return RequestSemanticSummary.Empty;
         }
     }
+
+    private static void ValidateImageReferences(byte[] body, string? contentType)
+    {
+        if (body.Length == 0
+            || contentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            ValidateImageReferences(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            // llama.cpp remains responsible for ordinary JSON validation.
+        }
+    }
+
+    private static void ValidateImageReferences(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("type", out var type)
+                && type.ValueKind == JsonValueKind.String
+                && string.Equals(type.GetString(), "input_image", StringComparison.Ordinal)
+                && element.TryGetProperty("image_url", out var url)
+                && url.ValueKind == JsonValueKind.String)
+            {
+                var value = url.GetString() ?? string.Empty;
+                if (!value.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new UnsafeMediaReferenceException(
+                        "Local image input must be embedded as a data:image URL; remote and file URLs are not forwarded.");
+                }
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                ValidateImageReferences(property.Value);
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                ValidateImageReferences(item);
+            }
+        }
+    }
+
+    private sealed class UnsafeMediaReferenceException(string message) : Exception(message);
 
     private static string[] ReadTypeNames(
         JsonElement root,
@@ -771,7 +838,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                     $"不支持的请求 Content-Encoding：{encodings[index]}。"),
             };
             using var output = new MemoryStream();
-            CopyWithLimit(decoder, output, MaximumRequestBodyBytes);
+            CopyWithLimit(decoder, output, MaximumDecodedRequestBodyBytes);
             current = output.ToArray();
         }
 

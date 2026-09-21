@@ -40,6 +40,19 @@ public static class BatchScriptGenerator
             arguments.Add($"--device {QuoteValue(profile.Device)}");
         }
 
+        if (profile.ModelType == ModelType.MoE)
+        {
+            if (profile.MoeExpertPlacement == MoeExpertPlacement.CpuAll)
+            {
+                arguments.Add("--cpu-moe");
+            }
+            else if (profile.MoeExpertPlacement == MoeExpertPlacement.CpuFirstLayers
+                     && profile.CpuMoeLayers is int cpuMoeLayers)
+            {
+                arguments.Add($"--n-cpu-moe {cpuMoeLayers.ToString(CultureInfo.InvariantCulture)}");
+            }
+        }
+
         arguments.Add($"--flash-attn {QuoteValue(profile.FlashAttention)}");
         arguments.Add($"--cache-type-k {QuoteValue(profile.CacheTypeK)}");
         arguments.Add($"--cache-type-v {QuoteValue(profile.CacheTypeV)}");

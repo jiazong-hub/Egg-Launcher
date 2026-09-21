@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Launcher.Models.Scanning;
 
 namespace Launcher.Models.Remote;
 
@@ -76,11 +77,35 @@ public sealed partial class HuggingFaceModelCatalogClient
 
         var files = document.RootElement.EnumerateArray()
             .Select(ParseFile)
-            .Where(file => file is not null && IsMainGguf(file.Path))
+            .Where(file => file is not null
+                           && file.Path.EndsWith(".gguf", StringComparison.OrdinalIgnoreCase))
             .Select(file => file!)
             .ToArray();
 
-        return new HuggingFaceModelDetails(model, BuildVariants(model.RepositoryId, files));
+        var revisionId = string.IsNullOrWhiteSpace(model.Revision) ? "main" : model.Revision;
+        var mtpFiles = files
+            .Where(file => IsRemoteMtpCandidate(file.Path))
+            .Select(file => new HuggingFaceMtpFile(
+                model.RepositoryId,
+                revisionId,
+                file.Path,
+                file.SizeBytes))
+            .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var visionFiles = files
+            .Where(file => IsRemoteVisionCandidate(file.Path))
+            .Select(file => new HuggingFaceVisionFile(
+                model.RepositoryId,
+                revisionId,
+                file.Path,
+                file.SizeBytes))
+            .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        return new HuggingFaceModelDetails(
+            model,
+            BuildVariants(model.RepositoryId, files.Where(file => IsMainGguf(file.Path)).ToArray()),
+            mtpFiles,
+            visionFiles);
     }
 
     private static HuggingFaceModelSearchResult? ParseSearchResult(JsonElement element)
@@ -174,7 +199,8 @@ public sealed partial class HuggingFaceModelCatalogClient
                         quantization,
                         file.Path,
                         file.SizeBytes,
-                        1));
+                        1,
+                        [new HuggingFaceGgufFile(file.Path, file.SizeBytes)]));
                 }
 
                 continue;
@@ -214,7 +240,11 @@ public sealed partial class HuggingFaceModelCatalogClient
                 quantization,
                 first.Path,
                 group.Sum(item => item.File.SizeBytes),
-                expected));
+                expected,
+                group
+                    .OrderBy(item => item.Index)
+                    .Select(item => new HuggingFaceGgufFile(item.File.Path, item.File.SizeBytes))
+                    .ToArray()));
         }
 
         return singleFiles
@@ -243,13 +273,28 @@ public sealed partial class HuggingFaceModelCatalogClient
             return false;
         }
 
+        return !GgufAuxiliaryFileClassifier.IsAuxiliaryModel(path);
+    }
+
+    private static bool IsRemoteMtpCandidate(string path)
+    {
+        if (GgufAuxiliaryFileClassifier.IsMtpCompanion(path))
+        {
+            return true;
+        }
+
+        var tokens = path.Replace('\\', '/').Split(
+            ['/', '-', '_', '.'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return tokens.Any(token => string.Equals(token, "mtp", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsRemoteVisionCandidate(string path)
+    {
         var fileName = Path.GetFileName(path);
-        return !fileName.Contains("mmproj", StringComparison.OrdinalIgnoreCase)
-               && !fileName.Contains("imatrix", StringComparison.OrdinalIgnoreCase)
-               && !fileName.Contains("mtp-", StringComparison.OrdinalIgnoreCase)
-               && !fileName.Contains("eagle3-", StringComparison.OrdinalIgnoreCase)
-               && !fileName.Contains("dflash-", StringComparison.OrdinalIgnoreCase)
-               && !fileName.Contains("dspark-", StringComparison.OrdinalIgnoreCase);
+        return fileName.StartsWith("mmproj-", StringComparison.OrdinalIgnoreCase)
+               || fileName.Contains(".mmproj.", StringComparison.OrdinalIgnoreCase)
+               || fileName.Contains("mmproj", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ReadString(JsonElement element, string propertyName) =>
@@ -304,14 +349,48 @@ public sealed record HuggingFaceModelSearchResult(
 
 public sealed record HuggingFaceModelDetails(
     HuggingFaceModelSearchResult Model,
-    IReadOnlyList<HuggingFaceGgufVariant> Variants);
+    IReadOnlyList<HuggingFaceGgufVariant> Variants,
+    IReadOnlyList<HuggingFaceMtpFile>? MtpFiles = null,
+    IReadOnlyList<HuggingFaceVisionFile>? VisionFiles = null)
+{
+    public IReadOnlyList<HuggingFaceMtpFile> ExternalMtpFiles =>
+        MtpFiles ?? Array.Empty<HuggingFaceMtpFile>();
+
+    public IReadOnlyList<HuggingFaceVisionFile> ExternalVisionFiles =>
+        VisionFiles ?? Array.Empty<HuggingFaceVisionFile>();
+}
 
 public sealed record HuggingFaceGgufVariant(
     string RepositoryId,
     string Quantization,
     string PrimaryFilePath,
     long TotalSizeBytes,
-    int ShardCount)
+    int ShardCount,
+    IReadOnlyList<HuggingFaceGgufFile>? Files = null)
 {
     public string DownloadId => $"{RepositoryId}:{Quantization}";
+
+    public IReadOnlyList<HuggingFaceGgufFile> ExpectedFiles => Files is { Count: > 0 }
+        ? Files
+        : [new HuggingFaceGgufFile(PrimaryFilePath, ShardCount == 1 ? TotalSizeBytes : 0)];
+}
+
+public sealed record HuggingFaceGgufFile(string Path, long SizeBytes);
+
+public sealed record HuggingFaceMtpFile(
+    string RepositoryId,
+    string Revision,
+    string Path,
+    long SizeBytes)
+{
+    public string DownloadId => $"{RepositoryId}@{Revision}:{Path}";
+}
+
+public sealed record HuggingFaceVisionFile(
+    string RepositoryId,
+    string Revision,
+    string Path,
+    long SizeBytes)
+{
+    public string DownloadId => $"{RepositoryId}@{Revision}:{Path}";
 }

@@ -20,7 +20,8 @@ public static class ModelProfileFactory
     public static ModelProfile CreateDefault(
         GgufModelCandidate candidate,
         string runtimeRoot,
-        IEnumerable<ModelProfile>? existingProfiles = null)
+        IEnumerable<ModelProfile>? existingProfiles = null,
+        bool detectModelType = true)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
@@ -45,6 +46,11 @@ public static class ModelProfileFactory
             identifier = $"{baseIdentifier}-{suffix}";
         }
 
+        var metadata = detectModelType ? TryReadMetadata(modelPath) : null;
+        var detectedModelType = metadata?.DetectModelType() ?? ModelType.Unknown;
+        var (modelType, modelTypeSource) = detectModelType
+            ? (detectedModelType, ModelTypeSource.Detected)
+            : (ModelType.Unknown, ModelTypeSource.Legacy);
         return new ModelProfile
         {
             Id = identifier,
@@ -59,8 +65,65 @@ public static class ModelProfileFactory
             RemoteQuantization = candidate.RemoteQuantization,
             KnownSizeBytes = candidate.TotalSizeBytes > 0 ? candidate.TotalSizeBytes : null,
             KnownShardCount = candidate.ShardCount > 0 ? candidate.ShardCount : null,
+            ModelType = modelType,
+            ModelTypeSource = modelTypeSource,
+            MtpCapabilityStatus = metadata?.HasEmbeddedMtp == true
+                ? MtpCapabilityStatus.EmbeddedCandidate
+                : MtpCapabilityStatus.Unknown,
+            VisionCapabilityStatus = metadata?.HasVisionEncoder == true
+                ? VisionCapabilityStatus.BuiltInCandidate
+                : VisionCapabilityStatus.Unknown,
+            ContextSize = 16_384,
             CompactionSafetyReserve = ModelProfile.DefaultCompactionSafetyReserve,
         };
+    }
+
+    public static ModelProfile RecreateForModelType(ModelProfile profile, ModelType modelType)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+        if (modelType == ModelType.Unknown)
+        {
+            throw new ArgumentOutOfRangeException(nameof(modelType));
+        }
+
+        return new ModelProfile
+        {
+            Id = profile.Id,
+            DisplayName = profile.DisplayName,
+            ModelRelativePath = profile.ModelRelativePath,
+            SourceKind = profile.SourceKind,
+            RemoteModelId = profile.RemoteModelId,
+            RemoteRepositoryId = profile.RemoteRepositoryId,
+            RemoteQuantization = profile.RemoteQuantization,
+            KnownSizeBytes = profile.KnownSizeBytes,
+            KnownShardCount = profile.KnownShardCount,
+            Alias = profile.Alias,
+            ShowInModePage = profile.ShowInModePage,
+            DisplayOrder = profile.DisplayOrder,
+            Host = profile.Host,
+            Port = profile.Port,
+            ModelType = modelType,
+            ModelTypeSource = ModelTypeSource.UserSelected,
+            ContextSize = 16_384,
+            CompactionSafetyReserve = ModelProfile.DefaultCompactionSafetyReserve,
+            ChatTemplateRelativePath = profile.ChatTemplateRelativePath,
+        };
+    }
+
+    private static GgufModelMetadata? TryReadMetadata(string modelPath)
+    {
+        try
+        {
+            return GgufContextMetadataReader.ReadMetadata(modelPath);
+        }
+        catch (Exception exception) when (exception is IOException
+                                          or UnauthorizedAccessException
+                                          or InvalidDataException
+                                          or NotSupportedException
+                                          or OverflowException)
+        {
+            return null;
+        }
     }
 
     private static string MakeIdentifier(string value)

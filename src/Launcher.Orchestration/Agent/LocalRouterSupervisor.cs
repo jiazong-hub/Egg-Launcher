@@ -99,6 +99,25 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
                     stopped ? "已停止 Agent 所有的 Local Router 与安全代理。" : null);
             }
 
+            if (string.IsNullOrWhiteSpace(settings.SelectedModelId))
+            {
+                var stopped = _processManager.OwnedProcessId is not null || _safetyProxy.IsRunning;
+                await StopRouterComponentsAsync(cancellationToken).ConfigureAwait(false);
+                _routerInfo = null;
+                _activeFingerprint = null;
+                await TryWriteRuntimeStateAsync(new RuntimeState
+                {
+                    SelectedMode = ProviderMode.Local,
+                    Phase = RuntimePhase.Stopped,
+                    AgentProcessId = Environment.ProcessId,
+                }).ConfigureAwait(false);
+                return new LocalRouterReconcileResult(
+                    ProviderMode.Local,
+                    stopped ? LocalRouterReconcileAction.Stopped : LocalRouterReconcileAction.None,
+                    null,
+                    "当前 Local 模型已被移除；等待用户重新预选模型并启动。");
+            }
+
             if (_processManager.OwnedProcessId is null)
             {
                 var recoveringFromRouterExit = _routerInfo is not null
@@ -115,7 +134,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
                         : LocalRouterReconcileAction.Started,
                     recoveringFromRouterExit
                         ? "检测到 Local Router 意外退出，已清理旧安全代理并完成重启。"
-                        : "Local Router 已就绪；直接启动 ChatGPT Desktop 时将沿用当前 Local 配置。",
+                        : "Local Router 已就绪；等待 Egg Launcher 启动本次 ChatGPT Local 会话。",
                     cancellationToken).ConfigureAwait(false);
             }
 

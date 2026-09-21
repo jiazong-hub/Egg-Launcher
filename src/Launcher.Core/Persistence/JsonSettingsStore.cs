@@ -43,7 +43,7 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
                 SerializerOptions,
                 cancellationToken).ConfigureAwait(false);
 
-            return Validate(settings);
+            return Validate(Migrate(settings));
         }
         catch (JsonException exception)
         {
@@ -66,6 +66,7 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
     public async Task SaveAsync(LauncherSettings settings, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        settings = Migrate(settings);
         Validate(settings);
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -130,6 +131,33 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
         ? $"检测到备份 {_settingsPath}.bak；它可能属于上一次模式，Launcher 不会自动套用，请确认模式后再手动恢复。"
         : "未检测到可用的 .bak 备份。";
 
+    private static LauncherSettings Migrate(LauncherSettings? settings)
+    {
+        if (settings is null)
+        {
+            throw new InvalidDataException("设置文件为空。");
+        }
+
+        if (settings.SchemaVersion != 1)
+        {
+            return settings;
+        }
+
+        if (!Enum.IsDefined(settings.Language))
+        {
+            throw new InvalidDataException($"设置中的界面语言无效：{settings.Language}。");
+        }
+
+        // Version 1 stored only an explicit Chinese/English choice. Version 2
+        // intentionally moves every existing installation to the new system-language
+        // default; users can still create an explicit override from the main window.
+        return settings with
+        {
+            SchemaVersion = LauncherSettings.CurrentSchemaVersion,
+            Language = AppLanguage.System,
+        };
+    }
+
     private static LauncherSettings Validate(LauncherSettings? settings)
     {
         if (settings is null)
@@ -148,6 +176,27 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
             throw new InvalidDataException($"设置中的模式值无效：{settings.SelectedMode}。");
         }
 
+        if (settings.PendingMode is { } pendingMode && !Enum.IsDefined(pendingMode))
+        {
+            throw new InvalidDataException($"设置中的预选模式值无效：{pendingMode}。");
+        }
+
+        if (!Enum.IsDefined(settings.Theme))
+        {
+            throw new InvalidDataException($"设置中的界面主题无效：{settings.Theme}。");
+        }
+
+        if (!Enum.IsDefined(settings.Language))
+        {
+            throw new InvalidDataException($"设置中的界面语言无效：{settings.Language}。");
+        }
+
+        if (settings.PendingMode == ProviderMode.Local
+            && string.IsNullOrWhiteSpace(settings.PendingModelId))
+        {
+            throw new InvalidDataException("Local 预选模式缺少模型 ID。");
+        }
+
         if (settings.RouterPort is < 1 or > 65535)
         {
             throw new InvalidDataException("设置中的 Router 端口必须在 1 到 65535 之间。");
@@ -161,11 +210,6 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
 
         if (settings.SelectedMode == ProviderMode.Local)
         {
-            if (string.IsNullOrWhiteSpace(settings.SelectedModelId))
-            {
-                throw new InvalidDataException("Local 模式缺少已选择的模型 ID。");
-            }
-
             if (string.IsNullOrWhiteSpace(settings.LlamaRoot))
             {
                 throw new InvalidDataException("Local 模式缺少 llama.cpp Runtime Root。");

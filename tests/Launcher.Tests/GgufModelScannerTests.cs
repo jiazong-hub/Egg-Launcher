@@ -51,6 +51,48 @@ public sealed class GgufModelScannerTests
     }
 
     [Fact]
+    public void Scan_ExcludesMtpCompanionFromStandaloneModels()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "coder-Q4_K_M.gguf"), [1, 2, 3]);
+            File.WriteAllBytes(Path.Combine(root, "mtp-coder-Q4_K_M.gguf"), [4, 5]);
+
+            var result = new GgufModelScanner().Scan(root);
+
+            Assert.Single(result.Models);
+            var excluded = Assert.Single(result.ExcludedFiles);
+            Assert.Contains("MTP", excluded.Reason, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Scan_ExcludesEveryDownloadedFileInsideLauncherMtpDirectory()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            File.WriteAllBytes(Path.Combine(root, "coder-Q4_K_M.gguf"), [1, 2, 3]);
+            var mtpRoot = Directory.CreateDirectory(Path.Combine(root, "egg-launcher-mtp", "org", "repo"));
+            File.WriteAllBytes(Path.Combine(mtpRoot.FullName, "companion-Q4_K_M.gguf"), [4, 5]);
+
+            var result = new GgufModelScanner().Scan(root);
+
+            Assert.Single(result.Models);
+            Assert.Single(result.ExcludedFiles);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void Scan_WhenShardSetIsIncomplete_ExcludesPartialModel()
     {
         var root = CreateTemporaryDirectory();

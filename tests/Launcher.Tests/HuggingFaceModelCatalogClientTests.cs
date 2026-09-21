@@ -51,6 +51,7 @@ public sealed class HuggingFaceModelCatalogClientTests
                   {"type":"file","path":"model-TQ1_0.gguf","size":90},
                   {"type":"file","path":"model-UD-Q4_K_XL.gguf","size":110},
                   {"type":"file","path":"mmproj-model-F16.gguf","size":50},
+                  {"type":"file","path":"mtp-model-F16.gguf","size":60},
                   {"type":"file","path":"broken-Q5_K_M-00001-of-00002.gguf","size":80}
                 ]
                 """);
@@ -70,6 +71,50 @@ public sealed class HuggingFaceModelCatalogClientTests
         Assert.Equal(400, q8.TotalSizeBytes);
         Assert.Contains(details.Variants, variant => variant.Quantization == "TQ1_0");
         Assert.Contains(details.Variants, variant => variant.Quantization == "UD-Q4_K_XL");
+        var mtp = Assert.Single(details.ExternalMtpFiles);
+        Assert.Equal("mtp-model-F16.gguf", mtp.Path);
+        Assert.Equal(60, mtp.SizeBytes);
+        Assert.Equal("abcdef", mtp.Revision);
+        var vision = Assert.Single(details.ExternalVisionFiles);
+        Assert.Equal("mmproj-model-F16.gguf", vision.Path);
+        Assert.Equal(50, vision.SizeBytes);
+    }
+
+    [Fact]
+    public void WebUriBuilder_CreatesRepositoryAndPinnedVariantPages()
+    {
+        var model = new HuggingFaceModelSearchResult(
+            "org/model name", "org", null, null, false, 0, 0, null, "abc123");
+        var variant = new HuggingFaceGgufVariant(
+            model.RepositoryId,
+            "Q4_K_M",
+            "weights/model Q4_K_M.gguf",
+            100,
+            1);
+
+        var repositoryUri = HuggingFaceWebUriBuilder.BuildRepositoryUri(model.RepositoryId);
+        var variantUri = HuggingFaceWebUriBuilder.BuildVariantUri(model, variant);
+
+        Assert.Equal("https://huggingface.co/org/model%20name", repositoryUri.AbsoluteUri);
+        Assert.Equal(
+            "https://huggingface.co/org/model%20name/blob/abc123/weights/model%20Q4_K_M.gguf",
+            variantUri.AbsoluteUri);
+    }
+
+    [Fact]
+    public void WebUriBuilder_RejectsCrossRepositoryOrTraversalPaths()
+    {
+        var model = new HuggingFaceModelSearchResult(
+            "org/model", "org", null, null, false, 0, 0, null, null);
+        var otherRepository = new HuggingFaceGgufVariant(
+            "other/model", "Q4_K_M", "model-Q4_K_M.gguf", 100, 1);
+        var traversal = new HuggingFaceGgufVariant(
+            model.RepositoryId, "Q4_K_M", "../model-Q4_K_M.gguf", 100, 1);
+
+        Assert.Throws<ArgumentException>(() =>
+            HuggingFaceWebUriBuilder.BuildVariantUri(model, otherRepository));
+        Assert.Throws<ArgumentException>(() =>
+            HuggingFaceWebUriBuilder.BuildVariantUri(model, traversal));
     }
 
     private static HttpResponseMessage JsonResponse(string json) => new(HttpStatusCode.OK)

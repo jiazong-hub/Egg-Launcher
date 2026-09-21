@@ -17,6 +17,16 @@ public static partial class LocalModelCatalogBuilder
     {
         Validate(options);
 
+        var reasoningLevels = new JsonArray();
+        foreach (var level in options.SupportedReasoningLevels)
+        {
+            reasoningLevels.Add(new JsonObject
+            {
+                ["effort"] = level,
+                ["description"] = ReasoningLevelDescription(level),
+            });
+        }
+
         var model = new JsonObject
         {
             ["slug"] = options.Slug,
@@ -25,10 +35,9 @@ public static partial class LocalModelCatalogBuilder
             // Current Codex requires either base_instructions or an instruction template.
             // Keep this empty so the launcher does not invent model behavior.
             ["base_instructions"] = string.Empty,
-            // Do not advertise a launcher-chosen reasoning mode. An empty list tells
-            // Codex that this local endpoint has no client-selectable reasoning preset;
-            // llama.cpp and the model template remain responsible for model behavior.
-            ["supported_reasoning_levels"] = new JsonArray(),
+            // Only exact levels verified from llama.cpp may be advertised. An empty list
+            // keeps the model template responsible for behavior without inventing presets.
+            ["supported_reasoning_levels"] = reasoningLevels,
             ["shell_type"] = "unified_exec",
             ["visibility"] = "list",
             ["supported_in_api"] = true,
@@ -52,9 +61,15 @@ public static partial class LocalModelCatalogBuilder
             ["supports_image_detail_original"] = false,
             ["context_window"] = options.ContextWindow,
             ["max_context_window"] = options.ContextWindow,
-            ["input_modalities"] = new JsonArray("text"),
+            ["input_modalities"] = options.SupportsImageInput
+                ? new JsonArray("text", "image")
+                : new JsonArray("text"),
             ["supports_search_tool"] = false,
         };
+        if (options.DefaultReasoningLevel is not null)
+        {
+            model["default_reasoning_level"] = options.DefaultReasoningLevel;
+        }
 
         var catalog = new JsonObject
         {
@@ -108,7 +123,39 @@ public static partial class LocalModelCatalogBuilder
         {
             throw new ArgumentOutOfRangeException(nameof(options), "Catalog Context Window 不能小于 1024。");
         }
+
+        var allowedLevels = new HashSet<string>(
+            ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra", "persistent"],
+            StringComparer.Ordinal);
+        if (options.SupportedReasoningLevels is null
+            || options.SupportedReasoningLevels.Count > allowedLevels.Count
+            || options.SupportedReasoningLevels.Any(level => !allowedLevels.Contains(level))
+            || options.SupportedReasoningLevels.Distinct(StringComparer.Ordinal).Count()
+                != options.SupportedReasoningLevels.Count)
+        {
+            throw new ArgumentException("Catalog 思考强度档位必须是经过验证的唯一标准值。", nameof(options));
+        }
+
+        if (options.DefaultReasoningLevel is not null
+            && !options.SupportedReasoningLevels.Contains(options.DefaultReasoningLevel, StringComparer.Ordinal))
+        {
+            throw new ArgumentException("Catalog 默认思考强度必须属于支持档位。", nameof(options));
+        }
     }
+
+    private static string ReasoningLevelDescription(string level) => level switch
+    {
+        "none" => "No additional reasoning",
+        "minimal" => "Minimal reasoning effort",
+        "low" => "Low reasoning effort",
+        "medium" => "Medium reasoning effort",
+        "high" => "High reasoning effort",
+        "xhigh" => "Extra-high reasoning effort",
+        "max" => "Maximum reasoning effort",
+        "ultra" => "Ultra reasoning effort",
+        "persistent" => "Persistent reasoning effort",
+        _ => throw new ArgumentOutOfRangeException(nameof(level)),
+    };
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._:/-]*$", RegexOptions.CultureInvariant)]
     private static partial Regex SafeSlugRegex();
