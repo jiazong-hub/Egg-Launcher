@@ -251,6 +251,8 @@
     <sys:String x:Key="NumaModeTip">普通桌面平台保持默认；仅在 NUMA 系统中按需要选择。</sys:String>
     <sys:String x:Key="SwaFullCache">SWA 完整缓存</sys:String>
     <sys:String x:Key="SwaFullCacheTip">默认不覆盖；开启会增加部分架构的 KV 内存使用。</sys:String>
+    <sys:String x:Key="ContextCheckpoints">上下文检查点</sys:String>
+    <sys:String x:Key="ContextCheckpointsTip">对应 llama.cpp --ctx-checkpoints：留空使用 Runtime 默认值；0 关闭检查点，可能降低长前缀恢复效率并增加预填充时间。此项不改变 Codex 的上下文压缩。</sys:String>
     <sys:String x:Key="WeightRepack">权重 Repack</sys:String>
     <sys:String x:Key="WeightRepackTip">默认由 llama.cpp 决定；关闭可能降低部分后端性能。</sys:String>
     <sys:String x:Key="OperationOffloadTip">控制主机 Tensor 操作是否卸载到设备；保持默认通常最安全。</sys:String>

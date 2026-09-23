@@ -89,7 +89,7 @@ public partial class ProfileEditorWindow : Window
     [
         "threads", "threads-batch", "kv-offload", "no-kv-offload", "load-mode", "lazy-mode",
         "fit", "fit-target", "fit-ctx", "n-cpu-ffn", "split-mode", "tensor-split", "main-gpu",
-        "numa", "swa-full", "repack", "no-repack", "op-offload", "no-op-offload", "no-host",
+        "numa", "swa-full", "ctx-checkpoints", "swa-checkpoints", "repack", "no-repack", "op-offload", "no-op-offload", "no-host",
         "rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx",
         "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast", "override-tensor",
         "cpu-moe", "n-cpu-moe",
@@ -157,6 +157,7 @@ public partial class ProfileEditorWindow : Window
     private readonly bool _hasEmbeddedMtpCandidate;
     private bool? _runtimeSupportsMtp;
     private bool? _runtimeSupportsExternalMtp;
+    private bool? _runtimeSupportsContextCheckpoints;
     private bool _isPopulatingMtp;
     private MtpCapabilityStatus _displayedMtpCapabilityStatus = MtpCapabilityStatus.Unknown;
     private bool? _runtimeSupportsVision;
@@ -175,7 +176,6 @@ public partial class ProfileEditorWindow : Window
         _hasEmbeddedMtpCandidate = TryReadModelMetadata(profile, _runtimeRoot)?.HasEmbeddedMtp == true;
         _contextChoices = BuildContextChoices(_modelContextLimit);
         InitializeComponent();
-        Loaded += (_, _) => AlignActionsWithSelectedTabSurface();
         UiMotion.AttachWindowEntrance(this);
         InitializeAdvancedChoices();
         InitializeMtpChoices();
@@ -201,31 +201,10 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
-        AlignActionsWithTabSurface(content);
         await UiMotion.AnimateEntranceAsync(
             content,
             offsetY: 5,
             durationMilliseconds: UiMotion.StandardMilliseconds);
-    }
-
-    private void AlignActionsWithSelectedTabSurface()
-    {
-        if (ProfileEditorTabs.SelectedItem is TabItem { Content: FrameworkElement content })
-        {
-            AlignActionsWithTabSurface(content);
-        }
-    }
-
-    private void AlignActionsWithTabSurface(FrameworkElement content)
-    {
-        if (content is not ScrollViewer { Content: FrameworkElement surface })
-        {
-            return;
-        }
-
-        ProfileEditorActionsHost.SetBinding(
-            WidthProperty,
-            new System.Windows.Data.Binding(nameof(ActualWidth)) { Source = surface });
     }
 
     private void RestoreModelDefaultsButton_Click(object sender, RoutedEventArgs e)
@@ -589,6 +568,8 @@ public partial class ProfileEditorWindow : Window
         {
             _runtimeSupportsMtp = null;
             _runtimeSupportsExternalMtp = null;
+            _runtimeSupportsContextCheckpoints = null;
+            UpdateContextCheckpointsUiState();
             _runtimeSupportsVision = null;
             UpdateMtpUiState();
             UpdateVisionUiState();
@@ -597,7 +578,11 @@ public partial class ProfileEditorWindow : Window
 
         _runtimeSupportsMtp = capabilities.Contains("spec-type");
         _runtimeSupportsExternalMtp = capabilities.Contains("spec-draft-model");
+        _runtimeSupportsContextCheckpoints = capabilities.Contains("ctx-checkpoints")
+            || capabilities.Contains("swa-checkpoints");
         _runtimeSupportsVision = capabilities.Contains("mmproj");
+
+        UpdateContextCheckpointsUiState();
 
         foreach (var (control, option) in new (FrameworkElement, string)[]
                  {
@@ -880,6 +865,12 @@ public partial class ProfileEditorWindow : Window
         MainGpuTextBox.Text = ReadArgument(extra, "main-gpu");
         Select(NumaComboBox, ReadArgument(extra, "numa"));
         Select(SwaFullComboBox, extra.ContainsKey("swa-full") ? "on" : string.Empty);
+        CtxCheckpointsTextBox.Text = ReadArgument(extra, "ctx-checkpoints");
+        if (string.IsNullOrWhiteSpace(CtxCheckpointsTextBox.Text))
+        {
+            CtxCheckpointsTextBox.Text = ReadArgument(extra, "swa-checkpoints");
+        }
+        UpdateContextCheckpointsUiState();
         Select(RepackComboBox, extra.ContainsKey("no-repack") ? "off" : extra.ContainsKey("repack") ? "on" : string.Empty);
         Select(OpOffloadComboBox, extra.ContainsKey("no-op-offload") ? "off" : extra.ContainsKey("op-offload") ? "on" : string.Empty);
         Select(NoHostComboBox, extra.ContainsKey("no-host") ? "on" : string.Empty);
@@ -1351,14 +1342,26 @@ public partial class ProfileEditorWindow : Window
                 (AppLanguageManager.Choose("CPU 批处理线程", "CPU Batch Threads"), ThreadsBatchTextBox.Text, false),
                 (AppLanguageManager.Choose("Fit 最低上下文", "Fit Minimum Context"), FitContextTextBox.Text, false),
                 (AppLanguageManager.Choose("CPU Dense FFN 层数", "CPU Dense FFN Layers"), CpuFfnLayersTextBox.Text, true),
-                (AppLanguageManager.Choose("主 GPU", "Main GPU"), MainGpuTextBox.Text, true)))
+                (AppLanguageManager.Choose("主 GPU", "Main GPU"), MainGpuTextBox.Text, true),
+                (AppLanguageManager.Choose("上下文检查点", "Context Checkpoints"), CtxCheckpointsTextBox.Text, true)))
         {
             arguments = extra;
             return false;
         }
 
+        if (_runtimeSupportsContextCheckpoints == false
+            && !string.IsNullOrWhiteSpace(CtxCheckpointsTextBox.Text))
+        {
+            arguments = extra;
+            error = AppLanguageManager.Choose(
+                "当前 llama.cpp Runtime 不支持 --ctx-checkpoints；清空此项后才能保存。",
+                "The current llama.cpp Runtime does not support --ctx-checkpoints. Clear this field before saving.");
+            return false;
+        }
+
         AddOptional(extra, "threads", ThreadsTextBox.Text);
         AddOptional(extra, "threads-batch", ThreadsBatchTextBox.Text);
+        AddOptional(extra, "ctx-checkpoints", CtxCheckpointsTextBox.Text);
         AddToggle(extra, KvOffloadComboBox, "kv-offload", "no-kv-offload");
         AddOptional(extra, "load-mode", _originalProfile.ModelType == ModelType.MoE
             ? SelectedValue<string>(MoeLoadModeComboBox)
@@ -1395,6 +1398,24 @@ public partial class ProfileEditorWindow : Window
         AddOptional(extra, "override-tensor", OverrideTensorTextBox.Text);
         arguments = extra;
         return true;
+    }
+
+    private void UpdateContextCheckpointsUiState()
+    {
+        if (_runtimeSupportsContextCheckpoints == false)
+        {
+            // Keep an existing value editable so the user can remove it after changing
+            // to a Runtime that does not expose this option. A non-empty value is rejected
+            // during save below.
+            CtxCheckpointsTextBox.IsEnabled = !string.IsNullOrWhiteSpace(CtxCheckpointsTextBox.Text);
+            CtxCheckpointsTextBox.ToolTip = AppLanguageManager.Choose(
+                "当前 llama.cpp Runtime 不支持 --ctx-checkpoints；清空此项后才能保存。",
+                "The current llama.cpp Runtime does not support --ctx-checkpoints. Clear this field before saving.");
+            return;
+        }
+
+        CtxCheckpointsTextBox.IsEnabled = true;
+        CtxCheckpointsTextBox.SetResourceReference(FrameworkElement.ToolTipProperty, "ContextCheckpointsTip");
     }
 
     private static bool ValidateOptionalNonNegativeIntegers(

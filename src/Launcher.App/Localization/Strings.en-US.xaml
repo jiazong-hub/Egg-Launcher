@@ -251,6 +251,8 @@
     <sys:String x:Key="NumaModeTip">Keep the default on normal desktops. Select only as needed on NUMA systems.</sys:String>
     <sys:String x:Key="SwaFullCache">Full SWA Cache</sys:String>
     <sys:String x:Key="SwaFullCacheTip">Default does not override. Enabling increases KV memory use on some architectures.</sys:String>
+    <sys:String x:Key="ContextCheckpoints">Context Checkpoints</sys:String>
+    <sys:String x:Key="ContextCheckpointsTip">llama.cpp --ctx-checkpoints. Leave blank for the Runtime default; 0 disables checkpoints and may reduce long-prefix restore efficiency and increase prefill time. This does not change Codex context compaction.</sys:String>
     <sys:String x:Key="WeightRepack">Weight Repack</sys:String>
     <sys:String x:Key="WeightRepackTip">Default lets llama.cpp decide. Disabling may reduce performance on some backends.</sys:String>
     <sys:String x:Key="OperationOffloadTip">Controls whether host tensor operations are offloaded to the device. Keeping the default is usually safest.</sys:String>

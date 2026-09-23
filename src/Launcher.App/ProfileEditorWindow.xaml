@@ -12,6 +12,39 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
     <Window.Resources>
+        <Style x:Key="ProfileEditorTabControlStyle" TargetType="TabControl">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid ClipToBounds="True"
+                              KeyboardNavigation.TabNavigation="Local"
+                              SnapsToDevicePixels="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TabPanel x:Name="HeaderPanel"
+                                      Grid.Row="0"
+                                      IsItemsHost="True"
+                                      KeyboardNavigation.TabIndex="1" />
+                            <Border x:Name="ContentPanel"
+                                    Grid.Row="1"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    KeyboardNavigation.DirectionalNavigation="Contained"
+                                    KeyboardNavigation.TabIndex="2">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  ContentSource="SelectedContent"
+                                                  HorizontalAlignment="Stretch"
+                                                  VerticalAlignment="Stretch"
+                                                  SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
             <Setter Property="Background" Value="Transparent" />
@@ -89,11 +122,21 @@
         </StackPanel>
 
         <TabControl x:Name="ProfileEditorTabs" Grid.Row="1" Margin="0,20,0,18"
+                    Style="{StaticResource ProfileEditorTabControlStyle}"
+                    HorizontalAlignment="Stretch"
                     Background="Transparent" BorderThickness="0"
+                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
                     SelectionChanged="ProfileEditorTabs_SelectionChanged">
             <TabItem Header="{DynamicResource BasicParameters}">
-                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
-                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch"
+                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
 
                     <Grid>
@@ -248,8 +291,15 @@
             </TabItem>
 
             <TabItem Header="{DynamicResource VisionParameters}">
-                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
-                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch"
+                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
                             <TextBlock x:Name="VisionStatusTextBlock" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                             <CheckBox x:Name="VisionEnableCheckBox" Style="{StaticResource StartupToggleStyle}" FontWeight="SemiBold"
@@ -276,8 +326,15 @@
             </TabItem>
 
             <TabItem Header="{DynamicResource MtpParameters}">
-                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
-                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch"
+                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
                             <TextBlock x:Name="MtpStatusTextBlock" Margin="0,0,0,12"
                                        Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
@@ -329,8 +386,15 @@
             </TabItem>
 
             <TabItem Header="{DynamicResource AdvancedParameters}">
-                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
-                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch"
+                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
                             <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap"
                                        Text="{DynamicResource AdvancedParametersHint}" />
@@ -350,13 +414,14 @@
                                 <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource MainGpu}"/><TextBox x:Name="MainGpuTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource MainGpuTip}"/></StackPanel>
                                 <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource NumaMode}"/><ComboBox x:Name="NumaComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource NumaModeTip}"/></StackPanel>
                                 <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource SwaFullCache}"/><ComboBox x:Name="SwaFullComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource SwaFullCacheTip}"/></StackPanel>
-                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource WeightRepack}"/><ComboBox x:Name="RepackComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource WeightRepackTip}"/></StackPanel>
-                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="Operation Offload"/><ComboBox x:Name="OpOffloadComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource OperationOffloadTip}"/></StackPanel>
-                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource BypassHostBuffer}"/><ComboBox x:Name="NoHostComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource BypassHostBufferTip}"/></StackPanel>
-                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource RopeScalingMode}"/><ComboBox x:Name="RopeScalingComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource RopeScalingModeTip}"/></StackPanel>
-                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="RoPE Scale"/><TextBox x:Name="RopeScaleTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeScaleTip}"/></StackPanel>
-                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Base"/><TextBox x:Name="RopeFreqBaseTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeFrequencyBaseTip}"/></StackPanel>
-                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Scale"/><TextBox x:Name="RopeFreqScaleTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeFrequencyScaleTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource ContextCheckpoints}"/><TextBox x:Name="CtxCheckpointsTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource ContextCheckpointsTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource WeightRepack}"/><ComboBox x:Name="RepackComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource WeightRepackTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="Operation Offload"/><ComboBox x:Name="OpOffloadComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource OperationOffloadTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource BypassHostBuffer}"/><ComboBox x:Name="NoHostComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource BypassHostBufferTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="{DynamicResource RopeScalingMode}"/><ComboBox x:Name="RopeScalingComboBox" Margin="0,6,0,14" Padding="7" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource RopeScalingModeTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="RoPE Scale"/><TextBox x:Name="RopeScaleTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeScaleTip}"/></StackPanel>
+                                <StackPanel Margin="9,0,0,0"><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Base"/><TextBox x:Name="RopeFreqBaseTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeFrequencyBaseTip}"/></StackPanel>
+                                <StackPanel Margin="0,0,9,0"><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Scale"/><TextBox x:Name="RopeFreqScaleTextBox" Margin="0,6,0,14" Padding="9,7" ToolTip="{DynamicResource RopeFrequencyScaleTip}"/></StackPanel>
                             </UniformGrid>
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource YarnParameters}"/>
                             <TextBox x:Name="YarnArgumentsTextBox" Margin="0,6,0,14" Padding="9,7"
@@ -370,8 +435,15 @@
             </TabItem>
 
             <TabItem Header="{DynamicResource ModelInformation}">
-                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Auto">
-                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch"
+                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource DisplayName}" />
                             <TextBox x:Name="DisplayNameTextBox" Margin="0,6,0,14" Padding="9,7"
@@ -395,8 +467,8 @@
             </TabItem>
         </TabControl>
 
-        <Grid x:Name="ProfileEditorActionsHost" Grid.Row="2" HorizontalAlignment="Left">
-            <WrapPanel HorizontalAlignment="Right">
+        <Grid Grid.Row="2" HorizontalAlignment="Stretch">
+            <WrapPanel HorizontalAlignment="Left">
                 <Button x:Name="RestoreModelDefaultsButton" Padding="14,9" Content="{DynamicResource RestoreModelDefaults}"
                         ToolTip="{DynamicResource RestoreModelDefaultsTip}"
                         Click="RestoreModelDefaultsButton_Click" />

@@ -190,6 +190,7 @@ public static partial class ModelProfileValidator
         ValidateReasoningCapability(profile, errors);
         ValidateMtp(profile, runtimeRoot, errors);
         ValidateVision(profile, runtimeRoot, errors);
+        ValidateContextCheckpoints(profile, errors);
 
         foreach (var argument in profile.ExtraArguments)
         {
@@ -218,6 +219,29 @@ public static partial class ModelProfileValidator
         }
 
         return errors;
+    }
+
+    private static void ValidateContextCheckpoints(ModelProfile profile, ICollection<string> errors)
+    {
+        var checkpointArguments = profile.ExtraArguments
+            .Where(argument => argument.Key.Equals("ctx-checkpoints", StringComparison.OrdinalIgnoreCase)
+                               || argument.Key.Equals("swa-checkpoints", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        if (checkpointArguments.Length > 1)
+        {
+            errors.Add("上下文检查点只能使用 --ctx-checkpoints 或其别名 --swa-checkpoints 其中之一。");
+        }
+
+        foreach (var argument in checkpointArguments)
+        {
+            if (argument.Value is null
+                || !int.TryParse(argument.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var count)
+                || count < 0)
+            {
+                errors.Add($"高级参数 --{argument.Key} 必须是非负整数。");
+            }
+        }
     }
 
     private static void ValidateReasoningCapability(ModelProfile profile, ICollection<string> errors)
