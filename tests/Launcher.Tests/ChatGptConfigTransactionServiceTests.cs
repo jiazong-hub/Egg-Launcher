@@ -96,7 +96,8 @@ public sealed class ChatGptConfigTransactionServiceTests
             Assert.DoesNotContain("model_context_window", restoredText);
             Assert.DoesNotContain("model_auto_compact_token_limit", restoredText);
             Assert.DoesNotContain("model_reasoning_effort", restoredText);
-            Assert.DoesNotContain("model_providers.chatgpt_local_launcher", restoredText);
+            Assert.Contains("model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\"", restoredText);
+            Assert.Contains("base_url = \"http://127.0.0.1:0/v1/\"", restoredText);
             Assert.DoesNotContain("approval_policy =", restoredText);
             Assert.DoesNotContain("approvals_reviewer =", restoredText);
             Assert.Contains("model_providers.user_proxy =", restoredText);
@@ -202,7 +203,11 @@ public sealed class ChatGptConfigTransactionServiceTests
 
             await service.RestoreOpenAIAsync(paths.RecoveryFile);
 
-            Assert.Equal(original, await File.ReadAllTextAsync(configPath));
+            var restoredText = await File.ReadAllTextAsync(configPath);
+            Assert.Contains("description = \"\"\"\r\n[this-is-text-not-a-table]\r\nkept exactly\r\n\"\"\"", restoredText);
+            Assert.Contains("model = \"official\" # keep this comment", restoredText);
+            Assert.Contains("[projects.sample]\r\ntrust_level = \"trusted\"", restoredText);
+            Assert.Contains("model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\"", restoredText);
         }
         finally
         {
@@ -602,7 +607,7 @@ public sealed class ChatGptConfigTransactionServiceTests
     }
 
     [Fact]
-    public async Task RestoreOpenAi_WhenOriginalConfigDidNotExist_RemovesGeneratedConfig()
+    public async Task RestoreOpenAi_WhenOriginalConfigDidNotExist_KeepsHistoryProviderOnly()
     {
         var root = CreateTemporaryDirectory();
         try
@@ -616,7 +621,9 @@ public sealed class ChatGptConfigTransactionServiceTests
 
             await service.RestoreOpenAIAsync(paths.RecoveryFile);
 
-            Assert.False(File.Exists(configPath));
+            var restoredText = await File.ReadAllTextAsync(configPath);
+            Assert.Contains("model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\"", restoredText);
+            Assert.DoesNotContain("model_provider =", restoredText);
         }
         finally
         {

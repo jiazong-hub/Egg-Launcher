@@ -222,6 +222,13 @@
     <sys:String x:Key="MtpThreadsTip">外部 MTP 模型的 CPU 线程数。留空由 llama.cpp 决定。</sys:String>
     <sys:String x:Key="AdvancedParameters">高级参数</sys:String>
     <sys:String x:Key="ModelInformation">模型信息</sys:String>
+    <sys:String x:Key="SandboxSettings">沙箱设置</sys:String>
+    <sys:String x:Key="SandboxSettingsHint">此处只管理 Codex 执行命令时的沙箱权限，不调整审批方式或 llama.cpp 运行参数。未修改过沙箱设置的旧模型会继续沿用 Codex 当前配置。</sys:String>
+    <sys:String x:Key="SandboxNetworkAccess">命令联网权限</sys:String>
+    <sys:String x:Key="SandboxNetworkAccessTip">控制此模型对应的 Codex 命令是否可以联网；不影响 ChatGPT 的网页、浏览器或连接器功能。</sys:String>
+    <sys:String x:Key="SandboxAdditionalPaths">额外路径权限</sys:String>
+    <sys:String x:Key="SandboxAdditionalPathsTip">为 Codex 命令开放工作区之外的绝对路径。未勾选“允许写入”时只读，勾选后可读取和写入。不要授权整个磁盘根目录。</sys:String>
+    <sys:String x:Key="SandboxAddPath">添加路径</sys:String>
     <sys:String x:Key="AdvancedParametersHint">未调整的项目保持默认，不会写入模型配置。高级参数可能显著影响兼容性、内存占用和速度。</sys:String>
     <sys:String x:Key="ComputeDevice">计算设备</sys:String>
     <sys:String x:Key="ComputeDeviceTip">留空使用 llama.cpp 默认设备；多设备可按 llama.cpp 格式填写逗号分隔列表。</sys:String>

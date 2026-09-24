@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Launcher.Core\Launcher.Core.csproj" />
+    <ProjectReference Include="..\Launcher.Models\Launcher.Models.csproj" />
   </ItemGroup>
 
   <ItemGroup>

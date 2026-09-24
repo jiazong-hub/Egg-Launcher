@@ -10,6 +10,12 @@
       },
       "launcher.core": {
         "type": "Project"
+      },
+      "launcher.models": {
+        "type": "Project",
+        "dependencies": {
+          "Launcher.Core": "[0.9.2, )"
+        }
       }
     }
   }

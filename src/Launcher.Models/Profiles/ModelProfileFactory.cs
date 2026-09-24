@@ -107,6 +107,7 @@ public static class ModelProfileFactory
             ContextSize = 16_384,
             CompactionSafetyReserve = ModelProfile.DefaultCompactionSafetyReserve,
             ChatTemplateRelativePath = profile.ChatTemplateRelativePath,
+            SandboxSettings = profile.SandboxSettings,
         };
     }
 

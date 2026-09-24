@@ -41,6 +41,11 @@ public partial class ModelDownloadWindow : Window
 
     public HuggingFaceGgufVariant? SelectedDownload { get; private set; }
 
+    private void NestedResult_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        NestedScrollWheelRouter.Route(sender as DependencyObject, SearchPageScrollViewer, e);
+    }
+
     public HuggingFaceMtpFile? SelectedMtpDownload { get; private set; }
 
     public HuggingFaceVisionFile? SelectedVisionDownload { get; private set; }

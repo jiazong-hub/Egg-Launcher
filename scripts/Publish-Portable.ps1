@@ -424,10 +424,19 @@ try {
         -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.1.md') `
         -Destination $packageDocsPath
     Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.2.md') `
+        -Destination $packageDocsPath
+    Copy-Item `
         -LiteralPath (Join-Path $repositoryRoot 'docs\release-security-review-0.9.1.md') `
         -Destination $packageDocsPath
     Copy-Item `
         -LiteralPath (Join-Path $repositoryRoot 'docs\architecture\0002-thin-launcher-boundary.md') `
+        -Destination $packageArchitecturePath
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\architecture\0003-per-model-codex-sandbox.md') `
+        -Destination $packageArchitecturePath
+    Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\architecture\0004-cross-provider-history-boundary.md') `
         -Destination $packageArchitecturePath
 
     $sourceFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File |

@@ -2,7 +2,7 @@ namespace Launcher.Models.Profiles;
 
 public sealed record ModelProfile
 {
-    public const int CurrentSchemaVersion = 6;
+    public const int CurrentSchemaVersion = 7;
 
     public const int DefaultCompactionSafetyReserve = 8_192;
 
@@ -158,6 +158,9 @@ public sealed record ModelProfile
     public string? ReasoningCapabilitySignature { get; init; }
 
     public DateTimeOffset? ReasoningCapabilityCheckedAtUtc { get; init; }
+
+    /// <summary>Optional Codex sandbox overrides for this model, independent of llama.cpp settings.</summary>
+    public ModelSandboxSettings? SandboxSettings { get; init; }
 
     public IReadOnlyDictionary<string, string?> ExtraArguments { get; init; } =
         new Dictionary<string, string?>(StringComparer.Ordinal);

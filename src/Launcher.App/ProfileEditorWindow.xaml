@@ -434,6 +434,38 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="{DynamicResource SandboxSettings}">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="22" CornerRadius="14" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch"
+                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,14" Foreground="{DynamicResource SecondaryBrush}"
+                                       TextWrapping="Wrap" Text="{DynamicResource SandboxSettingsHint}" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource SandboxNetworkAccess}" />
+                            <ComboBox x:Name="SandboxNetworkAccessComboBox" Margin="0,6,0,16" Padding="7"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value"
+                                      SelectionChanged="SandboxNetworkAccess_Changed"
+                                      ToolTip="{DynamicResource SandboxNetworkAccessTip}" />
+                            <Border Margin="0,0,0,14" BorderBrush="{DynamicResource ControlBorderBrush}"
+                                    BorderThickness="0,1,0,0" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource SandboxAdditionalPaths}" />
+                            <TextBlock Margin="0,5,0,10" Foreground="{DynamicResource SecondaryBrush}"
+                                       TextWrapping="Wrap" Text="{DynamicResource SandboxAdditionalPathsTip}" />
+                            <StackPanel x:Name="SandboxPathsPanel" />
+                            <Button HorizontalAlignment="Left" Padding="12,7"
+                                    Content="{DynamicResource SandboxAddPath}"
+                                    Click="AddSandboxPathButton_Click" />
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="{DynamicResource ModelInformation}">
                 <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
                               Margin="0,16,0,0" Padding="0,0,12,0"

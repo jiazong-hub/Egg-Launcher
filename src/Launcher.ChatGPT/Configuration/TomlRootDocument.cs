@@ -31,6 +31,75 @@ internal sealed class TomlRootDocument
             : _text.Substring(assignment.Span.Offset, assignment.Span.Length).TrimEnd('\r', '\n');
     }
 
+    public string? GetDefinition(string key)
+    {
+        var assignment = FindSingleAssignment(key);
+        if (assignment is not null)
+        {
+            return _text.Substring(assignment.Span.Offset, assignment.Span.Length).TrimEnd('\r', '\n');
+        }
+
+        var table = FindSingleTable(key);
+        return table is null
+            ? null
+            : _text.Substring(table.Span.Offset, table.Span.Length).TrimEnd('\r', '\n');
+    }
+
+    public string? GetStringValue(string key)
+    {
+        var assignment = FindSingleAssignment(key);
+        if (assignment is null)
+        {
+            return null;
+        }
+
+        return assignment.Value is StringValueSyntax { Value: not null } value
+            ? value.Value
+            : throw new InvalidDataException($"ChatGPT 配置项 {key} 必须是字符串。");
+    }
+
+    public bool? GetTableBooleanValue(string tableKey, string itemKey)
+    {
+        var assignment = FindSingleTableAssignment(tableKey, itemKey);
+        if (assignment is null)
+        {
+            return null;
+        }
+
+        return assignment.Value is BooleanValueSyntax value
+            ? value.Value
+            : throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是布尔值。");
+    }
+
+    public IReadOnlyList<string>? GetTableStringArrayValue(string tableKey, string itemKey)
+    {
+        var assignment = FindSingleTableAssignment(tableKey, itemKey);
+        if (assignment is null)
+        {
+            return null;
+        }
+
+        if (assignment.Value is not ArraySyntax array)
+        {
+            throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是字符串数组。");
+        }
+
+        var values = new List<string>(array.Items.ChildrenCount);
+        for (var index = 0; index < array.Items.ChildrenCount; index++)
+        {
+            var item = array.Items.GetChild(index)
+                ?? throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 包含缺失项目。");
+            if (item.Value is not StringValueSyntax { Value: not null } value)
+            {
+                throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 只能包含字符串。");
+            }
+
+            values.Add(value.Value);
+        }
+
+        return values;
+    }
+
     /// <summary>
     /// Returns true when the requested logical key already exists, is an ancestor of
     /// an existing key/table, or is sealed inside an inline-table ancestor. This is
@@ -65,6 +134,36 @@ internal sealed class TomlRootDocument
                 {
                     return true;
                 }
+            }
+        }
+
+        return false;
+    }
+
+    public bool ContainsDescendantDefinition(string key)
+    {
+        var target = ParseManagedKey(key);
+        foreach (var assignment in _syntax.KeyValues)
+        {
+            var path = GetKeyPath(assignment.Key);
+            if (path.Length > target.Length && IsPrefix(target, path))
+            {
+                return true;
+            }
+        }
+
+        foreach (var table in _syntax.Tables)
+        {
+            var tablePath = GetKeyPath(table.Name);
+            if (tablePath.Length > target.Length && IsPrefix(target, tablePath))
+            {
+                return true;
+            }
+
+            if (PathsEqual(tablePath, target)
+                && table.Items.Any(assignment => GetKeyPath(assignment.Key).Length > 1))
+            {
+                return true;
             }
         }
 
@@ -125,6 +224,55 @@ internal sealed class TomlRootDocument
         return new TomlRootDocument(root + normalizedAssignment + lineEnding + suffix);
     }
 
+    public TomlRootDocument SetRawDefinition(string key, string? definition)
+    {
+        var normalizedDefinition = definition?.TrimEnd('\r', '\n');
+        if (normalizedDefinition is null)
+        {
+            var assignment = FindSingleAssignment(key);
+            if (assignment is not null)
+            {
+                return SetRawAssignment(key, null);
+            }
+
+            var table = FindSingleTable(key);
+            if (table is null)
+            {
+                return this;
+            }
+
+            return new TomlRootDocument(
+                _text[..table.Span.Offset]
+                + _text[(table.Span.Offset + table.Span.Length)..]);
+        }
+
+        if (!normalizedDefinition.StartsWith("[", StringComparison.Ordinal))
+        {
+            return SetRawAssignment(key, normalizedDefinition);
+        }
+
+        var parsed = ParseValidated(normalizedDefinition);
+        var replacementTable = parsed.Tables.ChildrenCount == 1
+            ? parsed.Tables.GetChild(0)
+            : null;
+        if (parsed.KeyValues.ChildrenCount != 0
+            || replacementTable is not TableSyntax
+            || !PathsEqual(GetKeyPath(replacementTable.Name), ParseManagedKey(key)))
+        {
+            throw new InvalidDataException($"表定义不属于受管配置 {string.Join('.', ParseManagedKey(key))}。");
+        }
+
+        var withoutExisting = SetRawDefinition(key, null);
+        var insertionText = withoutExisting._text;
+        var lineEnding = withoutExisting.DetectLineEnding();
+        if (insertionText.Length > 0 && !insertionText.EndsWith('\n'))
+        {
+            insertionText += lineEnding;
+        }
+
+        return new TomlRootDocument(insertionText + normalizedDefinition + lineEnding);
+    }
+
     public override string ToString() => _text;
 
     private KeyValueSyntax? FindSingleAssignment(string key)
@@ -139,6 +287,41 @@ internal sealed class TomlRootDocument
             // Tomlyn's semantic validation should reject this first. Keep the guard
             // so this editor remains fail-closed if parser behavior changes.
             throw new InvalidDataException($"顶层配置 {key} 出现多次，拒绝自动修改。");
+        }
+
+        return matches.Length == 0 ? null : matches[0];
+    }
+
+    private TableSyntaxBase? FindSingleTable(string key)
+    {
+        var target = ParseManagedKey(key);
+        var matches = _syntax.Tables
+            .Where(table => PathsEqual(GetKeyPath(table.Name), target))
+            .ToArray();
+        if (matches.Length > 1)
+        {
+            throw new InvalidDataException($"ChatGPT 配置表 {key} 出现多次，拒绝自动修改。");
+        }
+
+        return matches.Length == 0 ? null : matches[0];
+    }
+
+    private KeyValueSyntax? FindSingleTableAssignment(string tableKey, string itemKey)
+    {
+        var targetTable = ParseManagedKey(tableKey);
+        var table = FindSingleTable(tableKey);
+        if (table is null)
+        {
+            return null;
+        }
+
+        var targetItem = ParseManagedKey(itemKey);
+        var matches = table.Items
+            .Where(assignment => PathsEqual(GetKeyPath(assignment.Key), targetItem))
+            .ToArray();
+        if (matches.Length > 1)
+        {
+            throw new InvalidDataException($"ChatGPT 配置项 {string.Join('.', targetTable)}.{itemKey} 出现多次，拒绝自动修改。");
         }
 
         return matches.Length == 0 ? null : matches[0];

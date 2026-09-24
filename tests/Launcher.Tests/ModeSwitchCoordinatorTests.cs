@@ -216,7 +216,8 @@ public sealed class ModeSwitchCoordinatorTests
             Assert.Contains("service_tier = \"default\"", restoredConfig, StringComparison.Ordinal);
             Assert.DoesNotContain("openai_base_url", restoredConfig, StringComparison.Ordinal);
             Assert.DoesNotContain("model_provider =", restoredConfig, StringComparison.Ordinal);
-            Assert.DoesNotContain("model_providers.chatgpt_local_launcher", restoredConfig, StringComparison.Ordinal);
+            Assert.Contains("model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\"", restoredConfig, StringComparison.Ordinal);
+            Assert.Contains("base_url = \"http://127.0.0.1:0/v1/\"", restoredConfig, StringComparison.Ordinal);
             Assert.DoesNotContain("approval_policy =", restoredConfig, StringComparison.Ordinal);
             Assert.DoesNotContain("approvals_reviewer =", restoredConfig, StringComparison.Ordinal);
             Assert.Contains("custom_setting = true", restoredConfig, StringComparison.Ordinal);

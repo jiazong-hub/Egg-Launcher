@@ -2896,21 +2896,7 @@ public partial class MainWindow : Window
 
     private void RuntimeNestedList_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (sender is DependencyObject source)
-        {
-            var nestedScrollViewer = FindVisualChild<ScrollViewer>(source);
-            var canScrollInside = nestedScrollViewer is not null
-                && (e.Delta < 0
-                    ? nestedScrollViewer.VerticalOffset < nestedScrollViewer.ScrollableHeight
-                    : nestedScrollViewer.VerticalOffset > 0);
-            if (canScrollInside) return;
-        }
-
-        e.Handled = true;
-        RuntimeMonitorScrollViewer.ScrollToVerticalOffset(Math.Clamp(
-            RuntimeMonitorScrollViewer.VerticalOffset - e.Delta,
-            0,
-            RuntimeMonitorScrollViewer.ScrollableHeight));
+        NestedScrollWheelRouter.Route(sender as DependencyObject, RuntimeMonitorScrollViewer, e);
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent)
@@ -3399,6 +3385,17 @@ public partial class MainWindow : Window
     private async Task<ChatGptClientLaunchResult> LaunchClientAndRefreshAsync(
         CancellationToken cancellationToken)
     {
+        if (_settings.SelectedMode == ProviderMode.OpenAI
+            && !_clientDetector.IsRunning()
+            && !string.IsNullOrWhiteSpace(_codexHome))
+        {
+            await new ChatGptConfigTransactionService(_clientDetector)
+                .EnsureOfficialCompatibilityAsync(
+                    _paths.RecoveryFile,
+                    Path.Combine(_codexHome, "config.toml"),
+                    cancellationToken);
+        }
+
         var result = new ChatGptClientLauncher(
             _clientDetector,
             new ChatGptClientInstallationLocator()).Launch();

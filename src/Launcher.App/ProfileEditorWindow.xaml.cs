@@ -2,9 +2,12 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using Launcher.Models.Profiles;
 using Launcher.Models.Scanning;
 using Launcher.Runtime.Detection;
+using WpfCheckBox = System.Windows.Controls.CheckBox;
+using WpfTextBox = System.Windows.Controls.TextBox;
 
 namespace Launcher.App;
 
@@ -150,6 +153,13 @@ public partial class ProfileEditorWindow : Window
         new(AppLanguageManager.Choose("禁用", "Disabled"), -1),
     ];
 
+    private readonly IReadOnlyList<Choice<SandboxNetworkAccess>> SandboxNetworkChoices =
+    [
+        new(AppLanguageManager.Choose("沿用 Codex 默认联网设置", "Inherit Codex network setting"), SandboxNetworkAccess.InheritCodexSettings),
+        new(AppLanguageManager.Choose("禁止命令联网", "Disable command network access"), SandboxNetworkAccess.Disabled),
+        new(AppLanguageManager.Choose("完整联网", "Full network access"), SandboxNetworkAccess.Full),
+    ];
+
     private readonly string _runtimeRoot;
     private readonly ModelProfile _originalProfile;
     private readonly int? _modelContextLimit;
@@ -162,6 +172,9 @@ public partial class ProfileEditorWindow : Window
     private MtpCapabilityStatus _displayedMtpCapabilityStatus = MtpCapabilityStatus.Unknown;
     private bool? _runtimeSupportsVision;
     private bool _isPopulatingVision;
+    private bool _isPopulatingSandbox;
+    private bool _sandboxSettingsEdited;
+    private readonly List<SandboxPathRow> _sandboxPathRows = [];
 
     public ProfileEditorWindow(
         ModelProfile profile,
@@ -213,7 +226,7 @@ public partial class ProfileEditorWindow : Window
         {
             DisplayName = DisplayNameTextBox.Text.Trim(),
         };
-        Populate(defaults);
+        Populate(defaults, populateSandbox: false);
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -277,6 +290,16 @@ public partial class ProfileEditorWindow : Window
         }
     }
 
+    private void SandboxNetworkAccess_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_isPopulatingSandbox)
+        {
+            _sandboxSettingsEdited = true;
+        }
+    }
+
+    private void AddSandboxPathButton_Click(object sender, RoutedEventArgs e) => AddSandboxPathRow(markEdited: true);
+
     private void CompleteSave(bool saveAsModelDefault)
     {
         if (!TryGetSelectedContextSize(out var contextSize, out var contextError))
@@ -320,6 +343,17 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
+        if (!TryBuildSandboxSettings(out var sandboxSettings, out var sandboxError))
+        {
+            MessageBox.Show(
+                this,
+                sandboxError,
+                AppLanguageManager.Choose("沙箱设置无效", "Invalid Sandbox Settings"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         if (mtp.Enabled
             && SelectedValue<int>(ParallelComboBox) > 1
             && MessageBox.Show(
@@ -337,6 +371,7 @@ public partial class ProfileEditorWindow : Window
 
         var updated = _originalProfile with
         {
+            SchemaVersion = ModelProfile.CurrentSchemaVersion,
             DisplayName = DisplayNameTextBox.Text.Trim(),
             ContextSize = contextSize,
             CompactionSafetyReserve = SelectedValue<int>(CompactionSafetyReserveComboBox),
@@ -378,6 +413,7 @@ public partial class ProfileEditorWindow : Window
             VisionImageMinTokens = vision.ImageMinTokens,
             VisionImageMaxTokens = vision.ImageMaxTokens,
             VisionBatchMaxTokens = vision.BatchMaxTokens,
+            SandboxSettings = sandboxSettings,
             ExtraArguments = extraArguments,
         };
         var errors = ModelProfileValidator.Validate(updated, _runtimeRoot);
@@ -416,7 +452,7 @@ public partial class ProfileEditorWindow : Window
         DialogResult = true;
     }
 
-    private void Populate(ModelProfile profile)
+    private void Populate(ModelProfile profile, bool populateSandbox = true)
     {
         DisplayNameTextBox.Text = profile.DisplayName;
         AliasTextBox.Text = profile.Alias;
@@ -491,7 +527,169 @@ public partial class ProfileEditorWindow : Window
         PopulateVision(profile);
         PopulateMtp(profile);
         PopulateAdvanced(profile);
+        if (populateSandbox)
+        {
+            PopulateSandbox(profile);
+        }
+
         UpdateContextRisk();
+    }
+
+    private void PopulateSandbox(ModelProfile profile)
+    {
+        _isPopulatingSandbox = true;
+        SandboxNetworkAccessComboBox.ItemsSource = SandboxNetworkChoices;
+        SandboxNetworkAccessComboBox.SelectedValue = profile.SandboxSettings?.NetworkAccess
+            ?? SandboxNetworkAccess.InheritCodexSettings;
+        SandboxPathsPanel.Children.Clear();
+        _sandboxPathRows.Clear();
+        foreach (var permission in profile.SandboxSettings?.AdditionalPaths ?? Array.Empty<SandboxPathPermission>())
+        {
+            AddSandboxPathRow(permission, markEdited: false);
+        }
+
+        _isPopulatingSandbox = false;
+    }
+
+    private SandboxPathRow AddSandboxPathRow(
+        SandboxPathPermission? permission = null,
+        bool markEdited = false)
+    {
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var pathTextBox = new WpfTextBox
+        {
+            Text = permission?.Path ?? string.Empty,
+            Margin = new Thickness(0, 0, 8, 0),
+            Padding = new Thickness(9, 7, 9, 7),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            ToolTip = AppLanguageManager.Choose("输入或选择要开放给此模型的绝对路径。", "Enter or browse to an absolute path for this model."),
+        };
+        pathTextBox.TextChanged += (_, _) => MarkSandboxSettingsEdited();
+        row.Children.Add(pathTextBox);
+
+        var allowWriteCheckBox = new WpfCheckBox
+        {
+            Content = AppLanguageManager.Choose("允许写入", "Allow write"),
+            IsChecked = permission?.AllowWrite == true,
+            Margin = new Thickness(0, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = AppLanguageManager.Choose("未勾选时为只读；勾选后允许读取和写入。", "Unchecked grants read-only access; checked grants read and write access."),
+        };
+        allowWriteCheckBox.Checked += (_, _) => MarkSandboxSettingsEdited();
+        allowWriteCheckBox.Unchecked += (_, _) => MarkSandboxSettingsEdited();
+        Grid.SetColumn(allowWriteCheckBox, 1);
+        row.Children.Add(allowWriteCheckBox);
+
+        var browseButton = new Button
+        {
+            Content = AppLanguageManager.Choose("浏览…", "Browse…"),
+            Padding = new Thickness(10, 6, 10, 6),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        browseButton.Click += (_, _) => BrowseSandboxPath(pathTextBox);
+        Grid.SetColumn(browseButton, 2);
+        row.Children.Add(browseButton);
+
+        var removeButton = new Button
+        {
+            Content = AppLanguageManager.Choose("移除", "Remove"),
+            Padding = new Thickness(10, 6, 10, 6),
+        };
+        var pathRow = new SandboxPathRow(row, pathTextBox, allowWriteCheckBox);
+        removeButton.Click += (_, _) =>
+        {
+            SandboxPathsPanel.Children.Remove(row);
+            _sandboxPathRows.Remove(pathRow);
+            MarkSandboxSettingsEdited();
+        };
+        Grid.SetColumn(removeButton, 3);
+        row.Children.Add(removeButton);
+
+        SandboxPathsPanel.Children.Add(row);
+        _sandboxPathRows.Add(pathRow);
+        if (markEdited)
+        {
+            MarkSandboxSettingsEdited();
+        }
+
+        return pathRow;
+    }
+
+    private void BrowseSandboxPath(WpfTextBox pathTextBox)
+    {
+        var initialDirectory = Directory.Exists(pathTextBox.Text) ? pathTextBox.Text : null;
+        var dialog = new OpenFolderDialog
+        {
+            Title = AppLanguageManager.Choose("选择沙箱路径", "Select Sandbox Path"),
+            Multiselect = false,
+            InitialDirectory = initialDirectory,
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            pathTextBox.Text = dialog.FolderName;
+        }
+    }
+
+    private void MarkSandboxSettingsEdited()
+    {
+        if (!_isPopulatingSandbox)
+        {
+            _sandboxSettingsEdited = true;
+        }
+    }
+
+    private bool TryBuildSandboxSettings(out ModelSandboxSettings? settings, out string error)
+    {
+        if (!_sandboxSettingsEdited)
+        {
+            settings = _originalProfile.SandboxSettings;
+            error = string.Empty;
+            return true;
+        }
+
+        var networkAccess = SelectedValue<SandboxNetworkAccess>(SandboxNetworkAccessComboBox);
+        var paths = _sandboxPathRows
+            .Where(row => !string.IsNullOrWhiteSpace(row.PathTextBox.Text))
+            .Select(row => new SandboxPathPermission
+            {
+                Path = row.PathTextBox.Text.Trim(),
+                AllowWrite = row.AllowWriteCheckBox.IsChecked == true,
+            })
+            .ToArray();
+
+        if (networkAccess == SandboxNetworkAccess.InheritCodexSettings && paths.Length == 0)
+        {
+            settings = null;
+            error = string.Empty;
+            return true;
+        }
+
+        settings = new ModelSandboxSettings
+        {
+            NetworkAccess = networkAccess,
+            AdditionalPaths = paths,
+        };
+        var validationErrors = ModelSandboxSettingsValidator.Validate(settings);
+        if (validationErrors.Count > 0)
+        {
+            error = string.Join(Environment.NewLine, validationErrors);
+            return false;
+        }
+
+        settings = settings with
+        {
+            AdditionalPaths = paths.Select(permission => permission with
+            {
+                Path = Path.GetFullPath(permission.Path),
+            }).ToArray(),
+        };
+        error = string.Empty;
+        return true;
     }
 
     private void PopulateReasoningCapability(ModelProfile profile)
@@ -1548,6 +1746,11 @@ public partial class ProfileEditorWindow : Window
         int? ImageMinTokens,
         int? ImageMaxTokens,
         int? BatchMaxTokens);
+
+    private sealed record SandboxPathRow(
+        Grid Container,
+        WpfTextBox PathTextBox,
+        WpfCheckBox AllowWriteCheckBox);
 
     private sealed record Choice<T>(string Label, T Value)
     {

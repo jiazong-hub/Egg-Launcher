@@ -71,6 +71,7 @@ public sealed class ModeSwitchCoordinator(
                     OpenAIBaseUrl = new Uri($"http://{IPAddress.Loopback}:{publicPort}/v1"),
                     ContextWindow = request.Profile.ContextSize,
                     AutoCompactTokenLimit = request.Profile.AutoCompactTokenLimit,
+                    SandboxSettings = request.Profile.SandboxSettings,
                     OriginalLauncherSettings = settings,
                     TargetLauncherSettings = targetSettings,
                 };

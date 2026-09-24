@@ -84,6 +84,7 @@ public static partial class ModelProfileValidator
         ValidateModelPath(profile.ModelRelativePath, runtimeRoot, errors);
         ValidateSource(profile, runtimeRoot, errors);
         ValidateChatTemplatePath(profile.ChatTemplateRelativePath, runtimeRoot, errors);
+        errors.AddRange(ModelSandboxSettingsValidator.Validate(profile.SandboxSettings));
 
         if (profile.ContextSize < 0)
         {

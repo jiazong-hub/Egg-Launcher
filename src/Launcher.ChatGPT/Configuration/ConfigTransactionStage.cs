@@ -11,4 +11,5 @@ public enum ConfigTransactionStage
     LocalUpdateApplied,
     OpenAiRestorePrepared,
     Restored,
+    OfficialCompatibilityPrepared,
 }

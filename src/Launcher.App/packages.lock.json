@@ -15,7 +15,8 @@
       "launcher.chatgpt": {
         "type": "Project",
         "dependencies": {
-          "Launcher.Core": "[1.0.0, )",
+          "Launcher.Core": "[0.9.2, )",
+          "Launcher.Models": "[0.9.2, )",
           "Tomlyn": "[2.10.1, )"
         }
       },
@@ -25,31 +26,31 @@
       "launcher.models": {
         "type": "Project",
         "dependencies": {
-          "Launcher.Core": "[1.0.0, )"
+          "Launcher.Core": "[0.9.2, )"
         }
       },
       "launcher.orchestration": {
         "type": "Project",
         "dependencies": {
-          "Launcher.ChatGPT": "[1.0.0, )",
-          "Launcher.Core": "[1.0.0, )",
-          "Launcher.Models": "[1.0.0, )",
-          "Launcher.Runtime": "[1.0.0, )",
-          "Launcher.Scripts": "[1.0.0, )"
+          "Launcher.ChatGPT": "[0.9.2, )",
+          "Launcher.Core": "[0.9.2, )",
+          "Launcher.Models": "[0.9.2, )",
+          "Launcher.Runtime": "[0.9.2, )",
+          "Launcher.Scripts": "[0.9.2, )"
         }
       },
       "launcher.runtime": {
         "type": "Project",
         "dependencies": {
-          "Launcher.Core": "[1.0.0, )",
+          "Launcher.Core": "[0.9.2, )",
           "ZstdSharp.Port": "[0.8.8, )"
         }
       },
       "launcher.scripts": {
         "type": "Project",
         "dependencies": {
-          "Launcher.Core": "[1.0.0, )",
-          "Launcher.Models": "[1.0.0, )"
+          "Launcher.Core": "[0.9.2, )",
+          "Launcher.Models": "[0.9.2, )"
         }
       }
     },

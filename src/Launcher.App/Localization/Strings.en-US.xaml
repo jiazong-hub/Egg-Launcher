@@ -222,6 +222,13 @@
     <sys:String x:Key="MtpThreadsTip">CPU thread count for the external MTP model. Leave blank for llama.cpp to decide.</sys:String>
     <sys:String x:Key="AdvancedParameters">Advanced</sys:String>
     <sys:String x:Key="ModelInformation">Model Info</sys:String>
+    <sys:String x:Key="SandboxSettings">Sandbox</sys:String>
+    <sys:String x:Key="SandboxSettingsHint">These controls set Codex command sandbox permissions only. They do not change approval behavior or llama.cpp runtime arguments. Older models without saved sandbox settings keep the current Codex configuration.</sys:String>
+    <sys:String x:Key="SandboxNetworkAccess">Command network access</sys:String>
+    <sys:String x:Key="SandboxNetworkAccessTip">Choose whether Codex commands for this model can access the network. This does not affect ChatGPT web, browser, or connector features.</sys:String>
+    <sys:String x:Key="SandboxAdditionalPaths">Additional path access</sys:String>
+    <sys:String x:Key="SandboxAdditionalPathsTip">Grant Codex commands access to absolute paths outside the workspace. Leave Allow write unchecked for read-only access, or check it to allow reads and writes. Avoid granting an entire drive root.</sys:String>
+    <sys:String x:Key="SandboxAddPath">Add path</sys:String>
     <sys:String x:Key="AdvancedParametersHint">Unchanged items remain at default and are not written to the model profile. Advanced parameters can significantly affect compatibility, memory use, and speed.</sys:String>
     <sys:String x:Key="ComputeDevice">Compute Device</sys:String>
     <sys:String x:Key="ComputeDeviceTip">Leave blank for the llama.cpp default device. For multiple devices, enter a comma-separated list in llama.cpp format.</sys:String>

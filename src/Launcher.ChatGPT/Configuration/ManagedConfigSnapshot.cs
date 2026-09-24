@@ -29,4 +29,14 @@ public sealed record ManagedConfigSnapshot
     public LauncherSettings? TargetLauncherSettings { get; init; }
 
     public bool SettingsCommitted { get; init; } = true;
+
+    public bool OfficialCompatibilityOwned { get; init; }
+
+    public string? CompatibilityBackupPath { get; init; }
+
+    public bool CompatibilityOriginalConfigExisted { get; init; }
+
+    public string? CompatibilityOriginalConfigSha256 { get; init; }
+
+    public string? CompatibilityAppliedConfigSha256 { get; init; }
 }

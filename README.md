@@ -1,19 +1,19 @@
 # Egg Launcher
 
-版本：0.9.1（公测版）
+版本：0.9.2（本地版本标签；沙箱设置为 beta）
 开发者：甲总不是贾总
 
 签名方式与当前作者证书指纹见 [Code signing policy](docs/signing-policy.md)。
 
 Windows 10 22H2 / Windows 11 上的开源 ChatGPT Desktop 与 llama.cpp 双环境启动器。
 
-0.9.1 在 0.9.0 稳定核心之上完成界面、模型能力管理和并发可靠性升级：OpenAI / Local 切换、本地 GPU 推理、项目与历史共享、官方配置恢复、Codex 原生本地上下文压缩、Dense/MoE 独立参数、MTP、视觉模块、模型下载与自动登记、运行监控及托盘控制均已接入。模型在线下载仍标记为实验性，不作为核心切换与推理的发布门禁。
+0.9.1 在 0.9.0 稳定核心之上完成界面、模型能力管理和并发可靠性升级。0.9.2 增加按模型保存的 Codex 沙箱设置、llama.cpp Context Checkpoints 参数、模型管理与搜索结果的滚动接力，以及 OpenAI 模式查阅旧 Local 任务的能力。审批方式与 llama.cpp 运行参数保持独立。模型在线下载仍标记为实验性。
 
 Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负责模型加载、推理、KV Cache 与硬性窗口，Codex 负责监控 token、选择安全节点、触发本地 compaction 并重建历史。Launcher 只解决路径、配置、切换、进程协调和安全边界，代码不会读取或替换账户凭据。
 
 ## 当前发布状态
 
-- 版本：`0.9.1` 公测版；核心切换逻辑保持稳定，本版完成全局 UI、双语、能力关联和主要高概率竞态修复。
+- 版本：`v0.9.2` 本地标签；沙箱设置仍为 beta。当前源码的自动化测试和完整沙箱真机验收尚未完成，不能将此标签理解为公开发布门禁已通过。
 - 当前真机结论：CUDA 环境下 Local 推理和自动压缩已连续通过，切回 OpenAI 后官方账户、模型和权限配置可恢复。
 - 模型管理：新模型只在首次添加时识别 Dense/MoE；类型未知时要求用户指定。MTP、视觉和思考档位均按模型保存能力状态，未验证或不支持的能力不能误开启。
 - 界面状态：支持深色/浅色主题、中英文及跟随系统语言、托盘菜单与按需状态提示；主窗口后台或最小化时停止无意义的高频状态探测。
@@ -25,16 +25,19 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 
 - [用户功能说明](docs/user-guide.md)
 - [0.9.1 公测版发布说明](docs/release-notes-0.9.1.md)
+- [0.9.2 本地版本说明](docs/release-notes-0.9.2.md)
 - [真机验收清单](docs/manual-acceptance-checklist.md)
-- [当前安全复核](docs/release-security-review-0.9.1.md)
+- [v0.9.1 已封存安全复核（0.9.2 尚待完整验收）](docs/release-security-review-0.9.1.md)
 - [变更记录](CHANGELOG.md)
+- [架构决策 0003：按模型管理 Codex 沙箱权限](docs/architecture/0003-per-model-codex-sandbox.md)
+- [架构决策 0004：跨 Provider 历史查阅与续聊边界](docs/architecture/0004-cross-provider-history-boundary.md)
 
 ## 产品边界
 
 - OpenAI 与 Local 模式互斥，切换前必须关闭 ChatGPT Desktop。
 - 关闭客户端不会切换模式；上次模式和本地模型会保留。
 - 切换本地模型不需要先回到 OpenAI；客户端关闭后可直接执行 Local A→B 事务。
-- 两种模式共享项目、任务历史与上下文；远端访问端点和模型列表隔离。
+- 两种模式共享项目和任务历史，可跨模式查阅；远端访问端点和模型列表隔离。旧任务在另一 Provider 下继续发送消息不属于 0.9.2 支持范围。
 - Local 模式由后台 Agent、回环安全代理与 llama.cpp Router 支持直接启动 ChatGPT Desktop；为了共享原生项目和历史，Codex 会保留官方账户外壳（包括左下角账户名称），但只加载 local-only 模型 Catalog。这不是一个独立的“本地账户登录”。本地 Provider 复用现有登录状态但使用独立 Provider 身份，使 Codex 选择自己的本地语义压缩，而不是向 llama.cpp 发送 OpenAI 专用 compaction item。
 - 安全代理只公开必需的 Responses、模型清单和健康检查路由，拒绝浏览器 Origin 和管理接口；它剥离官方认证、Cookie 和账户元数据，除必要的传输解压外，不解析或改写请求正文，也不改写 llama.cpp 响应。Agent 为私有 llama 管理端点生成随机 API key，状态文件只保存当前 Windows 用户可解开的 DPAPI 密文。
 - 每个模型保存独立的“压缩安全余量”，Launcher 只把 `Context - 压缩安全余量` 写成 Codex 的原生自动压缩线。该余量不是单次输出 token 限制；Codex 仍负责判断安全节点、请求当前模型生成摘要并重建历史，Launcher 不生成摘要，也不保存第二套对话。代理只记录 `turn/compaction`、输入项类型和协议形态等无正文诊断。
@@ -42,7 +45,7 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - Context 低于 16K 时，参数窗口、模型列表和 Local 启动确认会显示非阻断风险提醒；用户仍可保存、生成 BAT 和启动。Launcher 不自动提高 Context，也不改变用户设置的压缩安全余量。
 - 参数文件只校验缓存类型等原生参数的安全格式，不用固定枚举阻止未来 llama.cpp 新增的合法值；最终支持性与错误信息仍由所选 Runtime 决定。
 - 主窗口位于前台时以低频率刷新运行状态；最小化、隐藏到托盘或退出过程中停止周期探测。进入模型管理、打开托盘菜单或请求托盘状态时按需刷新一次，避免重复昂贵检测。本地模型页的嵌套列表在到达自身滚动边界后会继续滚动整个页面。
-- 权限模式由 ChatGPT Desktop 输入框下方的原生控件管理。Launcher 不替用户选择或覆盖 Local 权限，但切回 OpenAI 时仍恢复进入 Local 前保存的官方权限字段。
+- 审批方式仍由 ChatGPT Desktop 的原生控件管理，Launcher 不修改 `approval_policy` 或 `approvals_reviewer`。如用户为某个模型保存了沙箱设置，Launcher 会在 Local 切换事务中应用该模型的命名权限配置，并在切换模型或回到 OpenAI 时恢复对应基线；未设置沙箱的旧模型不改变现有 Codex 沙箱配置。
 - 配置切换使用模式级与配置级跨进程锁、提交前文件版本校验和可恢复事务；原官方配置按当前 Windows 用户使用 DPAPI 加密备份。启动时会收敛中断事务，受管字段冲突或 `config.toml` 在读取后被外部改写时停止而不是覆盖。
 - Launcher 与 Agent 均为单实例；Agent 通过 Windows Job Object 约束自有 llama-server 进程树，异常退出时不会遗留模型进程长期占用显存。
 - Profile 默认启用 llama.cpp 原生 `--sleep-idle-seconds 300`：空闲五分钟后由 llama.cpp 卸载模型与 KV Cache，新请求自动重新加载；Agent 不再监视客户端关闭并代替 Runtime 卸载模型。
@@ -60,7 +63,7 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - App 会校验后台 Agent 的协议版本、PID、程序路径、进程启动时间和状态心跳，拒绝把新版界面和旧版 Agent 混用；无法确认归属的同名进程绝不会被强制结束。
 - llama.cpp 上游使用随机回环端口；若启动与绑定之间发生端口竞态，Agent 只对明确的地址占用错误换端口重试，模型或参数错误不会被掩盖。Desktop-facing 回环端口首次切换时随机生成并持久化；若以后被占用，只有在 ChatGPT Desktop 已关闭时才会通过配置事务迁移，绝不结束未知占用进程。App 只连接 Agent 状态中经过身份与心跳校验的实际端点。
 - 便携版可由用户在首页启用当前用户的 Windows 登录启动项；程序不会在未确认时自行注册。
-- 切回 OpenAI 时完整恢复进入 Local 前的模型、思考强度、摘要/详细程度、服务层级、上下文设置以及权限字段，并保留官方账户、工作区、项目和历史。
+- 切回 OpenAI 时恢复进入 Local 前的模型、思考强度、摘要/详细程度、服务层级、上下文设置以及权限字段，并保留官方账户、工作区、项目和历史。为查阅旧 Local 对话，配置保留未激活、不能处理请求的本地历史 Provider 定义；原任务跨 Provider 续聊的第二阶段已放弃，不在此版本实现。
 
 完整需求见 [ChatGPT_Launcher_OpenSource_PRD.md](ChatGPT_Launcher_OpenSource_PRD.md)。
 
@@ -132,7 +135,8 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - `Launcher.Orchestration`：模式切换事务与后台 Router 监督
 - `Launcher.Tests`：自动化测试
 - `docs/user-guide.md`：页面、按钮、参数、状态与对话框说明
-- `docs/release-notes-0.9.1.md`：当前公测版已验证范围、升级内容与已知限制
+- `docs/release-notes-0.9.1.md`：v0.9.1 公测版封存说明
+- `docs/release-notes-0.9.2.md`：v0.9.2 本地版本范围和已知限制
 - `docs/research`：历史探索记录，不作为当前实现规范
 
 ## 安全原则

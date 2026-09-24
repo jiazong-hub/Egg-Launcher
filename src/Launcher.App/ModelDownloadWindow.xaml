@@ -47,7 +47,7 @@
             </Border>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" Margin="0,16,0,0"
+        <ScrollViewer x:Name="SearchPageScrollViewer" Grid.Row="1" Margin="0,16,0,0"
                       HorizontalScrollBarVisibility="Disabled"
                       VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="0,0,10,0">
@@ -58,7 +58,7 @@
             </Grid.RowDefinitions>
             <TextBlock FontSize="16" FontWeight="SemiBold"
                        Foreground="{DynamicResource PrimaryBrush}" Text="{DynamicResource SearchResults}" />
-            <Border Grid.Row="1" Margin="0,8,0,0"
+            <Border x:Name="SearchResultsBorder" Grid.Row="1" Margin="0,8,0,0"
                     Background="{DynamicResource InputSurfaceBrush}"
                     BorderBrush="{DynamicResource InputBorderBrush}"
                     BorderThickness="1">
@@ -69,10 +69,12 @@
                         <ColumnDefinition Width="2*" />
                     </Grid.ColumnDefinitions>
                     <ListBox x:Name="SearchResultsList" Background="Transparent" BorderThickness="0"
-                             DisplayMemberPath="Summary"
-                             SelectionChanged="SearchResultsList_SelectionChanged" />
+                              DisplayMemberPath="Summary"
+                              SelectionChanged="SearchResultsList_SelectionChanged"
+                              PreviewMouseWheel="NestedResult_PreviewMouseWheel" />
                     <Border Grid.Column="1" Background="{DynamicResource InputBorderBrush}" />
                     <ScrollViewer Grid.Column="2" Padding="14"
+                                  PreviewMouseWheel="NestedResult_PreviewMouseWheel"
                                   HorizontalScrollBarVisibility="Disabled"
                                   VerticalScrollBarVisibility="Auto">
                         <TextBlock x:Name="ModelDetailsText" TextWrapping="Wrap"
@@ -95,21 +97,24 @@
                 <RowDefinition Height="82" />
             </Grid.RowDefinitions>
             <ListBox x:Name="VariantsList" MinHeight="70" MaxHeight="150"
-                     Background="{DynamicResource InputSurfaceBrush}"
-                     BorderBrush="{DynamicResource InputBorderBrush}"
-                     DisplayMemberPath="Summary" SelectionChanged="VariantsList_SelectionChanged" />
+                      Background="{DynamicResource InputSurfaceBrush}"
+                      BorderBrush="{DynamicResource InputBorderBrush}"
+                      DisplayMemberPath="Summary" SelectionChanged="VariantsList_SelectionChanged"
+                      PreviewMouseWheel="NestedResult_PreviewMouseWheel" />
             <TextBlock Grid.Row="1" Margin="0,12,0,7" FontSize="15" FontWeight="SemiBold"
                        Foreground="{DynamicResource PrimaryBrush}" Text="{DynamicResource DownloadableMtpFiles}" />
             <ListBox x:Name="MtpFilesList" Grid.Row="2" MinHeight="54" MaxHeight="100"
-                     Background="{DynamicResource InputSurfaceBrush}"
-                     BorderBrush="{DynamicResource InputBorderBrush}"
-                     DisplayMemberPath="Summary" SelectionChanged="MtpFilesList_SelectionChanged" />
+                      Background="{DynamicResource InputSurfaceBrush}"
+                      BorderBrush="{DynamicResource InputBorderBrush}"
+                      DisplayMemberPath="Summary" SelectionChanged="MtpFilesList_SelectionChanged"
+                      PreviewMouseWheel="NestedResult_PreviewMouseWheel" />
             <TextBlock Grid.Row="3" Margin="0,12,0,7" FontSize="15" FontWeight="SemiBold"
                        Foreground="{DynamicResource PrimaryBrush}" Text="{DynamicResource DownloadableVisionFiles}" />
             <ListBox x:Name="VisionFilesList" Grid.Row="4" MinHeight="54" MaxHeight="100"
-                     Background="{DynamicResource InputSurfaceBrush}"
-                     BorderBrush="{DynamicResource InputBorderBrush}"
-                     DisplayMemberPath="Summary" SelectionChanged="VisionFilesList_SelectionChanged" />
+                      Background="{DynamicResource InputSurfaceBrush}"
+                      BorderBrush="{DynamicResource InputBorderBrush}"
+                      DisplayMemberPath="Summary" SelectionChanged="VisionFilesList_SelectionChanged"
+                      PreviewMouseWheel="NestedResult_PreviewMouseWheel" />
         </Grid>
         </StackPanel>
         </ScrollViewer>
@@ -124,7 +129,8 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="3" Margin="0,18,0,0">
+        <Grid Grid.Row="3" Margin="0,18,0,0" HorizontalAlignment="Left"
+              Width="{Binding ElementName=SearchResultsBorder, Path=ActualWidth}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

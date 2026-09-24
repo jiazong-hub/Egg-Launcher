@@ -7,6 +7,7 @@ using Launcher.ChatGPT.Catalog;
 using Launcher.ChatGPT.Processes;
 using Launcher.Core.Configuration;
 using Launcher.Core.Security;
+using Launcher.Models.Profiles;
 
 namespace Launcher.ChatGPT.Configuration;
 
@@ -14,6 +15,20 @@ public sealed class ChatGptConfigTransactionService
 {
     private const string LocalProviderId = "chatgpt_local_launcher";
     private const string LocalProviderKey = "model_providers.chatgpt_local_launcher";
+    private const string OfflineCompatibilityProvider =
+        "model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\", "
+        + "base_url = \"http://127.0.0.1:0/v1/\", wire_api = \"responses\", "
+        + "requires_openai_auth = false, supports_websockets = false }";
+    private const string LauncherPermissionProfileName = "egg_launcher_active";
+    private const string LauncherPermissionProfileKey = $"permissions.{LauncherPermissionProfileName}";
+
+    private static readonly string[] SandboxManagedKeys =
+    [
+        "default_permissions",
+        "sandbox_mode",
+        "sandbox_workspace_write",
+        LauncherPermissionProfileKey,
+    ];
 
     private static readonly string[] ManagedKeys =
     [
@@ -33,11 +48,12 @@ public sealed class ChatGptConfigTransactionService
         "approval_policy",
         "approvals_reviewer",
         LocalProviderKey,
+        .. SandboxManagedKeys,
     ];
 
-    // Permission and model-preset fields are snapshotted so the official defaults
-    // can be restored, but Local mode does not own them. Desktop remains free to
-    // normalize these UI-owned values without causing a Provider transaction conflict.
+    // Approval fields remain snapshot-only: they are controlled by ChatGPT Desktop
+    // and are not sandbox permissions. SandboxManagedKeys are owned while Local mode
+    // is active so changing or restoring model-specific sandbox settings is atomic.
     private static readonly string[] OwnershipKeys =
     [
         "model",
@@ -47,6 +63,7 @@ public sealed class ChatGptConfigTransactionService
         "profile",
         "model_context_window",
         LocalProviderKey,
+        .. SandboxManagedKeys,
     ];
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.General)
@@ -97,15 +114,43 @@ public sealed class ChatGptConfigTransactionService
             var originalBytes = originalState.Bytes;
             var originalText = originalState.Text;
             var originalDocument = new TomlRootDocument(originalText);
-            if (originalDocument.ContainsDefinition(LocalProviderKey))
+            var previousSnapshot = File.Exists(dataPaths.RecoveryFile)
+                ? await LoadSnapshotAsync(dataPaths.RecoveryFile, cancellationToken).ConfigureAwait(false)
+                : null;
+            var ownsCompatibilityProvider = previousSnapshot is not null
+                && IsOwnedOfficialCompatibility(previousSnapshot, configPath, originalDocument);
+            if (previousSnapshot?.Stage == ConfigTransactionStage.Restored
+                && previousSnapshot.OfficialCompatibilityOwned
+                && !ownsCompatibilityProvider)
+            {
+                throw new ChatGptConfigConflictException(
+                    "启动器保留的历史 Provider 已被修改或删除；已停止切换，避免覆盖外部配置。");
+            }
+
+            if (originalDocument.ContainsDefinition(LocalProviderKey)
+                && !ownsCompatibilityProvider)
             {
                 throw new ChatGptConfigConflictException(
                     $"官方配置已包含 Provider '{LocalProviderId}'，为避免覆盖用户配置，已停止 Local 模式切换。");
             }
 
+            if (request.SandboxSettings is not null
+                && originalDocument.ContainsDefinition(LauncherPermissionProfileKey))
+            {
+                throw new ChatGptConfigConflictException(
+                    $"官方配置已包含权限配置 '{LauncherPermissionProfileName}'，为避免覆盖用户设置，已停止沙箱配置切换。");
+            }
+
+            if (request.SandboxSettings is not null
+                && originalDocument.ContainsDescendantDefinition("sandbox_workspace_write"))
+            {
+                throw new ChatGptConfigConflictException(
+                    "Codex 配置中的 sandbox_workspace_write 含有嵌套字段，无法完整移入模型权限配置；为避免丢失现有规则，已停止切换。");
+            }
+
             var originalAssignments = CaptureAssignments(originalDocument);
 
-            var localDocument = BuildLocalDocument(originalDocument, request);
+            var localDocument = BuildLocalDocument(originalDocument, request, originalAssignments);
             var localText = localDocument.ToString();
             var transactionId = Guid.NewGuid();
 
@@ -144,6 +189,8 @@ public sealed class ChatGptConfigTransactionService
                 OriginalLauncherSettings = request.OriginalLauncherSettings,
                 TargetLauncherSettings = request.TargetLauncherSettings,
                 SettingsCommitted = request.TargetLauncherSettings is null,
+                OfficialCompatibilityOwned = ownsCompatibilityProvider,
+                CompatibilityBackupPath = previousSnapshot?.CompatibilityBackupPath,
             };
 
             var recoveryPrepared = false;
@@ -181,6 +228,127 @@ public sealed class ChatGptConfigTransactionService
 
                 throw;
             }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<bool> EnsureOfficialCompatibilityAsync(
+        string recoveryPath,
+        string configPath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recoveryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(configPath);
+        if (!File.Exists(recoveryPath))
+        {
+            return false;
+        }
+
+        EnsureClientClosed();
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var transactionLock = await ConfigTransactionFileLock.AcquireAsync(
+                ConfigTransactionFileLock.ForRecoveryPath(recoveryPath),
+                cancellationToken).ConfigureAwait(false);
+            var snapshot = await LoadSnapshotAsync(recoveryPath, cancellationToken).ConfigureAwait(false);
+            if (snapshot.Stage != ConfigTransactionStage.Restored
+                || !snapshot.SettingsCommitted
+                || !string.Equals(
+                    Path.GetFullPath(snapshot.ConfigPath),
+                    Path.GetFullPath(configPath),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ChatGptConfigConflictException(
+                    "官方配置与启动器恢复记录不一致，已停止历史 Provider 兼容配置。");
+            }
+
+            if (!snapshot.AppliedAssignments.TryGetValue(LocalProviderKey, out var appliedProvider)
+                || appliedProvider is null
+                || !snapshot.OriginalAssignments.TryGetValue(LocalProviderKey, out var originalProvider)
+                || originalProvider is not null
+                    && (!snapshot.OfficialCompatibilityOwned
+                        || !string.Equals(
+                            originalProvider,
+                            OfflineCompatibilityProvider,
+                            StringComparison.Ordinal)))
+            {
+                throw new ChatGptConfigConflictException(
+                    "无法证明历史 Provider 由启动器创建，已停止兼容配置。");
+            }
+
+            var state = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
+            var document = new TomlRootDocument(state.Text);
+            if (snapshot.OfficialCompatibilityOwned)
+            {
+                if (!IsOwnedOfficialCompatibility(snapshot, configPath, document))
+                {
+                    throw new ChatGptConfigConflictException(
+                        "启动器保留的历史 Provider 已被修改或删除，已停止自动操作。");
+                }
+
+                return false;
+            }
+
+            if (document.ContainsDefinition(LocalProviderKey)
+                || string.Equals(document.GetStringValue("model_provider"), LocalProviderId, StringComparison.Ordinal))
+            {
+                throw new ChatGptConfigConflictException(
+                    "官方配置中的历史 Provider 标识已被其他配置占用，已停止自动操作。");
+            }
+
+            var compatibleDocument = document.SetRawAssignment(
+                LocalProviderKey,
+                OfflineCompatibilityProvider);
+            string? backupPath = null;
+            if (state.Exists)
+            {
+                var backupsDirectory = Path.Combine(Path.GetDirectoryName(recoveryPath)!, "backups");
+                Directory.CreateDirectory(backupsDirectory);
+                backupPath = Path.Combine(
+                    backupsDirectory,
+                    $"config-compat.{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.{Guid.NewGuid():N}.dpapi");
+                await ProtectedConfigBackup.WriteAsync(backupPath, state.Bytes, cancellationToken)
+                    .ConfigureAwait(false);
+                var verified = await ProtectedConfigBackup.ReadAsync(backupPath, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!CryptographicOperations.FixedTimeEquals(
+                        SHA256.HashData(state.Bytes),
+                        SHA256.HashData(verified)))
+                {
+                    throw new InvalidDataException("官方配置兼容备份校验失败，已停止写入。");
+                }
+            }
+
+            var prepared = snapshot with
+            {
+                Stage = ConfigTransactionStage.OfficialCompatibilityPrepared,
+                CompatibilityBackupPath = backupPath,
+                CompatibilityOriginalConfigExisted = state.Exists,
+                CompatibilityOriginalConfigSha256 = ComputeSha256(state.Bytes),
+                CompatibilityAppliedConfigSha256 = ComputeSha256(
+                    Encoding.UTF8.GetBytes(compatibleDocument.ToString())),
+            };
+            await WriteJsonAtomicallyAsync(recoveryPath, prepared, cancellationToken).ConfigureAwait(false);
+            EnsureClientClosed();
+            await BeforeConfigCommitAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
+            await WriteConfigAtomicallyAsync(
+                snapshot.ConfigPath,
+                compatibleDocument.ToString(),
+                state.Revision,
+                cancellationToken).ConfigureAwait(false);
+            await WriteJsonAtomicallyAsync(
+                recoveryPath,
+                prepared with
+                {
+                    Stage = ConfigTransactionStage.Restored,
+                    OfficialCompatibilityOwned = true,
+                },
+                cancellationToken).ConfigureAwait(false);
+            return true;
         }
         finally
         {
@@ -226,7 +394,7 @@ public sealed class ChatGptConfigTransactionService
             var currentState = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
             var currentDocument = new TomlRootDocument(currentState.Text);
             EnsureAssignmentsStillOwned(currentDocument, snapshot.AppliedAssignments);
-            var updatedDocument = BuildLocalDocument(currentDocument, request);
+            var updatedDocument = BuildLocalDocument(currentDocument, request, snapshot.OriginalAssignments);
             var prepared = snapshot with
             {
                 Stage = ConfigTransactionStage.LocalUpdatePrepared,
@@ -454,15 +622,16 @@ public sealed class ChatGptConfigTransactionService
 
             var currentState = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
             var currentDocument = new TomlRootDocument(currentState.Text);
+            var officialAssignments = GetOfficialCompatibleAssignments(snapshot);
             var acceptableAssignments = snapshot.Stage switch
             {
                 ConfigTransactionStage.Prepared =>
-                    new[] { snapshot.AppliedAssignments, snapshot.OriginalAssignments },
+                    new[] { snapshot.AppliedAssignments, snapshot.OriginalAssignments, officialAssignments },
                 ConfigTransactionStage.LocalUpdatePrepared or ConfigTransactionStage.LocalUpdateApplied
                     when snapshot.PreviousAppliedAssignments is not null =>
                     new[] { snapshot.AppliedAssignments, snapshot.PreviousAppliedAssignments },
                 ConfigTransactionStage.OpenAiRestorePrepared =>
-                    new[] { snapshot.AppliedAssignments, snapshot.OriginalAssignments },
+                    new[] { snapshot.AppliedAssignments, snapshot.OriginalAssignments, officialAssignments },
                 _ => new[] { snapshot.AppliedAssignments },
             };
             if (!acceptableAssignments.Any(assignments => AssignmentsMatch(currentDocument, assignments)))
@@ -471,7 +640,13 @@ public sealed class ChatGptConfigTransactionService
                     "ChatGPT 受管理配置与恢复记录不一致，已停止自动恢复。");
             }
 
-            var restoredDocument = BuildOpenAiDocument(currentDocument, snapshot);
+            // A prepared initial switch may never have written Local configuration.
+            // In that case there is no new Local history to preserve from this attempt.
+            var initialSwitchNeverApplied = snapshot.Stage == ConfigTransactionStage.Prepared
+                && AssignmentsMatch(currentDocument, snapshot.OriginalAssignments);
+            var restoredDocument = initialSwitchNeverApplied
+                ? ApplyAssignments(currentDocument, snapshot.OriginalAssignments)
+                : BuildOpenAiDocument(currentDocument, snapshot);
             EnsureClientClosed();
             await BeforeConfigCommitAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
             await WriteRestoredConfigAsync(
@@ -483,6 +658,9 @@ public sealed class ChatGptConfigTransactionService
             {
                 Stage = ConfigTransactionStage.Restored,
                 PreviousAppliedAssignments = null,
+                OfficialCompatibilityOwned = initialSwitchNeverApplied
+                    ? snapshot.OfficialCompatibilityOwned
+                    : IsOfficialCompatibilityOwned(snapshot),
             };
             await WriteJsonAtomicallyAsync(recoveryPath, restored, cancellationToken).ConfigureAwait(false);
             return restored;
@@ -643,6 +821,7 @@ public sealed class ChatGptConfigTransactionService
 
                 case ConfigTransactionStage.OpenAiRestorePrepared:
                     await VerifyOriginalBackupAsync(snapshot, cancellationToken).ConfigureAwait(false);
+                    var officialAssignments = GetOfficialCompatibleAssignments(snapshot);
                     if (AssignmentsMatch(currentDocument, snapshot.AppliedAssignments))
                     {
                         EnsureClientClosed();
@@ -653,14 +832,95 @@ public sealed class ChatGptConfigTransactionService
                             restoredDocument,
                             currentState.Revision,
                             cancellationToken).ConfigureAwait(false);
+                        snapshot = snapshot with
+                        {
+                            OfficialCompatibilityOwned = IsOfficialCompatibilityOwned(snapshot),
+                        };
                     }
-                    else if (!AssignmentsMatch(currentDocument, snapshot.OriginalAssignments))
+                    else if (AssignmentsMatch(currentDocument, officialAssignments))
+                    {
+                        snapshot = snapshot with
+                        {
+                            OfficialCompatibilityOwned = IsOfficialCompatibilityOwned(snapshot),
+                        };
+                    }
+                    else if (AssignmentsMatch(currentDocument, snapshot.OriginalAssignments))
+                    {
+                        snapshot = snapshot with { OfficialCompatibilityOwned = false };
+                    }
+                    else
                     {
                         throw RecoveryConflict();
                     }
 
                     snapshot = snapshot with { Stage = ConfigTransactionStage.Restored };
                     pendingSettings = snapshot.TargetLauncherSettings;
+                    changed = true;
+                    break;
+
+                case ConfigTransactionStage.OfficialCompatibilityPrepared:
+                    if (snapshot.CompatibilityOriginalConfigSha256 is null
+                        || snapshot.CompatibilityAppliedConfigSha256 is null)
+                    {
+                        throw new InvalidDataException("历史 Provider 兼容恢复记录不完整。");
+                    }
+
+                    if (snapshot.CompatibilityOriginalConfigExisted)
+                    {
+                        if (string.IsNullOrWhiteSpace(snapshot.CompatibilityBackupPath)
+                            || !File.Exists(snapshot.CompatibilityBackupPath))
+                        {
+                            throw new FileNotFoundException(
+                                "找不到官方配置兼容备份，已停止恢复。",
+                                snapshot.CompatibilityBackupPath);
+                        }
+
+                        var compatibilityBackup = await ProtectedConfigBackup.ReadAsync(
+                            snapshot.CompatibilityBackupPath,
+                            cancellationToken).ConfigureAwait(false);
+                        if (!string.Equals(
+                                ComputeSha256(compatibilityBackup),
+                                snapshot.CompatibilityOriginalConfigSha256,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            throw new InvalidDataException("官方配置兼容备份校验失败，已停止恢复。");
+                        }
+                    }
+
+                    var currentHash = ComputeSha256(currentState.Bytes);
+                    if (currentState.Exists
+                        && string.Equals(
+                            currentHash,
+                            snapshot.CompatibilityAppliedConfigSha256,
+                            StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(
+                            currentDocument.GetDefinition(LocalProviderKey),
+                            OfflineCompatibilityProvider,
+                            StringComparison.Ordinal))
+                    {
+                        snapshot = snapshot with
+                        {
+                            Stage = ConfigTransactionStage.Restored,
+                            OfficialCompatibilityOwned = true,
+                        };
+                    }
+                    else if (currentState.Exists == snapshot.CompatibilityOriginalConfigExisted
+                        && string.Equals(
+                            currentHash,
+                            snapshot.CompatibilityOriginalConfigSha256,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        snapshot = snapshot with
+                        {
+                            Stage = ConfigTransactionStage.Restored,
+                            OfficialCompatibilityOwned = false,
+                        };
+                    }
+                    else
+                    {
+                        throw RecoveryConflict();
+                    }
+
                     changed = true;
                     break;
 
@@ -811,7 +1071,7 @@ public sealed class ChatGptConfigTransactionService
     }
 
     private static IReadOnlyDictionary<string, string?> CaptureAssignments(TomlRootDocument document) =>
-        ManagedKeys.ToDictionary(key => key, document.GetAssignment, StringComparer.Ordinal);
+        ManagedKeys.ToDictionary(key => key, document.GetDefinition, StringComparer.Ordinal);
 
     // The provider deliberately keeps the existing OpenAI authentication manager so
     // Desktop retains its signed-in account shell and shared project history. Its
@@ -821,7 +1081,8 @@ public sealed class ChatGptConfigTransactionService
     // the launcher never creates summaries or rewrites conversation history.
     private static TomlRootDocument BuildLocalDocument(
         TomlRootDocument source,
-        ChatGptLocalModeRequest request)
+        ChatGptLocalModeRequest request,
+        IReadOnlyDictionary<string, string?> originalAssignments)
     {
         var contextWindow = request.ContextWindow.ToString(CultureInfo.InvariantCulture);
         var autoCompactTokenLimit = request.AutoCompactTokenLimit.ToString(CultureInfo.InvariantCulture);
@@ -829,7 +1090,7 @@ public sealed class ChatGptConfigTransactionService
         // This threshold tells Codex when to run its own native semantic compaction.
         // It is deliberately distinct from max_output_tokens: the launcher neither
         // limits one response nor summarizes/rewrites conversation history.
-        return source
+        var localDocument = source
             .SetRawAssignment("profile", null)
             .SetString("model", request.ModelSlug)
             .SetString("model_provider", LocalProviderId)
@@ -846,6 +1107,179 @@ public sealed class ChatGptConfigTransactionService
             .SetRawAssignment("model_verbosity", null)
             .SetRawAssignment("service_tier", null)
             .SetRawAssignment(LocalProviderKey, BuildLocalProviderAssignment(request.OpenAIBaseUrl));
+
+        return ApplyModelSandboxSettings(localDocument, request.SandboxSettings, originalAssignments);
+    }
+
+    private static TomlRootDocument ApplyModelSandboxSettings(
+        TomlRootDocument source,
+        ModelSandboxSettings? settings,
+        IReadOnlyDictionary<string, string?> originalAssignments)
+    {
+        if (settings is null)
+        {
+            var originalLauncherProfile = originalAssignments.TryGetValue(
+                    LauncherPermissionProfileKey,
+                    out var originalProfileDefinition)
+                && originalProfileDefinition is null;
+            var currentLauncherProfileIsActive = originalLauncherProfile
+                && string.Equals(
+                    source.GetStringValue("default_permissions"),
+                    LauncherPermissionProfileName,
+                    StringComparison.Ordinal)
+                && source.GetDefinition(LauncherPermissionProfileKey) is not null;
+            return currentLauncherProfileIsActive
+                ? RestoreSandboxAssignments(source, originalAssignments)
+                : source;
+        }
+
+        var baseline = RestoreSandboxAssignments(source, originalAssignments);
+
+        if (baseline.ContainsDefinition(LauncherPermissionProfileKey))
+        {
+            throw new ChatGptConfigConflictException(
+                $"配置已包含权限配置 '{LauncherPermissionProfileName}'，无法安全应用模型沙箱设置。");
+        }
+
+        var validationErrors = ModelSandboxSettingsValidator.Validate(settings);
+        if (validationErrors.Count > 0)
+        {
+            throw new ArgumentException(string.Join(Environment.NewLine, validationErrors), nameof(settings));
+        }
+
+        var configuredDefault = baseline.GetStringValue("default_permissions");
+        var legacySandboxMode = baseline.GetStringValue("sandbox_mode");
+        if (configuredDefault is not null && legacySandboxMode is not null)
+        {
+            throw new ChatGptConfigConflictException(
+                "Codex 配置同时设置了 default_permissions 和 sandbox_mode；请先在 Codex 配置中保留其中一种沙箱格式。");
+        }
+
+        var hasLegacyWorkspaceSettings = baseline.GetDefinition("sandbox_workspace_write") is not null;
+        if (configuredDefault is not null && hasLegacyWorkspaceSettings)
+        {
+            throw new ChatGptConfigConflictException(
+                "Codex 配置同时设置了 default_permissions 和 sandbox_workspace_write；请先在 Codex 配置中保留其中一种沙箱格式。");
+        }
+
+        var parentProfile = configuredDefault ?? (legacySandboxMode switch
+        {
+            "read-only" => ":read-only",
+            "workspace-write" => ":workspace",
+            "danger-full-access" => ":danger-full-access",
+            null => ":workspace",
+            _ => throw new ChatGptConfigConflictException("Codex 配置中的 sandbox_mode 值无法识别。"),
+        });
+        if (string.Equals(parentProfile, ":danger-full-access", StringComparison.Ordinal))
+        {
+            throw new ChatGptConfigConflictException(
+                "Codex 当前使用完整磁盘访问；Codex 不允许命名权限配置继承该模式。请先切换到工作区权限后再配置此模型。");
+        }
+
+        var legacyWorkspaceSettingsAreActive = legacySandboxMode is null or "workspace-write";
+        var legacyNetworkAccess = legacyWorkspaceSettingsAreActive
+            ? baseline.GetTableBooleanValue("sandbox_workspace_write", "network_access")
+            : null;
+        if (baseline.GetAssignment("sandbox_workspace_write") is not null)
+        {
+            throw new ChatGptConfigConflictException(
+                "Codex 配置将 sandbox_workspace_write 写成了内联赋值，无法完整移入模型权限配置；为避免丢失现有规则，已停止切换。");
+        }
+
+        var excludeTempDirectory = legacyWorkspaceSettingsAreActive
+            ? baseline.GetTableBooleanValue("sandbox_workspace_write", "exclude_tmpdir_env_var")
+            : null;
+        var excludeSlashTemp = legacyWorkspaceSettingsAreActive
+            ? baseline.GetTableBooleanValue("sandbox_workspace_write", "exclude_slash_tmp")
+            : null;
+        if (excludeTempDirectory == true || excludeSlashTemp == true)
+        {
+            throw new ChatGptConfigConflictException(
+                "当前 Codex 配置启用了临时目录排除选项，命名权限配置无法等价保留该选项；为避免扩大沙箱范围，已停止切换。");
+        }
+
+        var legacyWritableRoots = legacyWorkspaceSettingsAreActive
+            ? baseline.GetTableStringArrayValue("sandbox_workspace_write", "writable_roots") ?? Array.Empty<string>()
+            : Array.Empty<string>();
+        bool? networkEnabled = settings.NetworkAccess switch
+        {
+            SandboxNetworkAccess.Full => true,
+            SandboxNetworkAccess.Disabled => false,
+            SandboxNetworkAccess.InheritCodexSettings => legacyNetworkAccess,
+            _ => throw new ArgumentOutOfRangeException(nameof(settings)),
+        };
+        var profileAssignment = BuildPermissionProfileAssignment(
+            settings,
+            parentProfile,
+            networkEnabled,
+            legacyWritableRoots);
+
+        return baseline
+            .SetRawDefinition("sandbox_mode", null)
+            .SetRawDefinition("sandbox_workspace_write", null)
+            .SetString("default_permissions", LauncherPermissionProfileName)
+            .SetRawAssignment(LauncherPermissionProfileKey, profileAssignment);
+    }
+
+    private static TomlRootDocument RestoreSandboxAssignments(
+        TomlRootDocument document,
+        IReadOnlyDictionary<string, string?> originalAssignments)
+    {
+        foreach (var key in SandboxManagedKeys)
+        {
+            if (originalAssignments.TryGetValue(key, out var definition))
+            {
+                document = document.SetRawDefinition(key, definition);
+            }
+        }
+
+        return document;
+    }
+
+    private static string BuildPermissionProfileAssignment(
+        ModelSandboxSettings settings,
+        string parentProfile,
+        bool? networkEnabled,
+        IReadOnlyList<string> legacyWritableRoots)
+    {
+        var fields = new List<string>
+        {
+            $"extends = {JsonSerializer.Serialize(parentProfile)}",
+        };
+
+        var filesystem = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in legacyWritableRoots)
+        {
+            if (!Path.IsPathFullyQualified(path))
+            {
+                throw new ChatGptConfigConflictException(
+                    "Codex 配置中的 sandbox_workspace_write.writable_roots 包含非绝对路径；为避免改变原有权限，已停止切换。");
+            }
+
+            filesystem[Path.GetFullPath(path)] = "write";
+        }
+
+        foreach (var permission in settings.AdditionalPaths)
+        {
+            filesystem[Path.GetFullPath(permission.Path)] = permission.AllowWrite ? "write" : "read";
+        }
+
+        if (filesystem.Count > 0)
+        {
+            var entries = filesystem
+                .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(pair => $"{JsonSerializer.Serialize(pair.Key)} = {JsonSerializer.Serialize(pair.Value)}");
+            fields.Add($"filesystem = {{ {string.Join(", ", entries)} }}");
+        }
+
+        if (networkEnabled is bool enabled)
+        {
+            fields.Add(enabled
+                ? "network = { enabled = true, mode = \"full\" }"
+                : "network = { enabled = false }");
+        }
+
+        return $"{LauncherPermissionProfileKey} = {{ {string.Join(", ", fields)} }}";
     }
 
     private static string BuildLocalProviderAssignment(Uri baseUri)
@@ -861,11 +1295,52 @@ public sealed class ChatGptConfigTransactionService
         TomlRootDocument currentDocument,
         ManagedConfigSnapshot snapshot)
     {
-        // The initial Local transaction refuses a pre-existing provider with our
-        // fixed ID. Applying the captured value therefore removes only the provider
-        // created by this transaction, while remaining compatible with old recovery
-        // records that may contain an explicit original value.
-        return ApplyAssignments(currentDocument, snapshot.OriginalAssignments);
+        return ApplyAssignments(currentDocument, GetOfficialCompatibleAssignments(snapshot));
+    }
+
+    private static IReadOnlyDictionary<string, string?> GetOfficialCompatibleAssignments(
+        ManagedConfigSnapshot snapshot)
+    {
+        if (!IsOfficialCompatibilityOwned(snapshot))
+        {
+            return snapshot.OriginalAssignments;
+        }
+
+        var assignments = new Dictionary<string, string?>(snapshot.OriginalAssignments, StringComparer.Ordinal)
+        {
+            [LocalProviderKey] = OfflineCompatibilityProvider,
+        };
+        return assignments;
+    }
+
+    private static bool IsOfficialCompatibilityOwned(ManagedConfigSnapshot snapshot)
+    {
+        if (!snapshot.OriginalAssignments.TryGetValue(LocalProviderKey, out var originalProvider))
+        {
+            return false;
+        }
+
+        return originalProvider is null
+            || snapshot.OfficialCompatibilityOwned
+                && string.Equals(originalProvider, OfflineCompatibilityProvider, StringComparison.Ordinal);
+    }
+
+    private static bool IsOwnedOfficialCompatibility(
+        ManagedConfigSnapshot snapshot,
+        string configPath,
+        TomlRootDocument document)
+    {
+        return snapshot.Stage == ConfigTransactionStage.Restored
+            && snapshot.OfficialCompatibilityOwned
+            && string.Equals(
+                Path.GetFullPath(snapshot.ConfigPath),
+                Path.GetFullPath(configPath),
+                StringComparison.OrdinalIgnoreCase)
+            && string.Equals(
+                document.GetDefinition(LocalProviderKey),
+                OfflineCompatibilityProvider,
+                StringComparison.Ordinal)
+            && !string.Equals(document.GetStringValue("model_provider"), LocalProviderId, StringComparison.Ordinal);
     }
 
     private static TomlRootDocument ApplyAssignments(
@@ -879,7 +1354,7 @@ public sealed class ChatGptConfigTransactionService
                 continue;
             }
 
-            document = document.SetRawAssignment(key, assignment);
+            document = document.SetRawDefinition(key, assignment);
         }
 
         return document;
@@ -904,7 +1379,7 @@ public sealed class ChatGptConfigTransactionService
             .All(key =>
             {
                 expectedAssignments.TryGetValue(key, out var expected);
-                return string.Equals(currentDocument.GetAssignment(key), expected, StringComparison.Ordinal);
+                return string.Equals(currentDocument.GetDefinition(key), expected, StringComparison.Ordinal);
             });
 
     private static async Task<ManagedConfigSnapshot> LoadSnapshotAsync(
@@ -1043,6 +1518,11 @@ public sealed class ChatGptConfigTransactionService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ConfigPath);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModelSlug);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModelCatalogPath);
+        var sandboxErrors = ModelSandboxSettingsValidator.Validate(request.SandboxSettings);
+        if (sandboxErrors.Count > 0)
+        {
+            throw new ArgumentException(string.Join(Environment.NewLine, sandboxErrors), nameof(request));
+        }
 
         if (request.ContextWindow < 1_024)
         {

@@ -1,6 +1,7 @@
 namespace Launcher.ChatGPT.Configuration;
 
 using Launcher.Core.Configuration;
+using Launcher.Models.Profiles;
 
 public sealed record ChatGptLocalModeRequest
 {
@@ -15,6 +16,8 @@ public sealed record ChatGptLocalModeRequest
     public required int ContextWindow { get; init; }
 
     public required int AutoCompactTokenLimit { get; init; }
+
+    public ModelSandboxSettings? SandboxSettings { get; init; }
 
     public LauncherSettings? OriginalLauncherSettings { get; init; }
 
