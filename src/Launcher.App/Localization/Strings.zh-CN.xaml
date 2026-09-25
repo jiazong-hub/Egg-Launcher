@@ -105,7 +105,7 @@
     <sys:String x:Key="ReleaseNote093Title">0.9.3 · 2026-09-25</sys:String>
     <sys:String x:Key="ReleaseNote093Item1">• 关于页面增加更新日志，集中展示各版本的主要变化。</sys:String>
     <sys:String x:Key="ReleaseNote093Item2">• 增加 EXE 安装、升级与安全卸载流程。</sys:String>
-    <sys:String x:Key="ReleaseNote092Title">0.9.2 · 2026-09-24（本地版本）</sys:String>
+    <sys:String x:Key="ReleaseNote092Title">0.9.2 · 2026-09-24</sys:String>
     <sys:String x:Key="ReleaseNote092Item1">• 为每个本地模型增加独立的命令沙箱联网和目录权限设置。</sys:String>
     <sys:String x:Key="ReleaseNote092Item2">• 增加 llama.cpp Context Checkpoints 参数。</sys:String>
     <sys:String x:Key="ReleaseNote092Item3">• OpenAI 模式可以查阅旧 Local 任务的历史上下文。</sys:String>

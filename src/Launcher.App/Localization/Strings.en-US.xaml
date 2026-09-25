@@ -105,7 +105,7 @@
     <sys:String x:Key="ReleaseNote093Title">0.9.3 · 2026-09-25</sys:String>
     <sys:String x:Key="ReleaseNote093Item1">• Added a version history tab to the About window.</sys:String>
     <sys:String x:Key="ReleaseNote093Item2">• Added EXE installation, upgrade, and safe uninstall flows.</sys:String>
-    <sys:String x:Key="ReleaseNote092Title">0.9.2 · 2026-09-24 (Local Release)</sys:String>
+    <sys:String x:Key="ReleaseNote092Title">0.9.2 · 2026-09-24</sys:String>
     <sys:String x:Key="ReleaseNote092Item1">• Added per-model network and directory permissions for the command sandbox.</sys:String>
     <sys:String x:Key="ReleaseNote092Item2">• Added the llama.cpp Context Checkpoints option.</sys:String>
     <sys:String x:Key="ReleaseNote092Item3">• OpenAI mode can display the history of earlier Local tasks.</sys:String>
