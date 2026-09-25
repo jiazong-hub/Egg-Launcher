@@ -4,6 +4,8 @@
 **/obj/
 artifacts/
 publish/
+# Temporary logo design and preview workspace; keep out of the source repository.
+/LOGO918/
 *.user
 *.suo
 *.log
