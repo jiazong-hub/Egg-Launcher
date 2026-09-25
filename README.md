@@ -1,15 +1,18 @@
 # Egg Launcher
 
-版本：0.9.3（公开测试版；v0.9.2 为上一版本地标签）
-开发者：甲总不是贾总
+> 一款 Windows x64 启动器，让你在同一个 ChatGPT Desktop 中切换 OpenAI 在线模式与本地 llama.cpp 模式。
+>
+> A Windows x64 launcher for switching between OpenAI and local llama.cpp modes in ChatGPT Desktop.
 
-签名方式与当前作者证书指纹见 [Code signing policy](docs/signing-policy.md)。
+**[下载 v0.9.3 公开测试版（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.3/Egg-Launcher-0.9.3-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.3) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.3/Egg-Launcher-0.9.3-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
 
-Windows 10 22H2 / Windows 11 上的开源 ChatGPT Desktop 与 llama.cpp 双环境启动器。
+![Egg Launcher 双模式工作示意图](docs/images/egg-launcher-overview.svg)
 
-0.9.1 在 0.9.0 稳定核心之上完成界面、模型能力管理和并发可靠性升级。0.9.2 增加按模型保存的 Codex 沙箱设置、llama.cpp Context Checkpoints 参数、模型管理与搜索结果的滚动接力，以及 OpenAI 模式查阅旧 Local 任务的能力。审批方式与 llama.cpp 运行参数保持独立。模型在线下载仍标记为实验性。
+**当前测试范围：**已在 Windows 10 企业版 22H2（Build 19045.5371）验证启动、基本使用、模式切换、全新安装和旧版升级。Windows 11、ROCm、卸载及卸载时的配置恢复尚未测试；AMD Vulkan 后端可能偶发重连报错。安装包使用项目自签名证书，首次运行可能出现 Windows 安全提示，详见[签名策略与证书指纹](docs/signing-policy.md)。
 
-Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负责模型加载、推理、KV Cache 与硬性窗口，Codex 负责监控 token、选择安全节点、触发本地 compaction 并重建历史。Launcher 只解决路径、配置、切换、进程协调和安全边界，代码不会读取或替换账户凭据。
+开发者：甲总不是贾总 · [MIT License](LICENSE)
+
+模型推理由 llama.cpp 负责；Egg Launcher 管理路径、配置、模式切换、进程协调与安全边界，不读取或替换账户凭据。模型在线下载仍为实验性功能。
 
 ## 当前发布状态
 
