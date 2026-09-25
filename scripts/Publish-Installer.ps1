@@ -58,6 +58,14 @@ if (-not $RequireSignature -and $signingArgumentsProvided) {
     throw '提供签名参数时必须同时使用 -RequireSignature。'
 }
 if ($RequireSignature) {
+    $pwshCommand = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($null -eq $pwshCommand -or -not (Test-Path -LiteralPath $pwshCommand.Source -PathType Leaf)) {
+        throw '签名安装包需要 PowerShell 7（pwsh.exe）。'
+    }
+    $pwshPath = $pwshCommand.Source
+    if ($pwshPath.IndexOfAny(@('"', "`r", "`n")) -ge 0) {
+        throw 'PowerShell 7 路径包含不支持的引号或换行符。'
+    }
     $thumbprint = $SigningCertificateThumbprint.Replace(' ', '').ToUpperInvariant()
     if ($thumbprint -notmatch '^[0-9A-F]{40}$') {
         throw 'SigningCertificateThumbprint 必须是 40 位十六进制证书指纹。'
@@ -114,7 +122,7 @@ $compilerArguments = @(
     "/DAppVersion=$version"
 )
 if ($RequireSignature) {
-    $signCommand = 'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $q' +
+    $signCommand = '$q' + $pwshPath + '$q -NoProfile -NonInteractive -File $q' +
         $signScript + '$q -FilePath $f -SigningCertificateThumbprint ' + $thumbprint
     if ($AllowUntrustedSelfSignedCertificate) {
         $signCommand += ' -AllowUntrustedSelfSignedCertificate'
