@@ -110,15 +110,6 @@
         <TabControl x:Name="AboutTabs" Grid.Row="1" Margin="0,24,0,20"
                     Background="Transparent" BorderThickness="0"
                     SelectionChanged="AboutTabs_SelectionChanged">
-            <TabControl.Style>
-                <Style TargetType="TabControl">
-                    <Style.Triggers>
-                        <Trigger Property="SelectedIndex" Value="2">
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-                        </Trigger>
-                    </Style.Triggers>
-                </Style>
-            </TabControl.Style>
             <TabItem Header="{DynamicResource AboutProductTab}">
                 <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0"
                               VerticalScrollBarVisibility="Auto">
@@ -206,8 +197,10 @@
             </TabItem>
 
             <TabItem Header="{DynamicResource ChangelogTab}">
-                <ScrollViewer Margin="0,16,0,0" Padding="0,0,12,0"
-                              VerticalScrollBarVisibility="Auto">
+                <ScrollViewer Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0"
+                              HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
                     <StackPanel Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <Border Style="{StaticResource CardStyle}">
                             <StackPanel>
