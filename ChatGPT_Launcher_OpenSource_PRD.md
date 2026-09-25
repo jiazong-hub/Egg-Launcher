@@ -20,9 +20,9 @@
 3. 只有用户明确点击 OpenAI / Local 或切换本地模型时，Launcher 才实质修改受管理配置。
 4. Local 模式保留 Local 配置与轻量 Router；模型和 KV Cache 的空闲卸载、显存释放及下一次请求自动重载使用 llama.cpp 原生 `--sleep-idle-seconds`。
 5. 用户可以绕过 Launcher 直接启动 ChatGPT Desktop；客户端必须按上次保存的模式工作。该能力由登录启动的后台 Agent 与 llama.cpp Router 共同保证。
-6. 两种模式共享项目目录、项目列表、开发任务、历史记录和可查阅的上下文。允许用户跨模型继续任务，但 UI 应提示其兼容性风险，不强制禁止。
+6. 两种模式共享项目目录、项目列表、开发任务、历史记录和可查阅的上下文。跨 Provider 可以查阅旧任务；当前版本不承诺在另一 Provider 下继续原任务，继续开发时应在目标模式新建任务并引用旧内容。
 7. 两种模式隔离推理传输、账户凭据与模型视图：OpenAI 模式不显示本地模型，Local 模式不显示在线模型。为共享 ChatGPT Desktop 原生项目和历史，Local 可以保留官方账户外壳及左下角账户名称，但不得把凭据或账户元数据发送给本地 Provider；这不等同于独立的本地账户登录。
-8. Launcher 可以修改切换所必需的用户级 Provider / Catalog 配置，但不得破坏官方账户、工作区、凭据、项目或历史状态；切回 OpenAI 后应如同 Local 从未存在。
+8. Launcher 可以修改切换所必需的用户级 Provider / Catalog 配置，但不得破坏官方账户、工作区、凭据、项目或历史状态；切回 OpenAI 后恢复官方模型、请求路由和原有受管理设置。为使旧 Local 任务在 OpenAI 模式下仍可查阅，允许保留一条由 Launcher 管理、未激活且不能处理请求的本地历史 Provider 定义；该定义不得使本地模型出现在官方模型列表中。
 9. llama.cpp 是 Local 模式唯一的模型运行时，独立负责模型加载、推理、采样、KV Cache、硬性上下文容量、批处理及其原生 API；Codex 负责对话历史、token 监控、语义摘要和压缩后历史重建。Launcher 不复制任一方的能力。
 10. 模型默认参数属于单个 Profile。用户可把当前参数保存为该模型的专用默认；新增、恢复或修改其他模型时不得读取或套用该快照。Launcher 不提供无法依据模型与硬件证明正确的内置推荐回退；可选自动适配只调用当前 llama.cpp 自带的 `llama-fit-params`，结果必须先展示、再由用户确认。
 11. Launcher UI 与后台 Agent 生命周期分离：OpenAI 模式关闭 UI 时应正常结束无用 Agent；Local 模式关闭 UI 时由用户选择保留服务或停止代理、Router 与 Agent。停止后台服务不得隐式切换模式或恢复官方配置。
@@ -2298,10 +2298,10 @@ LocalConfiguredStopped
 - Local GGUF 不加载；
 - 在线账号正常；
 - 官方模型正常；
-- Local Provider 不出现；
+- 本地模型不出现在官方模型列表，当前模型不选用 Local Provider；
 - 本地模型不占 GPU 显存；
 - 官方账户、工作区、项目与历史任务保持正常；
-- 切回 OpenAI 后不残留 Launcher 管理的 Local Catalog / Provider 字段。
+- 切回 OpenAI 后恢复官方 Catalog 与请求路由，不残留活动 Local 端点；仅保留用于解析旧 Local 任务的未激活历史 Provider 定义。原任务跨 Provider 续聊不属于此项验收范围。
 
 ---
 

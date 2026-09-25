@@ -53,7 +53,12 @@ public sealed class ModeSwitchCoordinatorTests
             Assert.Contains("custom_setting = true", localConfig, StringComparison.Ordinal);
 
             await modeSwitch.SwitchToOpenAIAsync();
-            Assert.Equal(officialConfig, await File.ReadAllTextAsync(configPath));
+            var restoredConfig = await File.ReadAllTextAsync(configPath);
+            Assert.StartsWith(officialConfig, restoredConfig, StringComparison.Ordinal);
+            Assert.Contains("model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\"", restoredConfig, StringComparison.Ordinal);
+            Assert.Contains("base_url = \"http://127.0.0.1:0/v1/\"", restoredConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain("model_provider =", restoredConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain("127.0.0.1:19090", restoredConfig, StringComparison.Ordinal);
         }
         finally
         {
@@ -349,7 +354,12 @@ public sealed class ModeSwitchCoordinatorTests
 
             Assert.Contains("官方配置已经恢复", exception.Message, StringComparison.Ordinal);
             Assert.Contains("重新打开 Launcher", exception.Message, StringComparison.Ordinal);
-            Assert.Equal(officialConfig, await File.ReadAllTextAsync(configPath));
+            var restoredConfig = await File.ReadAllTextAsync(configPath);
+            Assert.StartsWith(officialConfig, restoredConfig, StringComparison.Ordinal);
+            Assert.Contains("model_providers.chatgpt_local_launcher = { name = \"Local history (offline)\"", restoredConfig, StringComparison.Ordinal);
+            Assert.Contains("base_url = \"http://127.0.0.1:0/v1/\"", restoredConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain("model_provider =", restoredConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain("127.0.0.1:18080", restoredConfig, StringComparison.Ordinal);
             Assert.Equal(ProviderMode.Local, (await settingsStore.LoadAsync()).SelectedMode);
             Assert.True(File.Exists(dataPaths.RecoveryFile));
         }
