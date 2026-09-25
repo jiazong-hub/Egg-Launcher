@@ -1,6 +1,6 @@
 # Egg Launcher
 
-版本：0.9.2（本地版本标签；沙箱设置为 beta）
+版本：0.9.3（安装版发布候选；v0.9.2 为上一版本地标签）
 开发者：甲总不是贾总
 
 签名方式与当前作者证书指纹见 [Code signing policy](docs/signing-policy.md)。
@@ -12,6 +12,8 @@ Windows 10 22H2 / Windows 11 上的开源 ChatGPT Desktop 与 llama.cpp 双环�
 Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负责模型加载、推理、KV Cache 与硬性窗口，Codex 负责监控 token、选择安全节点、触发本地 compaction 并重建历史。Launcher 只解决路径、配置、切换、进程协调和安全边界，代码不会读取或替换账户凭据。
 
 ## 当前发布状态
+
+- 0.9.3 已加入 EXE 安装包与“关于”页更新日志；安装、升级、卸载及签名后的真机验收完成前，不将其作为正式公开发布。
 
 - 版本：`v0.9.2` 本地标签；沙箱设置仍为 beta。该标签封存时未完成自动化测试和完整沙箱真机验收。2026-09-25 的后续工作树已修正两项与跨模式历史查阅需求冲突的旧测试断言，249 项自动化测试与 Release 构建通过；完整真机验收仍未完成，不能将此标签理解为公开发布门禁已通过。
 - 当前真机结论：CUDA 环境下 Local 推理和自动压缩已连续通过，切回 OpenAI 后官方账户、模型和权限配置可恢复。
@@ -26,6 +28,7 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - [用户功能说明](docs/user-guide.md)
 - [0.9.1 公测版发布说明](docs/release-notes-0.9.1.md)
 - [0.9.2 本地版本说明](docs/release-notes-0.9.2.md)
+- [0.9.3 安装版开发说明](docs/release-notes-0.9.3.md)
 - [真机验收清单](docs/manual-acceptance-checklist.md)
 - [v0.9.1 已封存安全复核（0.9.2 尚待完整验收）](docs/release-security-review-0.9.1.md)
 - [变更记录](CHANGELOG.md)
@@ -86,6 +89,16 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 & '.\scripts\Publish-Portable.ps1' -SelfContained -Archive
 ```
 
+生成 Windows x64 单文件 EXE 安装包（当前用户安装）：
+
+```powershell
+& '.\scripts\Publish-Installer.ps1' -IsccPath 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+```
+
+编译器须安装 Inno Setup 6.5 或更新版本；简体中文语言文件已随项目放在 `installer/ChineseSimplified.isl`（来源：Inno Setup 官方翻译仓库）。脚本复用便携发布门禁，先生成自包含内部目录，再编译安装包与 `.sha256` 文件。没有签名参数时仅供内部验收，不作为公开发布包。正式签名时传入 `-RequireSignature -SigningCertificateThumbprint '证书指纹'`；若使用自签名证书，另加 `-AllowUntrustedSelfSignedCertificate`。可选传入 `-SignToolPath` 和 `-TimestampUrl`，安装包与卸载程序由同一签名命令签署。
+
+安装器默认使用当前用户的程序目录，不要求管理员权限；不自动启用登录启动，不安装 llama.cpp、模型或 ChatGPT Desktop。升级前应正常退出启动器和 Agent。卸载确认后会先检查 ChatGPT Desktop 是否已关闭，并在必要时通过现有事务恢复 OpenAI 配置；失败会停止卸载。旧 Local 任务所需的未激活历史 Provider、`%LOCALAPPDATA%\ChatGPTLocalLauncher` 数据、模型和 Runtime 目录仍保留。旧便携版文件不会被自动删除。
+
 使用已安装在当前用户证书存储中的可信代码签名证书发布：
 
 ```powershell
@@ -126,7 +139,7 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 ## 项目结构
 
 - `Launcher.App`：WPF 图形界面
-- `Launcher.Agent`：登录启动的后台协调进程
+- `Launcher.Agent`：Local 会话的后台协调进程及卸载准备入口
 - `Launcher.Core`：设置、状态与持久化
 - `Launcher.Runtime`：llama.cpp Runtime / Router 能力探测、进程管理与回环安全代理
 - `Launcher.Models`：GGUF 扫描、公开模型目录元数据与 Profile
@@ -137,10 +150,12 @@ Launcher 不实现模型推理、工具协议或上下文摘要；llama.cpp 负�
 - `docs/user-guide.md`：页面、按钮、参数、状态与对话框说明
 - `docs/release-notes-0.9.1.md`：v0.9.1 公测版封存说明
 - `docs/release-notes-0.9.2.md`：v0.9.2 本地版本范围和已知限制
+- `installer/EggLauncher.iss`：EXE 安装与卸载脚本
+- `scripts/Publish-Installer.ps1`：安装包发布门禁与签名编译入口
 - `docs/research`：历史探索记录，不作为当前实现规范
 
 ## 安全原则
 
-不读取或复制 `auth.json` 内容；不整目录覆盖 `.codex`；不按进程名批量终止 llama-server；不在代理中实现模型能力或改写对话语义；所有真实 Provider 切换都要求客户端已关闭并由用户明确确认。登录启动只接受不允许普通用户组修改的 Agent 安装位置。启动 llama 子进程前会移除常见云端 API key/token 环境变量；原生 stdout/stderr 日志限制为每文件 32 MiB，但其内容由 llama.cpp 决定，排障后应按需清理。自动化构建与封存不会修改用户的真实 ChatGPT Provider；真实模式切换由用户按验收清单执行。
+不读取或复制 `auth.json` 内容；不整目录覆盖 `.codex`；不按进程名批量终止 llama-server；不在代理中实现模型能力或改写对话语义；所有真实 Provider 切换都要求客户端已关闭并由用户明确确认。登录启动只接受不允许普通用户组修改的 Launcher 程序位置。启动 llama 子进程前会移除常见云端 API key/token 环境变量；原生 stdout/stderr 日志限制为每文件 32 MiB，但其内容由 llama.cpp 决定，排障后应按需清理。自动化构建与封存不会修改用户的真实 ChatGPT Provider；真实模式切换由用户按验收清单执行。
 
 当前实现边界见 [架构决策 0002：Launcher 保持为 llama.cpp 的薄管理壳](docs/architecture/0002-thin-launcher-boundary.md)。`docs/research` 中的早期实测记录仅用于追溯，里面已经废弃的兼容代理方案不是当前实现依据，也不会放入发布包。

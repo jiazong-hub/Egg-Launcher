@@ -427,6 +427,9 @@ try {
         -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.2.md') `
         -Destination $packageDocsPath
     Copy-Item `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.3.md') `
+        -Destination $packageDocsPath
+    Copy-Item `
         -LiteralPath (Join-Path $repositoryRoot 'docs\release-security-review-0.9.1.md') `
         -Destination $packageDocsPath
     Copy-Item `

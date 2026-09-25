@@ -11,6 +11,7 @@ using Launcher.Core.Agent;
 using Launcher.Core.Configuration;
 using Launcher.Core.Diagnostics;
 using Launcher.Core.Persistence;
+using Launcher.Core.Startup;
 using Launcher.Models.Profiles;
 using Launcher.Models.Scanning;
 using Launcher.Orchestration.Agent;
@@ -38,6 +39,28 @@ static async Task RunAsync(string[] args)
     if (args.Contains("--self-test", StringComparer.OrdinalIgnoreCase))
     {
         Console.WriteLine("Launcher.Agent self-test succeeded.");
+        return;
+    }
+
+    if (args.Contains("--prepare-uninstall", StringComparer.OrdinalIgnoreCase))
+    {
+        if (args.Length != 1)
+        {
+            throw new ArgumentException("卸载准备命令不接受其他参数。");
+        }
+
+        EnsureLauncherIsStopped();
+        var uninstallPaths = LauncherDataPaths.ForCurrentUser();
+        using var uninstallSettings = new JsonSettingsStore(uninstallPaths.SettingsFile);
+        var uninstallClientDetector = new ChatGptClientDetector();
+        await new UninstallPreparationService(
+            uninstallSettings,
+            uninstallClientDetector,
+            new ChatGptConfigTransactionService(uninstallClientDetector),
+            uninstallPaths,
+            new WindowsUserRunEntryStore()).PrepareAsync(
+                Path.Combine(AppContext.BaseDirectory, "Launcher.App.exe"));
+        Console.WriteLine("Egg Launcher uninstall preparation succeeded.");
         return;
     }
 
@@ -722,6 +745,29 @@ static async Task RunAsync(string[] args)
         return null;
     }
 
+}
+
+static void EnsureLauncherIsStopped()
+{
+    foreach (var mutexName in new[]
+             {
+                 @"Local\ChatGPTLocalLauncher.App",
+                 @"Local\ChatGPTLocalLauncher.Agent",
+             })
+    {
+        try
+        {
+            if (Mutex.TryOpenExisting(mutexName, out var existing))
+            {
+                existing.Dispose();
+                throw new InvalidOperationException("请先正常退出 Egg Launcher 与后台 Agent，再卸载。");
+            }
+        }
+        catch (UnauthorizedAccessException exception)
+        {
+            throw new InvalidOperationException("无法确认启动器是否已退出，已停止卸载。", exception);
+        }
+    }
 }
 
 static void ReportFatalError(Exception exception)
