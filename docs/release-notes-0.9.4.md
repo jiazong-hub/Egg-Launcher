@@ -1,6 +1,6 @@
-# Egg Launcher 0.9.4（公开测试版发布候选）
+# Egg Launcher 0.9.4（公开测试版）
 
-本版本完善长对话上下文设置、沙箱联网与目录兼容，增加详细诊断日志，并优化参数和卡片界面。目前尚未公开发布，实际发布日期以 GitHub Release 为准。
+本版本完善长对话上下文设置、沙箱联网与目录兼容，增加详细诊断日志，并优化参数和卡片界面。2026-10-02 已公开发布，安装包与校验文件见 [GitHub Release](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.4)。
 
 ## 主要变化
 

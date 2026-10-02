@@ -4,7 +4,7 @@
 >
 > A Windows x64 launcher for switching between OpenAI and local llama.cpp modes in ChatGPT Desktop.
 
-**[下载 v0.9.3 公开测试版（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.3/Egg-Launcher-0.9.3-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.3) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.3/Egg-Launcher-0.9.3-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
+**[下载 v0.9.4 公开测试版（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.4/Egg-Launcher-0.9.4-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.4) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.4/Egg-Launcher-0.9.4-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
 
 ![Egg Launcher 双模式工作示意图](docs/images/egg-launcher-overview.svg)
 
@@ -16,7 +16,7 @@
 
 ## 当前发布状态
 
-- **0.9.4 发布候选正在进行正式检查，尚未公开发布。** 增加精简/详细诊断日志，完善上下文参数联动、滚动能力检测、沙箱联网兼容与常用目录权限，并优化参数和卡片界面。见[0.9.4 发布说明](docs/release-notes-0.9.4.md)及[检查记录](docs/release-checks-0.9.4.md)。上方下载入口在正式发布前仍指向已发布的 0.9.3。
+- **0.9.4 公开测试版已于 2026-10-02 发布。** 增加精简/详细诊断日志，完善上下文参数联动、滚动能力检测、沙箱联网兼容与常用目录权限，并优化参数和卡片界面。281 项 .NET 测试、8 项网络脚本离线检查及正式构建门禁通过，用户确认候选包测试完成。见[0.9.4 发布说明](docs/release-notes-0.9.4.md)及[检查记录](docs/release-checks-0.9.4.md)。[旧版 0.9.3](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.3)仍保留。
 
 - 0.9.3 公开测试版已加入 EXE 安装包与“关于”页更新日志。用户已在 Windows 10 企业版 22H2（Build 19045.5371）验证启动、基本使用、模式切换与启动、全新安装和旧版升级；卸载及卸载时的配置恢复尚未测试。
 - NVIDIA CUDA 后端当前实测稳定；AMD Vulkan 后端可能偶发重连报错；ROCm 后端未测试。建议通过 Egg Launcher 切换模式并启动客户端，绕过启动器可能造成客户端接口状态不同步。
@@ -36,7 +36,7 @@
 - [0.9.1 公测版发布说明](docs/release-notes-0.9.1.md)
 - [0.9.2 本地版本说明](docs/release-notes-0.9.2.md)
 - [0.9.3 安装版开发说明](docs/release-notes-0.9.3.md)
-- [0.9.4 发布候选说明](docs/release-notes-0.9.4.md)
+- [0.9.4 公开测试版说明](docs/release-notes-0.9.4.md)
 - [0.9.4 正式发布检查记录](docs/release-checks-0.9.4.md)
 - [真机验收清单](docs/manual-acceptance-checklist.md)
 - [v0.9.1 已封存安全复核（0.9.2 尚待完整验收）](docs/release-security-review-0.9.1.md)

@@ -1,6 +1,6 @@
-# Egg Launcher 0.9.4 用户功能说明（公开测试版发布候选）
+# Egg Launcher 0.9.4 用户功能说明（公开测试版）
 
-本文说明 0.9.4 发布候选的功能；已公开下载的版本仍为 0.9.3，待完成发布后更新入口。启动器是 llama.cpp 与 ChatGPT Desktop 之间的管理外壳，不重复实现推理、KV Cache、模型调度或语义摘要。沙箱设置仍为 beta，实测范围与已知限制见[版本说明](release-notes-0.9.4.md)及[正式检查记录](release-checks-0.9.4.md)。
+本文说明 0.9.4 公开测试版的功能，发布于 2026-10-02。启动器是 llama.cpp 与 ChatGPT Desktop 之间的管理外壳，不重复实现推理、KV Cache、模型调度或语义摘要。沙箱设置仍为 beta，实测范围与已知限制见[版本说明](release-notes-0.9.4.md)及[正式检查记录](release-checks-0.9.4.md)。
 
 ## 1. 模式与数据边界
 

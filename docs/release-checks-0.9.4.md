@@ -1,6 +1,14 @@
 # 0.9.4 正式发布检查记录
 
-检查日期：2026-10-02（Asia/Shanghai）。本记录描述发布准备基线；实际提交、标签及候选包以 Git 和发布草稿为准，尚未公开 GitHub Release。
+检查日期：2026-10-02（Asia/Shanghai）。本记录保留候选检查过程；已于同日 11:46（Asia/Shanghai）公开发布，使用预发布标记，不覆盖旧 Release。
+
+## 最终发布
+
+- 源码提交 `75393acaabb543491f6f61c89856d73d11f598cc`，标签 `v0.9.4`；工作树干净后重新构建，ProductVersion 为 `0.9.4+75393acaabb543491f6f61c89856d73d11f598cc`。
+- 完整门禁重跑通过：281 项 .NET 测试、在线依赖审计、Agent 自检、格式检查、Release 构建、签名安装程序封装；8 项 Python 离线检查再次通过。
+- 正式 EXE 大小 67,582,664 bytes，SHA-256：`5a7e4624faf2a1701ae07b98d857c68a008232c1eff037e1e8d887b4ac84508d`。GitHub 上传 digest 与本地一致，附带独立 .sha256 文件。
+- [公开发布页](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.4)。源代码和标签已推送，用户明确批准公开发布。此前候选包及草稿说明为过程记录。
+- 本次发布后的文档状态更新不移动版本标签，也不替换已签名二进制。
 
 ## 文档与版本
 
