@@ -2084,6 +2084,13 @@ public partial class MainWindow : Window
         {
             if (_settings.SelectedMode == ProviderMode.OpenAI)
             {
+                await new ModeRecoveryCoordinator(
+                    _settingsStore, new ChatGptConfigTransactionService(_clientDetector), _paths)
+                    .RecoverAsync(_lifetime.Token);
+                _settings = await _settingsStore.LoadAsync(_lifetime.Token);
+            }
+            if (_settings.SelectedMode == ProviderMode.OpenAI)
+            {
                 if (IsAgentRunning() && !await StopAgentForExitAsync())
                 {
                     StatusText.Text = AppLanguageManager.Choose("Local 后台服务未能安全停止，本次未启动 OpenAI 客户端。", "Local background services could not be stopped safely. The OpenAI client was not started.");

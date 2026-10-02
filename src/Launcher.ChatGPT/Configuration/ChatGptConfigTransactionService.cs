@@ -22,6 +22,11 @@ public sealed class ChatGptConfigTransactionService
     private const string LauncherPermissionProfileName = "egg_launcher_active";
     private const string LauncherPermissionProfileKey = $"permissions.{LauncherPermissionProfileName}";
 
+    private static readonly string[] PermissionBaselineKeys =
+    [
+        "default_permissions", "sandbox_mode", "sandbox_workspace_write", LauncherPermissionProfileKey,
+    ];
+
     private static readonly string[] SandboxManagedKeys =
     [
         "default_permissions",
@@ -121,6 +126,17 @@ public sealed class ChatGptConfigTransactionService
             var previousSnapshot = File.Exists(dataPaths.RecoveryFile)
                 ? await LoadSnapshotAsync(dataPaths.RecoveryFile, cancellationToken).ConfigureAwait(false)
                 : null;
+            if (previousSnapshot?.Stage == ConfigTransactionStage.Restored)
+            {
+                if (!string.Equals(Path.GetFullPath(previousSnapshot.ConfigPath), configPath, StringComparison.OrdinalIgnoreCase))
+                    throw new ChatGptConfigConflictException("恢复记录指向其他配置文件，已停止沙箱配置切换。");
+                (previousSnapshot, _) = await RepairRestoredPermissionsAsync(previousSnapshot, dataPaths.RecoveryFile, cancellationToken).ConfigureAwait(false);
+                originalState = await ReadConfigStateAsync(configPath, cancellationToken).ConfigureAwait(false);
+                originalExists = originalState.Exists;
+                originalBytes = originalState.Bytes;
+                originalText = originalState.Text;
+                originalDocument = new TomlRootDocument(originalText);
+            }
             var ownsCompatibilityProvider = previousSnapshot is not null
                 && IsOwnedOfficialCompatibility(previousSnapshot, configPath, originalDocument);
             if (previousSnapshot?.Stage == ConfigTransactionStage.Restored
@@ -398,6 +414,7 @@ public sealed class ChatGptConfigTransactionService
             var currentState = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
             var currentDocument = new TomlRootDocument(currentState.Text);
             EnsureAssignmentsStillOwned(currentDocument, snapshot.AppliedAssignments);
+            snapshot = await CompletePermissionBaselineAsync(snapshot, cancellationToken).ConfigureAwait(false);
             var updatedDocument = BuildLocalDocument(currentDocument, request, snapshot.OriginalAssignments, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!);
             var prepared = snapshot with
             {
@@ -619,9 +636,10 @@ public sealed class ChatGptConfigTransactionService
 
             if (snapshot.Stage == ConfigTransactionStage.Restored)
             {
-                return snapshot;
+                return (await RepairRestoredPermissionsAsync(snapshot, recoveryPath, cancellationToken).ConfigureAwait(false)).Snapshot;
             }
 
+            snapshot = await CompletePermissionBaselineAsync(snapshot, cancellationToken).ConfigureAwait(false);
             await VerifyOriginalBackupAsync(snapshot, cancellationToken).ConfigureAwait(false);
 
             var currentState = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
@@ -762,6 +780,15 @@ public sealed class ChatGptConfigTransactionService
             var currentDocument = new TomlRootDocument(currentState.Text);
             var changed = false;
             LauncherSettings? pendingSettings = null;
+
+            if (snapshot.Stage != ConfigTransactionStage.Restored
+                && snapshot.AppliedAssignments.TryGetValue(LauncherPermissionProfileKey, out var appliedPermissions)
+                && appliedPermissions is not null)
+            {
+                var completed = await CompletePermissionBaselineAsync(snapshot, cancellationToken).ConfigureAwait(false);
+                changed = !ReferenceEquals(completed, snapshot);
+                snapshot = completed;
+            }
 
             switch (snapshot.Stage)
             {
@@ -942,6 +969,7 @@ public sealed class ChatGptConfigTransactionService
                     break;
 
                 case ConfigTransactionStage.Restored:
+                    (snapshot, changed) = await RepairRestoredPermissionsAsync(snapshot, recoveryPath, cancellationToken).ConfigureAwait(false);
                     if (!snapshot.SettingsCommitted)
                     {
                         pendingSettings = snapshot.TargetLauncherSettings;
@@ -1486,13 +1514,13 @@ public sealed class ChatGptConfigTransactionService
             ?? throw new InvalidDataException("恢复记录为空。");
     }
 
-    private static async Task VerifyOriginalBackupAsync(
+    private static async Task<byte[]> VerifyOriginalBackupAsync(
         ManagedConfigSnapshot snapshot,
         CancellationToken cancellationToken)
     {
         if (!snapshot.OriginalConfigExisted)
         {
-            return;
+            return [];
         }
 
         if (string.IsNullOrWhiteSpace(snapshot.BackupPath) || !File.Exists(snapshot.BackupPath))
@@ -1510,6 +1538,57 @@ public sealed class ChatGptConfigTransactionService
         {
             throw new InvalidDataException("切换前的配置备份哈希不匹配，已停止自动恢复。");
         }
+        return backupBytes;
+    }
+
+    private static async Task<ManagedConfigSnapshot> CompletePermissionBaselineAsync(
+        ManagedConfigSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        if (PermissionBaselineKeys.All(snapshot.OriginalAssignments.ContainsKey)) return snapshot;
+        // Missing legacy keys are unknown, not evidence that the original field was absent.
+        var bytes = await VerifyOriginalBackupAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        var original = new TomlRootDocument(DecodeUtf8Config(bytes));
+        var assignments = new Dictionary<string, string?>(snapshot.OriginalAssignments, StringComparer.Ordinal);
+        foreach (var key in PermissionBaselineKeys)
+            assignments.TryAdd(key, original.GetDefinition(key));
+        return snapshot with { OriginalAssignments = assignments };
+    }
+
+    private async Task<(ManagedConfigSnapshot Snapshot, bool Changed)> RepairRestoredPermissionsAsync(
+        ManagedConfigSnapshot snapshot, string recoveryPath, CancellationToken cancellationToken)
+    {
+        var state = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
+        var document = new TomlRootDocument(state.Text);
+        var currentProfile = document.GetDefinition(LauncherPermissionProfileKey);
+        var active = document.GetStringValue("default_permissions") == LauncherPermissionProfileName;
+        if (currentProfile is null && !active) return (snapshot, false);
+        if (!snapshot.AppliedAssignments.TryGetValue(LauncherPermissionProfileKey, out var appliedProfile)
+            || appliedProfile is null)
+            throw new ChatGptConfigConflictException("无法确认现有 egg_launcher_active 权限配置归属，已停止自动恢复。");
+        var completed = await CompletePermissionBaselineAsync(snapshot, cancellationToken).ConfigureAwait(false);
+        var originalProfile = completed.OriginalAssignments[LauncherPermissionProfileKey];
+        if (originalProfile is not null)
+        {
+            if (string.Equals(currentProfile, originalProfile, StringComparison.Ordinal)) return (snapshot, false);
+            throw new ChatGptConfigConflictException("原始配置已包含 egg_launcher_active，无法作为启动器残留自动清理。");
+        }
+        var restored = document;
+        foreach (var key in PermissionBaselineKeys)
+        {
+            var current = document.GetDefinition(key);
+            var original = completed.OriginalAssignments[key];
+            if (string.Equals(current, original, StringComparison.Ordinal)) continue;
+            if (!completed.AppliedAssignments.TryGetValue(key, out var applied)
+                || !string.Equals(current, applied, StringComparison.Ordinal))
+                throw new ChatGptConfigConflictException("沙箱配置与恢复记录不一致，已停止自动清理，避免覆盖用户修改。");
+            restored = restored.SetRawDefinition(key, original);
+        }
+        EnsureClientClosed();
+        await BeforeConfigCommitAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
+        await WriteConfigAtomicallyAsync(snapshot.ConfigPath, restored.ToString(), state.Revision,
+            cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
+        await WriteJsonAtomicallyAsync(recoveryPath, completed, cancellationToken).ConfigureAwait(false);
+        return (completed, true);
     }
 
     private static async Task TryResetPreparedUpdateAsync(
