@@ -104,7 +104,7 @@
     <sys:String x:Key="LocalDataDirectory">本地数据目录</sys:String>
     <sys:String x:Key="LocalDataBody">模型与 Runtime 数据位于用户自行选择的 llama.cpp 目录。删除应用文件不会自动删除这些数据。</sys:String>
     <sys:String x:Key="ChangelogTab">更新日志</sys:String>
-    <sys:String x:Key="ReleaseNote094Title">0.9.4 · 公开测试版</sys:String>
+    <sys:String x:Key="ReleaseNote094Title">0.9.4 · 2026-10-02</sys:String>
     <sys:String x:Key="ReleaseNote094Item1">• 优化参数控件、卡片对齐、侧栏和窗口自适应。</sys:String>
     <sys:String x:Key="ReleaseNote094Item2">• 增加精简/详细日志和更完整的故障诊断。</sys:String>
     <sys:String x:Key="ReleaseNote094Item3">• 完善上下文、压缩余量、工具结果上限联动与滚动能力检测。</sys:String>

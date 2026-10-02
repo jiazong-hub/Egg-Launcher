@@ -104,7 +104,7 @@
     <sys:String x:Key="LocalDataDirectory">Local Data Directory</sys:String>
     <sys:String x:Key="LocalDataBody">Model and Runtime data remain in the llama.cpp directory selected by the user. Removing the application files does not automatically remove that data.</sys:String>
     <sys:String x:Key="ChangelogTab">Changelog</sys:String>
-    <sys:String x:Key="ReleaseNote094Title">0.9.4 · Public beta</sys:String>
+    <sys:String x:Key="ReleaseNote094Title">0.9.4 · 2026-10-02</sys:String>
     <sys:String x:Key="ReleaseNote094Item1">• Refined parameter controls, card alignment, sidebar and adaptive window layout.</sys:String>
     <sys:String x:Key="ReleaseNote094Item2">• Added concise/detailed logging and expanded fault diagnostics.</sys:String>
     <sys:String x:Key="ReleaseNote094Item3">• Improved context, compaction reserve and tool-result limits, with context-shift capability checks.</sys:String>
