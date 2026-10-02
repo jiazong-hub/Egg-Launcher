@@ -49,6 +49,8 @@ public static class RouterPresetGenerator
         Append(builder, "cache-type-k", profile.CacheTypeK);
         Append(builder, "cache-type-v", profile.CacheTypeV);
         Append(builder, "parallel", profile.Parallel);
+        Append(builder, profile.ContextShiftEnabled ? "context-shift" : "no-context-shift", "true");
+
         Append(builder, profile.Jinja ? "jinja" : "no-jinja", "true");
 
         var chatTemplatePath = ResolveChatTemplatePath(
@@ -79,6 +81,12 @@ public static class RouterPresetGenerator
 
         foreach (var argument in profile.ExtraArguments.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
+            if (argument.Key.Equals("context-shift", StringComparison.OrdinalIgnoreCase)
+                || argument.Key.Equals("no-context-shift", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             Append(builder, argument.Key, argument.Value ?? "true");
         }
 

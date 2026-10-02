@@ -51,6 +51,15 @@ public sealed class JsonModelProfileStore
                     continue;
                 }
 
+                if (!TryMigrateLegacyContextShiftArguments(profile, out var migratedProfile, out var migrationError))
+                {
+                    diagnostics.Add(
+                        $"{Path.GetFileName(path)}：旧版 --context-shift/--no-context-shift 参数无法无歧义迁移（{migrationError}）；未加载 Profile，源文件保留原样。");
+                    continue;
+                }
+
+                profile = migratedProfile;
+
                 if (profile.SchemaVersion is >= 1 and < ModelProfile.CurrentSchemaVersion)
                 {
                     // V1 did not record provenance. Treat it as a user-owned local file so
@@ -88,7 +97,9 @@ public sealed class JsonModelProfileStore
                 profile = NormalizeMtpSafety(profile, root);
                 profile = NormalizeVisionSafety(profile, root);
 
-                var errors = ModelProfileValidator.Validate(profile, root);
+                // Keep old conversation values visible for correction. Structural
+                // validation remains mandatory; saving and starting validate all bounds.
+                var errors = ModelProfileValidator.Validate(profile, root, validateConversationLimits: false);
                 if (errors.Count > 0)
                 {
                     diagnostics.Add($"{Path.GetFileName(path)}：{string.Join("；", errors)}");
@@ -133,6 +144,136 @@ public sealed class JsonModelProfileStore
                 .ThenBy(profile => profile.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToArray(),
             diagnostics);
+    }
+
+    private static bool TryMigrateLegacyContextShiftArguments(
+        ModelProfile profile,
+        out ModelProfile migratedProfile,
+        out string? error)
+    {
+        if (!TryMigrateContextShiftArguments(
+                profile.ExtraArguments,
+                out var profileArguments,
+                out var profileContextShiftEnabled,
+                out error))
+        {
+            migratedProfile = profile;
+            return false;
+        }
+
+        IReadOnlyDictionary<string, string?>? defaultArguments = null;
+        bool? defaultContextShiftEnabled = null;
+        if (profile.DefaultParameters is not null
+            && !TryMigrateContextShiftArguments(
+                profile.DefaultParameters.ExtraArguments,
+                out defaultArguments,
+                out defaultContextShiftEnabled,
+                out error))
+        {
+            migratedProfile = profile;
+            return false;
+        }
+
+        var migratedDefaults = profile.DefaultParameters is null
+            ? null
+            : profile.DefaultParameters with
+            {
+                ContextShiftEnabled = defaultContextShiftEnabled ?? profile.DefaultParameters.ContextShiftEnabled,
+                ExtraArguments = defaultArguments!,
+            };
+
+        migratedProfile = profile with
+        {
+            ContextShiftEnabled = profileContextShiftEnabled ?? profile.ContextShiftEnabled,
+            ExtraArguments = profileArguments,
+            DefaultParameters = migratedDefaults,
+        };
+        error = null;
+        return true;
+    }
+
+    private static bool TryMigrateContextShiftArguments(
+        IReadOnlyDictionary<string, string?>? extraArguments,
+        out IReadOnlyDictionary<string, string?> migratedArguments,
+        out bool? contextShiftEnabled,
+        out string? error)
+    {
+        var remainingArguments = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var contextShiftValues = new List<bool>();
+        var noContextShiftValues = new List<bool>();
+
+        if (extraArguments is not null)
+        {
+            foreach (var argument in extraArguments)
+            {
+                var isContextShift = argument.Key.Equals("context-shift", StringComparison.OrdinalIgnoreCase);
+                var isNoContextShift = argument.Key.Equals("no-context-shift", StringComparison.OrdinalIgnoreCase);
+                if (!isContextShift && !isNoContextShift)
+                {
+                    remainingArguments[argument.Key] = argument.Value;
+                    continue;
+                }
+
+                if (!TryParseLegacySwitchValue(argument.Value, out var switchEnabled))
+                {
+                    migratedArguments = extraArguments;
+                    contextShiftEnabled = null;
+                    error = $"--{argument.Key} 的值应为空、true 或 false";
+                    return false;
+                }
+
+                // A positive flag enables context shifting; the negative flag disables it.
+                (isContextShift ? contextShiftValues : noContextShiftValues)
+                    .Add(isContextShift ? switchEnabled : !switchEnabled);
+            }
+        }
+
+        if (contextShiftValues.Distinct().Skip(1).Any()
+            || noContextShiftValues.Distinct().Skip(1).Any())
+        {
+            migratedArguments = extraArguments ?? remainingArguments;
+            contextShiftEnabled = null;
+            error = "同一旧版参数以不同大小写重复且值冲突";
+            return false;
+        }
+
+        var positiveValue = contextShiftValues.FirstOrDefault();
+        var negativeValue = noContextShiftValues.FirstOrDefault();
+        if (contextShiftValues.Count > 0
+            && noContextShiftValues.Count > 0
+            && positiveValue != negativeValue)
+        {
+            migratedArguments = extraArguments ?? remainingArguments;
+            contextShiftEnabled = null;
+            error = "同时存在的两个旧版参数表达了相反设置";
+            return false;
+        }
+
+        migratedArguments = remainingArguments;
+        contextShiftEnabled = contextShiftValues.Count > 0
+            ? positiveValue
+            : noContextShiftValues.Count > 0
+                ? negativeValue
+                : null;
+        error = null;
+        return true;
+    }
+
+    private static bool TryParseLegacySwitchValue(string? value, out bool enabled)
+    {
+        if (value is null)
+        {
+            enabled = true;
+            return true;
+        }
+
+        if (bool.TryParse(value, out enabled))
+        {
+            return true;
+        }
+
+        enabled = false;
+        return false;
     }
 
     private static ModelProfile NormalizeMtpSafety(ModelProfile profile, string runtimeRoot)
@@ -375,7 +516,7 @@ public sealed class JsonModelProfileStore
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         ArgumentNullException.ThrowIfNull(profile);
         var root = Path.GetFullPath(runtimeRoot);
-        var errors = ModelProfileValidator.Validate(profile, root);
+        var errors = ModelProfileValidator.Validate(profile, root, validateConversationLimits: false);
         if (errors.Count > 0 || profile.SourceKind != ModelSourceKind.LlamaCache)
         {
             throw new InvalidDataException("只允许清理来源已经验证的 llama 缓存 Profile。");

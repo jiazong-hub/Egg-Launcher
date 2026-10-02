@@ -205,7 +205,17 @@
                         <Border Style="{StaticResource CardStyle}">
                             <StackPanel>
                                 <TextBlock FontSize="18" FontWeight="SemiBold"
-                                           Text="{DynamicResource ReleaseNote093Title}" />
+                                           Text="{DynamicResource ReleaseNote094Title}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote094Item1}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote094Item2}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote094Item3}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote094Item4}" />
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,14,0,0" Style="{StaticResource CardStyle}">
+                            <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource ReleaseNote093Title}" />
                                 <TextBlock Style="{StaticResource ReleaseNoteItemStyle}"
                                            Text="{DynamicResource ReleaseNote093Item1}" />
                                 <TextBlock Style="{StaticResource ReleaseNoteItemStyle}"

@@ -5,6 +5,26 @@ namespace Launcher.Tests;
 
 public sealed class RouterPresetGeneratorTests
 {
+    [Theory]
+    [InlineData(false, "no-context-shift = true", "\ncontext-shift =")]
+    [InlineData(true, "context-shift = true", "no-context-shift =")]
+    public void Generate_EmitsExplicitContextShiftChoice(bool enabled, string expected, string absent)
+    {
+        var profile = new ModelProfile
+        {
+            Id = "coder",
+            DisplayName = "Coder",
+            Alias = "coder",
+            ModelRelativePath = @"models\coder.gguf",
+            ContextSize = 32768,
+            CompactionSafetyReserve = 8192,
+            ContextShiftEnabled = enabled,
+        };
+        var preset = RouterPresetGenerator.Generate(profile, @"D:\llama.cpp", loadOnStartup: false);
+        Assert.Contains(expected, preset, StringComparison.Ordinal);
+        Assert.DoesNotContain(absent, preset, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Generate_ProducesVersionedSingleModelPreset()
     {
@@ -75,6 +95,7 @@ public sealed class RouterPresetGeneratorTests
             ModelRelativePath = @"models\coder.gguf",
             Alias = "coder-fit",
             ContextSize = 16384,
+            CompactionSafetyReserve = 4096,
             ExtraArguments = new Dictionary<string, string?>
             {
                 ["tensor-split"] = "3,1",
@@ -98,6 +119,7 @@ public sealed class RouterPresetGeneratorTests
             ModelRelativePath = @"models\moe.gguf",
             Alias = "moe",
             ContextSize = 16384,
+            CompactionSafetyReserve = 4096,
             ModelType = ModelType.MoE,
             MoeExpertPlacement = MoeExpertPlacement.CpuFirstLayers,
             CpuMoeLayers = 12,
@@ -119,6 +141,7 @@ public sealed class RouterPresetGeneratorTests
             ModelRelativePath = @"models\mtp.gguf",
             Alias = "mtp-embedded",
             ContextSize = 16384,
+            CompactionSafetyReserve = 4096,
             MtpEnabled = true,
             MtpSource = MtpSourceKind.Embedded,
             MtpCapabilityStatus = MtpCapabilityStatus.EmbeddedCandidate,
@@ -149,6 +172,7 @@ public sealed class RouterPresetGeneratorTests
                 ModelRelativePath = @"models\model.gguf",
                 Alias = "mtp-external",
                 ContextSize = 16384,
+                CompactionSafetyReserve = 4096,
                 MtpEnabled = true,
                 MtpSource = MtpSourceKind.External,
                 MtpCapabilityStatus = MtpCapabilityStatus.Verified,

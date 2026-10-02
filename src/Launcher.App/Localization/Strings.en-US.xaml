@@ -32,6 +32,8 @@
     <sys:String x:Key="SwitchToLightTheme">Switch to light mode</sys:String>
     <sys:String x:Key="SwitchToDarkTheme">Switch to dark mode</sys:String>
     <sys:String x:Key="StartAtLogin">Launch Egg Launcher at startup</sys:String>
+    <sys:String x:Key="DetailedLogRecording">Detailed logging</sys:String>
+    <sys:String x:Key="DetailedLogRecordingToolTip">Records more request stages and native llama.cpp output. Launcher structured logs exclude conversation text and authentication information; log files will be larger.</sys:String>
     <sys:String x:Key="DiagnosticLogs">Diagnostic Logs</sys:String>
     <sys:String x:Key="AboutEggLauncher">About Egg Launcher</sys:String>
     <sys:String x:Key="ModePageHint">Click to preselect; applied at launch</sys:String>
@@ -102,6 +104,11 @@
     <sys:String x:Key="LocalDataDirectory">Local Data Directory</sys:String>
     <sys:String x:Key="LocalDataBody">Model and Runtime data remain in the llama.cpp directory selected by the user. Removing the application files does not automatically remove that data.</sys:String>
     <sys:String x:Key="ChangelogTab">Changelog</sys:String>
+    <sys:String x:Key="ReleaseNote094Title">0.9.4 · Public beta</sys:String>
+    <sys:String x:Key="ReleaseNote094Item1">• Refined parameter controls, card alignment, sidebar and adaptive window layout.</sys:String>
+    <sys:String x:Key="ReleaseNote094Item2">• Added concise/detailed logging and expanded fault diagnostics.</sys:String>
+    <sys:String x:Key="ReleaseNote094Item3">• Improved context, compaction reserve and tool-result limits, with context-shift capability checks.</sys:String>
+    <sys:String x:Key="ReleaseNote094Item4">• Improved sandbox network compatibility, common-directory selection and optional Gradle user-home configuration.</sys:String>
     <sys:String x:Key="ReleaseNote093Title">0.9.3 · 2026-09-25</sys:String>
     <sys:String x:Key="ReleaseNote093Item1">• Added a version history tab to the About window.</sys:String>
     <sys:String x:Key="ReleaseNote093Item2">• Added EXE installation, upgrade, and safe uninstall flows.</sys:String>
@@ -279,6 +286,23 @@
     <sys:String x:Key="SwaFullCacheTip">Default does not override. Enabling increases KV memory use on some architectures.</sys:String>
     <sys:String x:Key="ContextCheckpoints">Context Checkpoints</sys:String>
     <sys:String x:Key="ContextCheckpointsTip">llama.cpp --ctx-checkpoints. Leave blank for the Runtime default; 0 disables checkpoints and may reduce long-prefix restore efficiency and increase prefill time. This does not change Codex context compaction.</sys:String>
+    <sys:String x:Key="LongConversationSettings">Long Conversations and Context</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimit">Tool Result History Limit</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimitTip">Enter integer tokens or K (1K=1,024). Codex tool_output_token_limit limits each tool result added to history, not commands per turn or generated tool arguments. Inherit the existing Codex setting by default; a selected value must be smaller than the compaction reserve.</sys:String>
+    <sys:String x:Key="KeepInitialTokens">Keep Initial Tokens (--keep)</sys:String>
+    <sys:String x:Key="KeepInitialTokensTip">Leave blank to omit --keep and use the llama.cpp default. Set an explicit Context size first. Enter a nonnegative integer to retain that many initial tokens during context shifting. Higher values leave less room to shift and must be below Context.</sys:String>
+    <sys:String x:Key="ContextShiftEnabled">Context Shifting (On / Off)</sys:String>
+    <sys:String x:Key="ContextShiftTip">When the context reaches its generation capacity, llama.cpp can discard earlier context to continue generating. This may cause the model to forget earlier content. This does not modify Codex history or perform Codex context compaction.</sys:String>
+    <sys:String x:Key="ContextShiftBlockedByVisionStatus">Context Shifting cannot be enabled while the vision module is on. Turn off the vision module first.</sys:String>
+    <sys:String x:Key="ContextShiftVisionConflictStatus">llama.cpp does not support enabling the vision module and Context Shifting at the same time. Turn one of them off.</sys:String>
+    <sys:String x:Key="ContextShiftUnsupportedStatus">The current llama.cpp Runtime does not report --context-shift, so this option cannot be enabled.</sys:String>
+    <sys:String x:Key="ContextShiftUnsupportedEnabledStatus">The current llama.cpp Runtime does not report --context-shift. The existing enabled setting has been preserved; turn it off before saving.</sys:String>
+    <sys:String x:Key="ContextShiftUnknownStatus">Runtime capabilities could not be read, so this option cannot be enabled until support is confirmed.</sys:String>
+    <sys:String x:Key="ContextShiftUnknownEnabledStatus">Runtime capabilities could not be read. The existing enabled setting has been preserved; turn it off before saving.</sys:String>
+    <sys:String x:Key="ContextShiftUnsupportedSaveError">The current llama.cpp Runtime does not report --context-shift. Turn off Context Shifting before saving.</sys:String>
+    <sys:String x:Key="ContextShiftUnknownSaveError">The current llama.cpp Runtime capabilities could not be read, so support for --context-shift cannot be confirmed. Turn off Context Shifting before saving.</sys:String>
+    <sys:String x:Key="ContextShiftVisionConflictError">llama.cpp does not support enabling the vision module and Context Shifting (On / Off) at the same time. Turn one of them off before saving.</sys:String>
+    <sys:String x:Key="ContextShiftErrorTitle">Invalid Context Shifting Setting</sys:String>
     <sys:String x:Key="WeightRepack">Weight Repack</sys:String>
     <sys:String x:Key="WeightRepackTip">Default lets llama.cpp decide. Disabling may reduce performance on some backends.</sys:String>
     <sys:String x:Key="OperationOffloadTip">Controls whether host tensor operations are offloaded to the device. Keeping the default is usually safest.</sys:String>
@@ -327,4 +351,11 @@
     <sys:String x:Key="SystemLanguageEnabled">Now following the Windows display language.</sys:String>
     <sys:String x:Key="LanguageSaveFailed">Failed to save language setting: {0}</sys:String>
     <sys:String x:Key="ThemeSaveFailed">Failed to save theme setting: {0}</sys:String>
+    <sys:String x:Key="ContextShiftRedetect">Detect shifting again</sys:String>
+    <sys:String x:Key="CancelDetection">Cancel detection</sys:String>
+    <sys:String x:Key="SandboxAllowNetwork">Allow command network access</sys:String>
+    <sys:String x:Key="SandboxNetworkCompatibility">Network compatibility mode</sys:String>
+    <sys:String x:Key="SandboxCompatibilityHint">Pass the fixed system proxy and provide a compatible HTTPS request/download helper. Save and restart the client to apply. System proxy settings remain unchanged.</sys:String>
+    <sys:String x:Key="SandboxCheckNetwork">Check network</sys:String>
+    <sys:String x:Key="SandboxNetworkDetails">Details</sys:String>
 </ResourceDictionary>

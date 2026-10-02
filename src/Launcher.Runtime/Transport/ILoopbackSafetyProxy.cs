@@ -6,6 +6,10 @@ public interface ILoopbackSafetyProxy : IAsyncDisposable
 
     Uri? PublicBaseUri { get; }
 
+    void SetDetailedDiagnosticsEnabled(bool enabled) { }
+
+    void SetRouterRunId(string? routerRunId) { }
+
     Task StartAsync(
         Uri publicBaseUri,
         Uri upstreamBaseUri,

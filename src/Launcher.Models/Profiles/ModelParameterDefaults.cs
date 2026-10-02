@@ -8,7 +8,11 @@ public sealed record ModelParameterDefaults
 {
     public int ContextSize { get; init; }
 
+    public bool ContextShiftEnabled { get; init; } = false;
+
     public int CompactionSafetyReserve { get; init; } = ModelProfile.MinimumCompactionSafetyReserve;
+
+    public int? ToolOutputTokenLimit { get; init; }
 
     public string GpuLayers { get; init; } = "auto";
 
@@ -85,7 +89,9 @@ public sealed record ModelParameterDefaults
         return new ModelParameterDefaults
         {
             ContextSize = profile.ContextSize,
+            ContextShiftEnabled = profile.ContextShiftEnabled,
             CompactionSafetyReserve = profile.CompactionSafetyReserve,
+            ToolOutputTokenLimit = profile.ToolOutputTokenLimit,
             GpuLayers = profile.GpuLayers,
             Device = profile.Device,
             MoeExpertPlacement = profile.MoeExpertPlacement,
@@ -132,7 +138,9 @@ public sealed record ModelParameterDefaults
         return profile with
         {
             ContextSize = ContextSize,
+            ContextShiftEnabled = ContextShiftEnabled,
             CompactionSafetyReserve = CompactionSafetyReserve,
+            ToolOutputTokenLimit = ToolOutputTokenLimit,
             GpuLayers = GpuLayers,
             Device = Device,
             MoeExpertPlacement = MoeExpertPlacement,

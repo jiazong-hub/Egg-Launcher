@@ -49,8 +49,8 @@ en.LaunchProgram=Launch Egg Launcher
 zh.LaunchProgram=启动 Egg Launcher
 en.CloseBeforeInstall=Close Egg Launcher and its Agent before installing or updating, then retry.
 zh.CloseBeforeInstall=请先正常退出 Egg Launcher 和后台 Agent，再重试安装或升级。
-en.UninstallPreparationFailed=Uninstall preparation failed. Close ChatGPT Desktop, Egg Launcher and its Agent, then retry. If Local mode is active, restore OpenAI mode in Egg Launcher first. No program files were removed. Details are in ChatGPTLocalLauncher\Launcher.Agent.fatal.log under the Windows temp folder.
-zh.UninstallPreparationFailed=卸载准备失败。请先关闭 ChatGPT Desktop、Egg Launcher 和后台 Agent 后重试；若当前为 Local 模式，请先在启动器中恢复 OpenAI 模式。程序文件尚未删除。详情见 Windows 临时目录下的 ChatGPTLocalLauncher\Launcher.Agent.fatal.log。
+en.UninstallPreparationFailed=Uninstall preparation failed. Close ChatGPT Desktop, Egg Launcher and its Agent, then retry. If Local mode is active, restore OpenAI mode in Egg Launcher first. No program files were removed. Check %LOCALAPPDATA%\ChatGPTLocalLauncher\logs\agent.*.jsonl or %TEMP%\ChatGPTLocalLauncher\Launcher.Agent.emergency.jsonl for diagnostics.
+zh.UninstallPreparationFailed=卸载准备失败。请先关闭 ChatGPT Desktop、Egg Launcher 和后台 Agent 后重试；若当前为 Local 模式，请先在启动器中恢复 OpenAI 模式。程序文件尚未删除。请查看 %LOCALAPPDATA%\ChatGPTLocalLauncher\logs\agent.*.jsonl；若主日志不可用，再查看 %TEMP%\ChatGPTLocalLauncher\Launcher.Agent.emergency.jsonl。
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:DesktopShortcut}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

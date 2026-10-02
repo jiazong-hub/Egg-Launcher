@@ -37,7 +37,8 @@ internal static class AdaptiveWindowSizing
     {
         var handle = new WindowInteropHelper(window).Handle;
         var source = HwndSource.FromHwnd(handle);
-        source?.AddHook(WindowProcedure);
+        source?.AddHook((nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
+            => WindowProcedure(window, hwnd, message, wParam, lParam, ref handled));
     }
 
     public static void FitMainWindow(Window window)
@@ -46,8 +47,8 @@ internal static class AdaptiveWindowSizing
         var width = Math.Min(1360, workArea.Width * 0.96);
         var height = Math.Min(820, workArea.Height * 0.94);
 
-        window.MinWidth = Math.Min(840, width);
-        window.MinHeight = Math.Min(520, height);
+        window.MinWidth = Math.Min(960, width);
+        window.MinHeight = Math.Min(640, height);
         window.Width = Math.Max(window.MinWidth, width);
         window.Height = Math.Max(window.MinHeight, height);
         CenterInWorkArea(window, workArea);
@@ -74,6 +75,7 @@ internal static class AdaptiveWindowSizing
 
     public static void ClampToCurrentWorkArea(Window window)
     {
+        UpdateMainWindowMinimums(window);
         if (window.WindowState != WindowState.Normal)
         {
             return;
@@ -83,10 +85,8 @@ internal static class AdaptiveWindowSizing
         var maximumWidth = workArea.Width * 0.96;
         var maximumHeight = workArea.Height * 0.94;
 
-        window.MinWidth = Math.Min(window.MinWidth, maximumWidth);
-        window.MinHeight = Math.Min(window.MinHeight, maximumHeight);
-        window.Width = Math.Min(window.ActualWidth > 0 ? window.ActualWidth : window.Width, maximumWidth);
-        window.Height = Math.Min(window.ActualHeight > 0 ? window.ActualHeight : window.Height, maximumHeight);
+        window.Width = Math.Clamp(window.ActualWidth > 0 ? window.ActualWidth : window.Width, window.MinWidth, maximumWidth);
+        window.Height = Math.Clamp(window.ActualHeight > 0 ? window.ActualHeight : window.Height, window.MinHeight, maximumHeight);
         window.Left = Math.Clamp(
             window.Left,
             workArea.Left,
@@ -95,6 +95,15 @@ internal static class AdaptiveWindowSizing
             window.Top,
             workArea.Top,
             Math.Max(workArea.Top, workArea.Bottom - window.Height));
+    }
+
+    public static void UpdateMainWindowMinimums(Window window)
+    {
+        var workArea = GetWorkAreaInDips(window);
+        // Recompute from the design minimum each time: moving back to a larger
+        // monitor must restore the constraints relaxed for a small work area.
+        window.MinWidth = Math.Min(960, workArea.Width * 0.96);
+        window.MinHeight = Math.Min(640, workArea.Height * 0.94);
     }
 
     private static Rect GetWorkAreaInDips(Window window)
@@ -130,6 +139,7 @@ internal static class AdaptiveWindowSizing
     }
 
     private static nint WindowProcedure(
+        Window window,
         nint windowHandle,
         int message,
         nint wParam,
@@ -157,6 +167,9 @@ internal static class AdaptiveWindowSizing
         bounds.MaxSize.X = monitorInfo.Work.Right - monitorInfo.Work.Left;
         bounds.MaxSize.Y = monitorInfo.Work.Bottom - monitorInfo.Work.Top;
         bounds.MaxTrackSize = bounds.MaxSize;
+        var dpi = VisualTreeHelper.GetDpi(window);
+        bounds.MinTrackSize.X = Math.Min(bounds.MaxSize.X, (int)Math.Ceiling(window.MinWidth * dpi.DpiScaleX));
+        bounds.MinTrackSize.Y = Math.Min(bounds.MaxSize.Y, (int)Math.Ceiling(window.MinHeight * dpi.DpiScaleY));
         Marshal.StructureToPtr(bounds, lParam, false);
         handled = true;
         return nint.Zero;

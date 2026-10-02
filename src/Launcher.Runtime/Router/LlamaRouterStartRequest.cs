@@ -2,6 +2,10 @@ namespace Launcher.Runtime.Router;
 
 public sealed record LlamaRouterStartRequest
 {
+    public bool? ContextShiftRequested { get; init; }
+
+    public Action<string>? ContextShiftDisabledObserver { get; init; }
+
     public required string ExecutablePath { get; init; }
 
     public required string WorkingDirectory { get; init; }

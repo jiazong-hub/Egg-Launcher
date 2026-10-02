@@ -5,6 +5,16 @@ namespace Launcher.Tests;
 
 public sealed class BatchScriptGeneratorTests
 {
+    [Theory]
+    [InlineData(false, "--no-context-shift", "--context-shift")]
+    [InlineData(true, "--context-shift", "--no-context-shift")]
+    public void Generate_EmitsExplicitContextShiftChoice(bool enabled, string expected, string absent)
+    {
+        var script = BatchScriptGenerator.Generate(CreateProfile() with { ContextShiftEnabled = enabled }, @"D:\llama.cpp");
+        Assert.Contains(expected, script, StringComparison.Ordinal);
+        Assert.DoesNotContain(absent, script, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Generate_DerivesRuntimeFromScriptLocationAndUsesRelativeModelPath()
     {
@@ -37,7 +47,7 @@ public sealed class BatchScriptGeneratorTests
         {
             var profile = CreateProfile();
             var firstPath = await BatchScriptGenerator.WriteOwnedAsync(root, profile);
-            var updated = profile with { ContextSize = 16384 };
+            var updated = profile with { ContextSize = 16384, CompactionSafetyReserve = 4096 };
 
             var secondPath = await BatchScriptGenerator.WriteOwnedAsync(root, updated);
 

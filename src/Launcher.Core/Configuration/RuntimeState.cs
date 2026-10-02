@@ -2,7 +2,7 @@ namespace Launcher.Core.Configuration;
 
 public sealed record RuntimeState
 {
-    public const int CurrentAgentProtocolVersion = 9;
+    public const int CurrentAgentProtocolVersion = 10;
 
     public int AgentProtocolVersion { get; init; }
 
@@ -33,4 +33,6 @@ public sealed record RuntimeState
     public DateTimeOffset UpdatedAtUtc { get; init; } = DateTimeOffset.UtcNow;
 
     public string? LastError { get; init; }
+
+    public string? ContextShiftDisabledReason { get; init; }
 }

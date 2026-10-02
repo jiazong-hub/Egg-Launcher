@@ -47,4 +47,6 @@ public sealed record LauncherSettings
     public AppLanguage Language { get; init; } = AppLanguage.System;
 
     public bool LlamaMetricsSupported { get; init; }
+
+    public bool DetailedDiagnosticsEnabled { get; init; }
 }

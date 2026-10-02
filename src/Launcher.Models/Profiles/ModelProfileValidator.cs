@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
+using Launcher.Core.Configuration;
 
 namespace Launcher.Models.Profiles;
 
@@ -17,6 +18,7 @@ public static partial class ModelProfileValidator
             "spec-draft-device", "spec-draft-type-k", "spec-draft-type-v", "spec-draft-threads",
             "spec-draft-threads-batch", "mmproj", "no-mmproj", "mmproj-offload", "no-mmproj-offload",
             "mmproj-device", "image-min-tokens", "image-max-tokens", "mtmd-batch-max-tokens",
+            "context-shift", "no-context-shift",
         ],
         StringComparer.OrdinalIgnoreCase);
 
@@ -24,7 +26,7 @@ public static partial class ModelProfileValidator
         ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra", "persistent"],
         StringComparer.Ordinal);
 
-    public static IReadOnlyList<string> Validate(ModelProfile profile, string runtimeRoot)
+    public static IReadOnlyList<string> Validate(ModelProfile profile, string runtimeRoot, bool validateConversationLimits = true)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
@@ -91,15 +93,12 @@ public static partial class ModelProfileValidator
             errors.Add("Context 必须为 0 或正整数。");
         }
 
-        if (profile.CompactionSafetyReserve < 1_024)
-        {
-            errors.Add("压缩安全余量不能小于 1,024 tokens。");
-        }
+        if (validateConversationLimits)
+            errors.AddRange(LongConversationLimits.Validate(profile.ContextSize, profile.CompactionSafetyReserve, profile.ToolOutputTokenLimit));
 
-        if (profile.ContextSize > 0
-            && profile.CompactionSafetyReserve >= profile.ContextSize)
+        if (profile.ContextShiftEnabled && profile.VisionEnabled)
         {
-            errors.Add("压缩安全余量必须小于 Context；它用于决定 Codex 在下一次推理前何时压缩，而不是输出 token 上限。");
+            errors.Add("不能同时启用上下文移位和视觉输入。");
         }
 
         if (!IsValidGpuLayers(profile.GpuLayers))
@@ -192,6 +191,7 @@ public static partial class ModelProfileValidator
         ValidateMtp(profile, runtimeRoot, errors);
         ValidateVision(profile, runtimeRoot, errors);
         ValidateContextCheckpoints(profile, errors);
+        ValidateKeep(profile, errors);
 
         foreach (var argument in profile.ExtraArguments)
         {
@@ -241,6 +241,29 @@ public static partial class ModelProfileValidator
                 || count < 0)
             {
                 errors.Add($"高级参数 --{argument.Key} 必须是非负整数。");
+            }
+        }
+    }
+
+    private static void ValidateKeep(ModelProfile profile, ICollection<string> errors)
+    {
+        var keepArguments = profile.ExtraArguments
+            .Where(argument => argument.Key.Equals("keep", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (keepArguments.Length > 1)
+        {
+            errors.Add("高级参数 --keep 只能设置一次。");
+        }
+
+        foreach (var argument in keepArguments)
+        {
+            if (argument.Value is null
+                || !int.TryParse(argument.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var count)
+                || count < 0
+                || profile.ContextSize <= 0
+                || count >= profile.ContextSize)
+            {
+                errors.Add("高级参数 --keep 需要明确的 Context 数值，且必须是小于 Context 的非负整数；留空表示不写入此参数。");
             }
         }
     }

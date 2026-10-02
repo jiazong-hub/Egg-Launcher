@@ -49,7 +49,7 @@ public sealed class ModelProfileValidatorTests
         var errors = ModelProfileValidator.Validate(profile, @"D:\llama.cpp");
 
         Assert.Contains(errors, error => error.Contains("压缩安全余量", StringComparison.Ordinal)
-            && error.Contains("小于 Context", StringComparison.Ordinal));
+            && error.Contains("自动压缩线至少 1,024", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -2,7 +2,7 @@ namespace Launcher.Models.Profiles;
 
 public sealed record ModelProfile
 {
-    public const int CurrentSchemaVersion = 7;
+    public const int CurrentSchemaVersion = 11;
 
     public const int DefaultCompactionSafetyReserve = 8_192;
 
@@ -48,11 +48,17 @@ public sealed record ModelProfile
 
     public int ContextSize { get; init; }
 
+    /// <summary>Whether context shifting is enabled for this model.</summary>
+    public bool ContextShiftEnabled { get; init; } = false;
+
     /// <summary>
     /// Minimum free context Codex should retain before starting the next inference.
     /// This is not a per-response output token limit.
     /// </summary>
     public int CompactionSafetyReserve { get; init; } = MinimumCompactionSafetyReserve;
+
+    /// <summary>Optional Codex limit for one tool result stored in conversation history.</summary>
+    public int? ToolOutputTokenLimit { get; init; }
 
     public string GpuLayers { get; init; } = "auto";
 

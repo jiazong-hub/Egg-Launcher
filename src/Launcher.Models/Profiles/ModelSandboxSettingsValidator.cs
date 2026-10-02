@@ -15,6 +15,11 @@ public static class ModelSandboxSettingsValidator
             errors.Add("沙箱联网权限选项无效。");
         }
 
+        if (settings.NetworkCompatibilityEnabled && settings.NetworkAccess != SandboxNetworkAccess.Full)
+        {
+            errors.Add("联网兼容模式需要先开启允许命令联网。");
+        }
+
         if (settings.AdditionalPaths is null)
         {
             errors.Add("沙箱路径权限列表无效。");
@@ -22,6 +27,8 @@ public static class ModelSandboxSettingsValidator
         }
 
         var normalizedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (settings.AdditionalPaths.Count(p => p?.UseAsGradleUserHome == true) > 1)
+            errors.Add("只能指定一个 Gradle 用户目录。");
         foreach (var permission in settings.AdditionalPaths)
         {
             if (permission is null || string.IsNullOrWhiteSpace(permission.Path))
@@ -38,6 +45,8 @@ public static class ModelSandboxSettingsValidator
 
             try
             {
+                if (permission.UseAsGradleUserHome && !permission.AllowWrite)
+                    errors.Add("Gradle 用户目录必须允许读写。");
                 if (!Path.IsPathFullyQualified(permission.Path))
                 {
                     errors.Add($"沙箱路径必须是绝对路径：{permission.Path}");

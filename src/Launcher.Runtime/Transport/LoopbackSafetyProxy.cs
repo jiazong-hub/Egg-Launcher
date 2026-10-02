@@ -2,7 +2,11 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -10,6 +14,7 @@ using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Launcher.Core.Diagnostics;
 using Launcher.Core.Security;
 
 namespace Launcher.Runtime.Transport;
@@ -25,6 +30,8 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
     private const int MaximumRequestBodyBytes = 32 * 1024 * 1024;
     private const int MaximumDecodedRequestBodyBytes = 32 * 1024 * 1024;
     private const long MaximumDiagnosticLogBytes = 8L * 1024 * 1024;
+    private const int MaximumFailureBursts = 256;
+    private static readonly TimeSpan FailureBurstWindow = TimeSpan.FromMinutes(2);
 
     private static readonly HashSet<string> HopByHopHeaders = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -125,23 +132,46 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
     };
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SemaphoreSlim _diagnosticGate = new(1, 1);
-    private readonly string? _diagnosticLogPath;
+    private readonly string? _conciseDiagnosticLogPath;
+    private readonly string? _fullDiagnosticLogPath;
+    private readonly Func<Exception, Task>? _diagnosticFailureReporter;
+    private readonly object _failureBurstGate = new();
+    private readonly Dictionary<string, FailureBurstState> _failureBursts = new(StringComparer.Ordinal);
     private WebApplication? _application;
     private Uri? _upstreamBaseUri;
     private string? _upstreamApiKey;
-    private bool _diagnosticLogHardened;
+    private string? _diagnosticLogHardenedPath;
+    private string _sessionId = Guid.NewGuid().ToString("N");
+    private string? _routerRunId;
+    private int _detailedDiagnosticsEnabled;
+    private long _lastDiagnosticFailureReportAtMilliseconds;
     private bool _disposed;
 
-    public LoopbackSafetyProxy(string? diagnosticLogPath = null)
+    public LoopbackSafetyProxy(
+        string? diagnosticLogPath = null,
+        string? fullDiagnosticLogPath = null,
+        string? sessionId = null,
+        Func<Exception, Task>? diagnosticFailureReporter = null)
     {
-        _diagnosticLogPath = string.IsNullOrWhiteSpace(diagnosticLogPath)
+        _conciseDiagnosticLogPath = string.IsNullOrWhiteSpace(diagnosticLogPath)
             ? null
             : Path.GetFullPath(diagnosticLogPath);
+        _fullDiagnosticLogPath = string.IsNullOrWhiteSpace(fullDiagnosticLogPath)
+            ? _conciseDiagnosticLogPath
+            : Path.GetFullPath(fullDiagnosticLogPath);
+        _sessionId = string.IsNullOrWhiteSpace(sessionId) ? _sessionId : sessionId;
+        _diagnosticFailureReporter = diagnosticFailureReporter;
     }
 
     public bool IsRunning => _application is not null;
 
     public Uri? PublicBaseUri { get; private set; }
+
+    public void SetDetailedDiagnosticsEnabled(bool enabled) =>
+        Volatile.Write(ref _detailedDiagnosticsEnabled, enabled ? 1 : 0);
+
+    public void SetRouterRunId(string? routerRunId) =>
+        Volatile.Write(ref _routerRunId, routerRunId);
 
     public async Task StartAsync(
         Uri publicBaseUri,
@@ -202,7 +232,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 eventName = "safety_proxy_started",
                 publicBaseUri = SafeEndpoint(PublicBaseUri),
                 upstreamBaseUri = SafeEndpoint(_upstreamBaseUri),
-            }).ConfigureAwait(false);
+            }, importantInConcise: true).ConfigureAwait(false);
         }
         finally
         {
@@ -258,7 +288,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             {
                 timestampUtc = DateTimeOffset.UtcNow,
                 eventName = "safety_proxy_stopped",
-            }).ConfigureAwait(false);
+            }, importantInConcise: true).ConfigureAwait(false);
         }
         finally
         {
@@ -291,6 +321,9 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
         var stopwatch = Stopwatch.StartNew();
         var stage = "receive_request";
         RequestCopySummary? copySummary = null;
+        long responseBytesSent = 0;
+        var responseIsEventStream = false;
+        SseEventTracker? sseTracker = null;
         var codexMetadata = ReadCodexRequestMetadata(context.Request);
 
         await TryWriteDiagnosticAsync(new
@@ -302,13 +335,13 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             path = context.Request.Path.Value,
             protocol = context.Request.Protocol,
             contentLength = context.Request.ContentLength,
-            contentType = context.Request.ContentType,
+            contentType = SafeMediaType(context.Request.ContentType),
             contentEncoding = ReadContentEncodings(context.Request),
             requestKind = codexMetadata.RequestKind,
             compactionTrigger = codexMetadata.CompactionTrigger,
             compactionImplementation = codexMetadata.CompactionImplementation,
             compactionPhase = codexMetadata.CompactionPhase,
-        }).ConfigureAwait(false);
+        }, importantInConcise: false).ConfigureAwait(false);
 
         if (context.Request.Headers.ContainsKey("Origin"))
         {
@@ -339,6 +372,14 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 return;
             }
 
+            await TryWriteDiagnosticAsync(new
+            {
+                timestampUtc = DateTimeOffset.UtcNow,
+                eventName = "websocket_http_fallback",
+                requestId,
+                path = context.Request.Path.Value,
+                statusCode = StatusCodes.Status426UpgradeRequired,
+            }, importantInConcise: true).ConfigureAwait(false);
             context.Response.StatusCode = StatusCodes.Status426UpgradeRequired;
             await context.Response.WriteAsJsonAsync(
                 new { error = "Local llama.cpp uses the HTTP transport." },
@@ -369,7 +410,22 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 upstreamRequest,
                 value => stage = value,
                 context.RequestAborted).ConfigureAwait(false);
-            if (IsCompactionRequest(context.Request, codexMetadata, copySummary.Semantics))
+            var requestPreparationMs = stopwatch.ElapsedMilliseconds;
+            await TryWriteDiagnosticAsync(new
+            {
+                timestampUtc = DateTimeOffset.UtcNow,
+                eventName = "request_prepared",
+                requestId,
+                originalBodyBytes = copySummary.OriginalBodyBytes,
+                forwardedBodyBytes = copySummary.ForwardedBodyBytes,
+                requestDecoded = copySummary.Decoded,
+                requestPreparationMs,
+                inputItemTypes = copySummary.Semantics.InputItemTypes,
+                toolTypes = copySummary.Semantics.ToolTypes,
+                hasCompactionTrigger = copySummary.Semantics.HasCompactionTrigger,
+            }, importantInConcise: false).ConfigureAwait(false);
+            var isCompactionRequest = IsCompactionRequest(context.Request, codexMetadata, copySummary.Semantics);
+            if (isCompactionRequest)
             {
                 await TryWriteDiagnosticAsync(new
                 {
@@ -386,7 +442,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                         codexMetadata,
                         copySummary.Semantics),
                     inputItemTypes = copySummary.Semantics.InputItemTypes,
-                }).ConfigureAwait(false);
+                }, importantInConcise: true).ConfigureAwait(false);
             }
 
             if (!string.IsNullOrWhiteSpace(_upstreamApiKey))
@@ -396,6 +452,16 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             }
 
             stage = "send_upstream";
+            await TryWriteDiagnosticAsync(new
+            {
+                timestampUtc = DateTimeOffset.UtcNow,
+                eventName = "upstream_request_started",
+                requestId,
+                method = context.Request.Method,
+                path = context.Request.Path.Value,
+                requestPreparationMs,
+                isCompactionRequest,
+            }, importantInConcise: false).ConfigureAwait(false);
             using var upstreamResponse = await _httpClient.SendAsync(
                 upstreamRequest,
                 HttpCompletionOption.ResponseHeadersRead,
@@ -404,10 +470,12 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             context.Response.StatusCode = (int)upstreamResponse.StatusCode;
             CopyResponseHeaders(upstreamResponse, context.Response);
 
+            var timeToHeadersMs = stopwatch.ElapsedMilliseconds;
             await TryWriteDiagnosticAsync(new
             {
                 timestampUtc = DateTimeOffset.UtcNow,
                 eventName = "upstream_response",
+                responsePhase = "headers_received",
                 requestId,
                 upstream = SafeEndpoint(target),
                 statusCode = (int)upstreamResponse.StatusCode,
@@ -418,14 +486,20 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 inputItemTypes = copySummary.Semantics.InputItemTypes,
                 toolTypes = copySummary.Semantics.ToolTypes,
                 hasCompactionTrigger = copySummary.Semantics.HasCompactionTrigger,
-                durationMs = stopwatch.ElapsedMilliseconds,
-            }).ConfigureAwait(false);
+                timeToHeadersMs,
+                durationMs = timeToHeadersMs,
+                upstreamRequestId = ReadSafeUpstreamRequestId(upstreamResponse),
+                responseContentType = SafeMediaType(upstreamResponse.Content.Headers.ContentType?.ToString()),
+                responseContentLength = upstreamResponse.Content.Headers.ContentLength,
+            }, importantInConcise: true)
+                .ConfigureAwait(false);
 
             if (!upstreamResponse.IsSuccessStatusCode)
             {
                 var errorBody = await upstreamResponse.Content.ReadAsByteArrayAsync(context.RequestAborted)
                     .ConfigureAwait(false);
                 var safeDiagnostic = SafeDiagnostic(errorBody);
+                var errorCategory = SafeDiagnosticCategory(errorBody);
                 Console.Error.WriteLine(
                     $"llama.cpp returned HTTP {(int)upstreamResponse.StatusCode} for "
                     + $"{context.Request.Method} {context.Request.Path}: {safeDiagnostic}");
@@ -436,18 +510,89 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                     requestId,
                     statusCode = (int)upstreamResponse.StatusCode,
                     diagnostic = safeDiagnostic,
+                    errorCategory,
+                    errorBodyBytes = errorBody.Length,
                     requestKind = codexMetadata.RequestKind,
                     inputItemTypes = copySummary.Semantics.InputItemTypes,
                     hasCompactionTrigger = copySummary.Semantics.HasCompactionTrigger,
                     durationMs = stopwatch.ElapsedMilliseconds,
-                }).ConfigureAwait(false);
+                }, importantInConcise: true).ConfigureAwait(false);
                 await context.Response.Body.WriteAsync(errorBody, context.RequestAborted).ConfigureAwait(false);
+                responseBytesSent = errorBody.Length;
+                await TryWriteDiagnosticAsync(new
+                {
+                    timestampUtc = DateTimeOffset.UtcNow,
+                    eventName = "response_completed",
+                    requestId,
+                    outcome = "upstream_http_error",
+                    statusCode = (int)upstreamResponse.StatusCode,
+                    responseBytes = responseBytesSent,
+                    timeToHeadersMs,
+                    totalDurationMs = stopwatch.ElapsedMilliseconds,
+                    isCompactionRequest,
+                }, importantInConcise: true).ConfigureAwait(false);
                 return;
             }
 
-            await upstreamResponse.Content.CopyToAsync(
-                context.Response.Body,
-                context.RequestAborted).ConfigureAwait(false);
+            responseIsEventStream = string.Equals(
+                upstreamResponse.Content.Headers.ContentType?.MediaType,
+                "text/event-stream",
+                StringComparison.OrdinalIgnoreCase);
+            sseTracker = responseIsEventStream ? new SseEventTracker() : null;
+            await using var responseStream = await upstreamResponse.Content
+                .ReadAsStreamAsync(context.RequestAborted).ConfigureAwait(false);
+            var responseBuffer = new byte[81920];
+            long? timeToFirstBodyByteMs = null;
+            while (true)
+            {
+                var bytesRead = await responseStream.ReadAsync(
+                    responseBuffer.AsMemory(),
+                    context.RequestAborted).ConfigureAwait(false);
+                if (bytesRead == 0)
+                {
+                    break;
+                }
+
+                sseTracker?.Observe(responseBuffer.AsSpan(0, bytesRead), stopwatch.ElapsedMilliseconds);
+                timeToFirstBodyByteMs ??= stopwatch.ElapsedMilliseconds;
+                await context.Response.Body.WriteAsync(
+                    responseBuffer.AsMemory(0, bytesRead),
+                    context.RequestAborted).ConfigureAwait(false);
+                responseBytesSent += bytesRead;
+            }
+
+            sseTracker?.Complete(stopwatch.ElapsedMilliseconds);
+            var responseOutcome = sseTracker is null
+                ? "success"
+                : sseTracker.TerminalEvent switch
+                {
+                    "response.failed" => "sse_terminal_failed",
+                    "response.incomplete" => "sse_terminal_incomplete",
+                    null => "sse_eof_without_terminal_event",
+                    _ => "success",
+                };
+
+            await TryWriteDiagnosticAsync(new
+            {
+                timestampUtc = DateTimeOffset.UtcNow,
+                eventName = "response_completed",
+                requestId,
+                outcome = responseOutcome,
+                statusCode = (int)upstreamResponse.StatusCode,
+                responseBytes = responseBytesSent,
+                timeToHeadersMs,
+                timeToFirstBodyByteMs,
+                responseIsEventStream,
+                sseEventCount = sseTracker?.EventCount,
+                lastSseEvent = sseTracker?.LastEvent,
+                lastSseEventElapsedMs = sseTracker?.LastEventElapsedMs,
+                terminalSseEvent = sseTracker?.TerminalEvent,
+                terminalSseEventElapsedMs = sseTracker?.TerminalEventElapsedMs,
+                durationMs = stopwatch.ElapsedMilliseconds,
+                totalDurationMs = stopwatch.ElapsedMilliseconds,
+                isCompactionRequest,
+            }, importantInConcise: isCompactionRequest || responseOutcome != "success")
+                .ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
@@ -457,8 +602,18 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 eventName = "request_cancelled",
                 requestId,
                 stage,
+                downstreamAbortObserved = true,
+                responseHasStarted = context.Response.HasStarted,
+                responseBytesSent,
+                responseIsEventStream,
+                sseEventCount = sseTracker?.EventCount,
+                lastSseEvent = sseTracker?.LastEvent,
+                lastSseEventElapsedMs = sseTracker?.LastEventElapsedMs,
+                terminalSseEvent = sseTracker?.TerminalEvent,
+                terminalSseEventElapsedMs = sseTracker?.TerminalEventElapsedMs,
                 durationMs = stopwatch.ElapsedMilliseconds,
-            }).ConfigureAwait(false);
+                totalDurationMs = stopwatch.ElapsedMilliseconds,
+            }, importantInConcise: true).ConfigureAwait(false);
         }
         catch (UnsafeMediaReferenceException exception) when (!context.Response.HasStarted)
         {
@@ -470,28 +625,43 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 "unsafe_image_reference",
                 exception.Message).ConfigureAwait(false);
         }
-        catch (Exception exception) when (!context.Response.HasStarted)
+        catch (Exception exception)
         {
             var safeMessage = SafeExceptionMessage(exception);
             Console.Error.WriteLine(
                 $"Local safety proxy failed for {context.Request.Method} {context.Request.Path}: "
                 + $"{exception.GetType().Name}: {safeMessage}");
-            await TryWriteDiagnosticAsync(new
+            var exceptionProperties = DiagnosticSanitizer.CreateExceptionProperties(
+                exception,
+                includeStackTrace: Volatile.Read(ref _detailedDiagnosticsEnabled) == 1);
+            exceptionProperties["timestampUtc"] = DateTimeOffset.UtcNow;
+            exceptionProperties["eventName"] = "safety_proxy_error";
+            exceptionProperties["requestId"] = requestId;
+            exceptionProperties["stage"] = stage;
+            exceptionProperties["upstream"] = SafeEndpoint(target);
+            exceptionProperties["message"] = safeMessage;
+            exceptionProperties["originalBodyBytes"] = copySummary?.OriginalBodyBytes;
+            exceptionProperties["forwardedBodyBytes"] = copySummary?.ForwardedBodyBytes;
+            exceptionProperties["requestKind"] = codexMetadata.RequestKind;
+            exceptionProperties["inputItemTypes"] = copySummary?.Semantics.InputItemTypes;
+            exceptionProperties["hasCompactionTrigger"] = copySummary?.Semantics.HasCompactionTrigger;
+            exceptionProperties["responseHasStarted"] = context.Response.HasStarted;
+            exceptionProperties["responseBytesSent"] = responseBytesSent;
+            exceptionProperties["responseIsEventStream"] = responseIsEventStream;
+            exceptionProperties["sseEventCount"] = sseTracker?.EventCount;
+            exceptionProperties["lastSseEvent"] = sseTracker?.LastEvent;
+            exceptionProperties["lastSseEventElapsedMs"] = sseTracker?.LastEventElapsedMs;
+            exceptionProperties["terminalSseEvent"] = sseTracker?.TerminalEvent;
+            exceptionProperties["terminalSseEventElapsedMs"] = sseTracker?.TerminalEventElapsedMs;
+            exceptionProperties["durationMs"] = stopwatch.ElapsedMilliseconds;
+            exceptionProperties["totalDurationMs"] = stopwatch.ElapsedMilliseconds;
+            await TryWriteDiagnosticAsync(exceptionProperties, importantInConcise: true).ConfigureAwait(false);
+            if (context.Response.HasStarted)
             {
-                timestampUtc = DateTimeOffset.UtcNow,
-                eventName = "safety_proxy_error",
-                requestId,
-                stage,
-                upstream = SafeEndpoint(target),
-                exceptionType = exception.GetType().FullName,
-                message = safeMessage,
-                originalBodyBytes = copySummary?.OriginalBodyBytes,
-                forwardedBodyBytes = copySummary?.ForwardedBodyBytes,
-                requestKind = codexMetadata.RequestKind,
-                inputItemTypes = copySummary?.Semantics.InputItemTypes,
-                hasCompactionTrigger = copySummary?.Semantics.HasCompactionTrigger,
-                durationMs = stopwatch.ElapsedMilliseconds,
-            }).ConfigureAwait(false);
+                context.Abort();
+                return;
+            }
+
             context.Response.StatusCode = StatusCodes.Status502BadGateway;
             await context.Response.WriteAsJsonAsync(
                 new
@@ -807,7 +977,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             path = context.Request.Path.Value,
             statusCode,
             durationMs = stopwatch.ElapsedMilliseconds,
-        }).ConfigureAwait(false);
+        }, importantInConcise: true).ConfigureAwait(false);
         context.Response.StatusCode = statusCode;
         await context.Response.WriteAsJsonAsync(
             new
@@ -891,26 +1061,45 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
     private static Uri EnsureTrailingSlash(Uri uri) =>
         new(uri.AbsoluteUri.TrimEnd('/') + "/", UriKind.Absolute);
 
-    private async Task TryWriteDiagnosticAsync(object value)
+    private async Task TryWriteDiagnosticAsync(object value, bool importantInConcise)
     {
-        if (_diagnosticLogPath is null)
+        var detailed = Volatile.Read(ref _detailedDiagnosticsEnabled) == 1;
+        if (!detailed && !importantInConcise)
+        {
+            return;
+        }
+
+        var path = detailed ? _fullDiagnosticLogPath : _conciseDiagnosticLogPath;
+        if (path is null)
         {
             return;
         }
 
         try
         {
-            var directory = Path.GetDirectoryName(_diagnosticLogPath)
+            var directory = Path.GetDirectoryName(path)
                 ?? throw new InvalidOperationException("代理日志必须位于一个目录中。");
             Directory.CreateDirectory(directory);
-            var line = JsonSerializer.Serialize(value) + Environment.NewLine;
+            var record = JsonSerializer.SerializeToNode(value) as JsonObject
+                ?? new JsonObject { ["eventName"] = "diagnostic_event" };
+            record = DiagnosticSanitizer.SanitizeJsonNode(record) as JsonObject
+                ?? new JsonObject { ["eventName"] = "diagnostic_event" };
+            record["schemaVersion"] = 2;
+            record["eventId"] = Guid.NewGuid().ToString("N");
+            record["level"] = ResolveDiagnosticLevel(record);
+            record["sessionId"] = _sessionId;
+            record["routerRunId"] = Volatile.Read(ref _routerRunId);
+            record["diagnosticMode"] = detailed ? "full" : "concise";
+            ApplyFailureBurst(record);
+            var line = record.ToJsonString() + Environment.NewLine;
             await _diagnosticGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
-                RotateDiagnosticLogIfNeeded();
-                var shouldHarden = !_diagnosticLogHardened || !File.Exists(_diagnosticLogPath);
+                RotateDiagnosticLogIfNeeded(path);
+                var shouldHarden = !string.Equals(_diagnosticLogHardenedPath, path, StringComparison.OrdinalIgnoreCase)
+                    || !File.Exists(path);
                 await using var stream = new FileStream(
-                    _diagnosticLogPath,
+                    path,
                     FileMode.Append,
                     FileAccess.Write,
                     FileShare.ReadWrite,
@@ -918,8 +1107,8 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                     FileOptions.Asynchronous);
                 if (shouldHarden)
                 {
-                    PrivateFilePermissions.HardenFile(_diagnosticLogPath);
-                    _diagnosticLogHardened = true;
+                    PrivateFilePermissions.HardenFile(path);
+                    _diagnosticLogHardenedPath = path;
                 }
                 await using var writer = new StreamWriter(stream) { AutoFlush = true };
                 await writer.WriteAsync(line).ConfigureAwait(false);
@@ -929,23 +1118,139 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 _diagnosticGate.Release();
             }
         }
-        catch
+        catch (Exception exception)
         {
-            // Diagnostics must never break the Local inference path.
+            await ReportDiagnosticWriteFailureAsync(exception).ConfigureAwait(false);
         }
     }
 
-    private void RotateDiagnosticLogIfNeeded()
+    private async Task ReportDiagnosticWriteFailureAsync(Exception exception)
     {
-        if (_diagnosticLogPath is null
-            || !File.Exists(_diagnosticLogPath)
-            || new FileInfo(_diagnosticLogPath).Length < MaximumDiagnosticLogBytes)
+        var now = Environment.TickCount64;
+        var previous = Volatile.Read(ref _lastDiagnosticFailureReportAtMilliseconds);
+        if ((previous != 0 && now - previous < 30_000)
+            || Interlocked.CompareExchange(ref _lastDiagnosticFailureReportAtMilliseconds, now, previous) != previous)
         {
             return;
         }
 
-        var secondBackup = _diagnosticLogPath + ".2";
-        var firstBackup = _diagnosticLogPath + ".1";
+        try
+        {
+            if (_diagnosticFailureReporter is not null)
+            {
+                await _diagnosticFailureReporter(exception).ConfigureAwait(false);
+                return;
+            }
+
+            Console.Error.WriteLine(
+                "Local proxy diagnostic write failed: "
+                + DiagnosticSanitizer.SanitizeText(exception.GetType().Name + ": " + exception.Message, 500));
+        }
+        catch (Exception reporterException)
+        {
+            try
+            {
+                Console.Error.WriteLine(
+                    "Local proxy diagnostic fallback failed: "
+                    + DiagnosticSanitizer.SanitizeText(
+                        reporterException.GetType().Name + ": " + reporterException.Message,
+                        500));
+            }
+            catch
+            {
+                // The inference path must keep running even when both log sinks fail.
+            }
+        }
+    }
+
+    private void ApplyFailureBurst(JsonObject record)
+    {
+        var eventName = record["eventName"]?.GetValue<string>() ?? string.Empty;
+        var outcome = record["outcome"]?.GetValue<string>() ?? string.Empty;
+        var statusCode = record["statusCode"]?.GetValue<int?>();
+        var isFailure = eventName is "upstream_error" or "safety_proxy_error" or "request_cancelled"
+            || (eventName == "response_completed" && !string.Equals(outcome, "success", StringComparison.Ordinal))
+            || (statusCode is >= 400 && eventName is "upstream_response" or "websocket_http_fallback");
+        if (!isFailure)
+        {
+            return;
+        }
+
+        var signature = string.Join('|',
+            eventName,
+            record["stage"]?.GetValue<string>() ?? string.Empty,
+            statusCode?.ToString() ?? string.Empty,
+            record["errorCategory"]?.GetValue<string>() ?? string.Empty,
+            record["exceptionType"]?.GetValue<string>() ?? string.Empty,
+            record["requestKind"]?.GetValue<string>() ?? string.Empty,
+            outcome);
+        var signatureHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signature)))[..16];
+        var now = DateTimeOffset.UtcNow;
+        lock (_failureBurstGate)
+        {
+            foreach (var stale in _failureBursts
+                         .Where(pair => now - pair.Value.LastSeenUtc > FailureBurstWindow)
+                         .Select(pair => pair.Key)
+                         .ToArray())
+            {
+                _failureBursts.Remove(stale);
+            }
+
+            if (!_failureBursts.TryGetValue(signatureHash, out var burst)
+                || now - burst.LastSeenUtc > FailureBurstWindow)
+            {
+                burst = new FailureBurstState(Guid.NewGuid().ToString("N"), now, now, 0);
+            }
+
+            burst = burst with { LastSeenUtc = now, RepeatCount = burst.RepeatCount + 1 };
+            _failureBursts[signatureHash] = burst;
+            while (_failureBursts.Count > MaximumFailureBursts)
+            {
+                var oldest = _failureBursts.MinBy(pair => pair.Value.LastSeenUtc).Key;
+                _failureBursts.Remove(oldest);
+            }
+
+            record["failureBurstId"] = burst.BurstId;
+            record["failureRepeatCount"] = burst.RepeatCount;
+            record["failureFirstSeenUtc"] = burst.FirstSeenUtc;
+            record["failureLastSeenUtc"] = burst.LastSeenUtc;
+        }
+    }
+
+    private static string ResolveDiagnosticLevel(JsonObject record)
+    {
+        var eventName = record["eventName"]?.GetValue<string>() ?? string.Empty;
+        var outcome = record["outcome"]?.GetValue<string>() ?? string.Empty;
+        var statusCode = record["statusCode"]?.GetValue<int?>();
+        if (eventName is "safety_proxy_error" or "upstream_error"
+            || (eventName == "response_completed" && !string.Equals(outcome, "success", StringComparison.Ordinal)))
+        {
+            return "error";
+        }
+
+        if (eventName == "request_cancelled" || statusCode is >= 400)
+        {
+            return "warning";
+        }
+
+        return "info";
+    }
+
+    private sealed record FailureBurstState(
+        string BurstId,
+        DateTimeOffset FirstSeenUtc,
+        DateTimeOffset LastSeenUtc,
+        int RepeatCount);
+
+    private static void RotateDiagnosticLogIfNeeded(string path)
+    {
+        if (!File.Exists(path) || new FileInfo(path).Length < MaximumDiagnosticLogBytes)
+        {
+            return;
+        }
+
+        var secondBackup = path + ".2";
+        var firstBackup = path + ".1";
         if (File.Exists(secondBackup))
         {
             File.Delete(secondBackup);
@@ -956,8 +1261,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             File.Move(firstBackup, secondBackup, overwrite: true);
         }
 
-        File.Move(_diagnosticLogPath, firstBackup, overwrite: true);
-        _diagnosticLogHardened = false;
+        File.Move(path, firstBackup, overwrite: true);
     }
 
     private static string SafeEndpoint(Uri? uri) => uri is null
@@ -967,7 +1271,124 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
     private static string SafeExceptionMessage(Exception exception)
     {
         var message = exception.Message.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        message = Regex.Replace(message, @"(?i)\bBearer\s+[^\s,;]+", "Bearer <redacted>");
+        message = Regex.Replace(message, @"(?i)(?:[A-Z]:\\|\\\\)\S+", "<path>");
+        message = Regex.Replace(message, @"https?://\S+", "<url>");
+        message = Regex.Replace(message, @"(?i)\b(prompt|input|content|text)\s*[:=]\s*[^,;]+", "$1=<redacted>");
+        message = Regex.Replace(message, @"\b[A-Za-z0-9_+/.=-]{40,}\b", "<value>");
         return message.Length <= 500 ? message : message[..500];
+    }
+
+    private static string SafeMediaType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return string.Empty;
+        }
+
+        return MediaTypeHeaderValue.TryParse(contentType, out var parsed)
+            ? parsed.MediaType ?? string.Empty
+            : string.Empty;
+    }
+
+    private static string? ReadSafeUpstreamRequestId(HttpResponseMessage response)
+    {
+        foreach (var name in new[] { "x-request-id", "request-id" })
+        {
+            if (!response.Headers.TryGetValues(name, out var values))
+            {
+                continue;
+            }
+
+            var value = values.FirstOrDefault()?.Trim();
+            if (string.IsNullOrEmpty(value) || value.Length > 128)
+            {
+                continue;
+            }
+
+            if (value.All(character => char.IsAsciiLetterOrDigit(character)
+                || character is '-' or '_' or '.' or ':'))
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static string SafeDiagnosticCategory(byte[] body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("error", out var error)
+                || error.ValueKind != JsonValueKind.Object)
+            {
+                return "unclassified_upstream_error";
+            }
+
+            var code = error.TryGetProperty("code", out var codeElement)
+                ? codeElement.ToString().ToLowerInvariant()
+                : string.Empty;
+            var type = error.TryGetProperty("type", out var typeElement)
+                ? typeElement.ToString().ToLowerInvariant()
+                : string.Empty;
+            var message = error.TryGetProperty("message", out var messageElement)
+                && messageElement.ValueKind == JsonValueKind.String
+                    ? messageElement.GetString()?.ToLowerInvariant() ?? string.Empty
+                    : string.Empty;
+            var diagnostic = $"{code} {type} {message}";
+
+            if (diagnostic.Contains("exceed_context_size", StringComparison.Ordinal)
+                || diagnostic.Contains("context size", StringComparison.Ordinal)
+                || diagnostic.Contains("context length", StringComparison.Ordinal))
+            {
+                return "context_overflow";
+            }
+
+            if (diagnostic.Contains("device lost", StringComparison.Ordinal))
+            {
+                return "device_lost";
+            }
+
+            if (diagnostic.Contains("vulkan", StringComparison.Ordinal))
+            {
+                return "vulkan_backend_error";
+            }
+
+            if (diagnostic.Contains("cuda", StringComparison.Ordinal))
+            {
+                return "cuda_backend_error";
+            }
+
+            if (diagnostic.Contains("out of memory", StringComparison.Ordinal)
+                || diagnostic.Contains("allocation", StringComparison.Ordinal))
+            {
+                return "allocation_failure";
+            }
+
+            if (diagnostic.Contains("cancel", StringComparison.Ordinal))
+            {
+                return "upstream_cancelled";
+            }
+
+            if (type.Contains("invalid_request", StringComparison.Ordinal))
+            {
+                return "invalid_request";
+            }
+
+            if (type.Contains("server_error", StringComparison.Ordinal))
+            {
+                return "upstream_server_error";
+            }
+        }
+        catch (JsonException)
+        {
+            return "unstructured_upstream_error";
+        }
+
+        return "unclassified_upstream_error";
     }
 
     private static string SafeDiagnostic(byte[] body)
@@ -983,14 +1404,27 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 return "JSON error body without structured error details";
             }
 
-            var code = error.TryGetProperty("code", out var codeElement) ? codeElement.ToString() : "unknown";
-            var type = error.TryGetProperty("type", out var typeElement) ? typeElement.GetString() : "unknown";
+            var code = error.TryGetProperty("code", out var codeElement)
+                ? SafeDiagnosticToken(codeElement.ToString())
+                : "unknown";
+            var type = error.TryGetProperty("type", out var typeElement)
+                ? SafeDiagnosticToken(typeElement.ToString())
+                : "unknown";
             return $"code={code}, type={type}";
         }
         catch
         {
             return "non-JSON error body";
         }
+    }
+
+    private static string SafeDiagnosticToken(string value)
+    {
+        var safe = new string(value
+            .Take(80)
+            .Where(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.')
+            .ToArray());
+        return string.IsNullOrEmpty(safe) ? "unknown" : safe;
     }
 
     private sealed record RequestCopySummary(
@@ -1014,5 +1448,81 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
         string? CompactionPhase)
     {
         public static CodexRequestMetadata Empty { get; } = new(null, null, null, null);
+    }
+
+    private sealed class SseEventTracker
+    {
+        private const int MaximumEventLineBytes = 512;
+        private readonly byte[] _line = new byte[MaximumEventLineBytes];
+        private int _lineLength;
+        private bool _lineOverflowed;
+
+        public int EventCount { get; private set; }
+
+        public string? LastEvent { get; private set; }
+
+        public string? TerminalEvent { get; private set; }
+
+        public long? LastEventElapsedMs { get; private set; }
+
+        public long? TerminalEventElapsedMs { get; private set; }
+
+        public void Observe(ReadOnlySpan<byte> bytes, long elapsedMs)
+        {
+            foreach (var value in bytes)
+            {
+                if (value == (byte)'\n')
+                {
+                    ProcessLine(elapsedMs);
+                    _lineLength = 0;
+                    _lineOverflowed = false;
+                    continue;
+                }
+
+                if (_lineLength < MaximumEventLineBytes)
+                {
+                    _line[_lineLength++] = value;
+                }
+                else
+                {
+                    _lineOverflowed = true;
+                }
+            }
+        }
+
+        public void Complete(long elapsedMs) => ProcessLine(elapsedMs);
+
+        private void ProcessLine(long elapsedMs)
+        {
+            if (_lineOverflowed || _lineLength == 0)
+            {
+                return;
+            }
+
+            var line = Encoding.ASCII.GetString(_line, 0, _lineLength).TrimEnd('\r');
+            string? eventName = null;
+            if (line.StartsWith("event:", StringComparison.Ordinal))
+            {
+                eventName = SafeDiagnosticToken(line[6..].Trim());
+            }
+            else if (string.Equals(line, "data: [DONE]", StringComparison.Ordinal))
+            {
+                eventName = "done";
+            }
+
+            if (eventName is null)
+            {
+                return;
+            }
+
+            EventCount++;
+            LastEvent = eventName;
+            LastEventElapsedMs = elapsedMs;
+            if (eventName is "response.completed" or "response.failed" or "response.incomplete" or "done")
+            {
+                TerminalEvent = eventName;
+                TerminalEventElapsedMs = elapsedMs;
+            }
+        }
     }
 }

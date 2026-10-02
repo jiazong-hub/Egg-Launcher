@@ -268,6 +268,7 @@ public partial class MainWindow : Window
                 configTransactionService,
                 _paths).RecoverAsync(_lifetime.Token);
             _settings = await _settingsStore.LoadAsync(_lifetime.Token);
+            DetailedLoggingCheckBox.IsChecked = _settings.DetailedDiagnosticsEnabled;
             AppThemeManager.Apply(_settings.Theme);
             AppLanguageManager.Apply(_settings.Language);
             UpdateThemeToggleUi(_settings.Theme);
@@ -855,6 +856,42 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void DetailedLoggingCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy)
+        {
+            DetailedLoggingCheckBox.IsChecked = _settings.DetailedDiagnosticsEnabled;
+            return;
+        }
+
+        var enabled = DetailedLoggingCheckBox.IsChecked == true;
+        try
+        {
+            SetBusy(true);
+            await MutateSettingsAsync(
+                settings => settings with { DetailedDiagnosticsEnabled = enabled },
+                _lifetime.Token);
+            StatusText.Text = enabled
+                ? AppLanguageManager.Choose(
+                    "已启用详细日志记录；正在运行的 Local 服务会自动切换，无需重启模型。",
+                    "Detailed logging enabled. Running Local services will switch automatically without restarting the model.")
+                : AppLanguageManager.Choose(
+                    "已切换到精简日志记录。",
+                    "Switched to concise logging.");
+        }
+        catch (Exception exception)
+        {
+            DetailedLoggingCheckBox.IsChecked = _settings.DetailedDiagnosticsEnabled;
+            StatusText.Text = AppLanguageManager.Choose(
+                $"详细日志设置保存失败：{exception.Message}",
+                $"Failed to save the detailed logging setting: {exception.Message}");
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
     private void OpenLogsButton_Click(object sender, RoutedEventArgs e)
     {
         try
@@ -865,7 +902,7 @@ public partial class MainWindow : Window
                 FileName = _paths.LogsDirectory,
                 UseShellExecute = true,
             });
-            StatusText.Text = AppLanguageManager.Choose("已打开诊断日志文件夹；proxy.jsonl 不记录提示词正文或认证头。llama 原生 stdout/stderr 内容由 Runtime 决定。", "Diagnostic Logs folder opened. proxy.jsonl does not record prompt text or authentication headers. Native llama stdout/stderr content depends on the Runtime.");
+            StatusText.Text = AppLanguageManager.Choose("已打开诊断日志文件夹；代理结构化日志不记录对话正文或认证头。详细模式会保存更多 llama.cpp 运行输出。", "Diagnostic Logs folder opened. Structured proxy logs omit conversation text and authentication headers. Detailed mode records more llama.cpp runtime output.");
         }
         catch (Exception exception)
         {
@@ -1770,6 +1807,40 @@ public partial class MainWindow : Window
         {
             var runtimeRoot = _settings.LlamaRoot
                 ?? throw new InvalidOperationException(AppLanguageManager.Choose("尚未配置 llama.cpp Runtime。", "The llama.cpp Runtime has not been configured."));
+            if (activeProfile.ContextShiftEnabled
+                && ContextShiftCapabilityCache.Read(activeProfile, runtimeRoot)?.Supported != true)
+            {
+                StatusText.Text = AppLanguageManager.Choose(
+                    "当前模型配置尚未验证滚动支持或已被 llama.cpp 禁用。请在模型参数中关闭滚动，或重新开启开关完成检测后启动。",
+                    "Shifting is unverified or was disabled for this model configuration. Turn it off in model parameters, or enable it there to complete detection before starting.");
+                MessageBox.Show(this, StatusText.Text, AppLanguageManager.Choose("上下文滚动需要确认", "Context Shifting Requires Verification"));
+                return;
+            }
+            var keepRequested = activeProfile.ExtraArguments.Keys.Any(
+                key => key.Equals("keep", StringComparison.OrdinalIgnoreCase));
+            if (activeProfile.ContextShiftEnabled || keepRequested)
+            {
+                var runtimeOptions = await LlamaRuntimeOptionDetector.DetectAsync(
+                    runtimeRoot,
+                    _lifetime.Token);
+                if (activeProfile.ContextShiftEnabled
+                    && (runtimeOptions is null || !runtimeOptions.Contains("context-shift")))
+                {
+                    StatusText.Text = AppLanguageManager.Choose(
+                        "当前所选 llama.cpp Runtime 未报告或无法确认支持 --context-shift。请关闭该 Profile 的上下文滚动选项，或选择支持此选项的 Runtime 后重试。",
+                        "The selected llama.cpp Runtime does not report or could not be checked for --context-shift. Turn off Context Shifting in this profile or select a Runtime that supports it, then try again.");
+                    return;
+                }
+
+                if (keepRequested && (runtimeOptions is null || !runtimeOptions.Contains("keep")))
+                {
+                    StatusText.Text = AppLanguageManager.Choose(
+                        "当前所选 llama.cpp Runtime 未报告或无法确认支持 --keep。请清空该 Profile 的保留开头 token 设置，或选择支持此选项的 Runtime 后重试。",
+                        "The selected llama.cpp Runtime does not report or could not be checked for --keep. Clear Keep Initial Tokens in this profile or select a Runtime that supports it, then try again.");
+                    return;
+                }
+            }
+
             activeProfile = await InvalidateStaleMtpValidationAsync(
                 activeProfile,
                 runtimeRoot,
@@ -2175,6 +2246,29 @@ public partial class MainWindow : Window
             }
 
             LlamaRuntimeText.Text = stateText;
+            string? runtimeShiftDisabledReason = null;
+            try
+            {
+                if (File.Exists(_paths.RuntimeStateFile))
+                {
+                    var state = JsonSerializer.Deserialize<RuntimeState>(
+                        await File.ReadAllTextAsync(_paths.RuntimeStateFile, _lifetime.Token));
+                    if (state?.Phase == RuntimePhase.Running && state.SelectedModelId == profile.Id
+                        && IsFreshRuntimeState(state.UpdatedAtUtc))
+                        runtimeShiftDisabledReason = state.ContextShiftDisabledReason;
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException) { }
+            if (runtimeShiftDisabledReason is not null)
+            {
+                LlamaRuntimeText.Text += AppLanguageManager.Choose(" · 滚动已被禁用", " · Shifting disabled");
+                LlamaRuntimeText.ToolTip = runtimeShiftDisabledReason;
+            }
+            else if (profile.ContextShiftEnabled && ContextShiftCapabilityCache.Read(profile, _settings.LlamaRoot!) is { Supported: false } shift)
+            {
+                LlamaRuntimeText.Text += AppLanguageManager.Choose(" · 滚动已被禁用", " · Shifting disabled");
+                LlamaRuntimeText.ToolTip = shift.Reason;
+            }
             UpdateRuntimeActionButtons();
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
@@ -2859,6 +2953,7 @@ public partial class MainWindow : Window
         LoadCurrentModelButton.IsEnabled = !busy && LoadCurrentModelButton.Tag is true;
         UnloadCurrentModelButton.IsEnabled = !busy && UnloadCurrentModelButton.Tag is true;
         StartAgentAtLoginCheckBox.IsEnabled = !busy && _appExecutablePath is not null;
+        DetailedLoggingCheckBox.IsEnabled = !busy;
         OpenLogsButton.IsEnabled = !busy;
         RefreshHardwareButton.IsEnabled = !busy && !_monitorRefreshInProgress;
         ThemeToggleButton.IsEnabled = _themeUiReady && !busy && !_themeChangeInProgress;

@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Launcher.ChatGPT.Catalog;
 using Launcher.ChatGPT.Configuration;
 using Launcher.ChatGPT.Discovery;
@@ -67,8 +68,21 @@ static async Task RunAsync(string[] args)
     var awaitInitialLocalSwitch = args.Contains("--await-local-switch", StringComparer.OrdinalIgnoreCase);
     var expectedInitialModelId = GetOptionValue(args, "--await-model");
     var paths = LauncherDataPaths.ForCurrentUser();
-    var agentLog = new JsonLineDiagnosticLog(paths.AgentLogFile);
     using var settingsStore = new JsonSettingsStore(paths.SettingsFile);
+    var detailedDiagnosticsEnabled = false;
+    try
+    {
+        detailedDiagnosticsEnabled = (await settingsStore.LoadAsync()).DetailedDiagnosticsEnabled;
+    }
+    catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException)
+    {
+        // Keep startup diagnostics available when settings require recovery.
+    }
+
+    var agentLog = new ModeAwareJsonLineDiagnosticLog(
+        paths.AgentConciseLogFile,
+        paths.AgentFullLogFile,
+        detailedDiagnosticsEnabled);
     var codexHome = GetOptionValue(args, "--codex-home");
     var inspector = new ChatGptIntegrationInspector(codexHome);
     var clientDetector = new ChatGptClientDetector();
@@ -146,16 +160,25 @@ static async Task RunAsync(string[] args)
             paths).RecoverAsync(shutdown.Token);
         if (recovery.Changed)
         {
-            await WriteAgentLogAsync("warning", "Recovered an interrupted mode switch before router reconciliation.");
+            await WriteAgentLogAsync(
+                "warning",
+                "Recovered an interrupted mode switch before router reconciliation.",
+                "interrupted_mode_switch_recovered");
         }
     }
     catch (Exception exception) when (exception is not OperationCanceledException)
     {
-        await WriteAgentLogAsync("error", $"Interrupted mode switch requires attention: {exception.Message}");
+        await WriteAgentDiagnosticEventObjectAsync(new DiagnosticEvent(
+            "interrupted_mode_switch_recovery_failed",
+            "error",
+            "Interrupted mode switch recovery failed.",
+            DiagnosticSanitizer.CreateExceptionProperties(
+                exception,
+                includeStackTrace: agentLog.DetailedDiagnosticsEnabled)));
         return;
     }
 
-    await WriteAgentLogAsync("info", "Agent started.");
+    await WriteAgentLogAsync("info", "Agent started.", "agent_started");
     var routerApiKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
     using var agentHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
     agentHttpClient.DefaultRequestHeaders.Authorization =
@@ -164,8 +187,15 @@ static async Task RunAsync(string[] args)
     var agentConfigTransactionService = new ChatGptConfigTransactionService(clientDetector);
     await using var supervisor = new LocalRouterSupervisor(
         settingsStore,
-        new LlamaRouterProcessManager(agentRouterClient),
-        new LoopbackSafetyProxy(paths.ProxyLogFile),
+        new LlamaRouterProcessManager(
+            agentRouterClient,
+            WriteAgentDiagnosticEventObjectAsync,
+            agentLog.SetRouterRunId),
+        new LoopbackSafetyProxy(
+            paths.ProxyConciseLogFile,
+            paths.ProxyFullLogFile,
+            agentLog.SessionId,
+            exception => ReportAgentDiagnosticWriteFailureAsync(exception, "safety_proxy")),
         agentRouterClient,
         paths,
         routerApiKey: routerApiKey,
@@ -174,12 +204,26 @@ static async Task RunAsync(string[] args)
             clientDetector,
             agentConfigTransactionService,
             paths),
-        runtimeStateDiagnosticWriter: message => WriteAgentLogAsync("error", message));
+        runtimeStateDiagnosticWriter: message => WriteAgentDiagnosticEventAsync(
+            "runtime_state_write_failed",
+            "error",
+            message),
+        diagnosticModeChanged: agentLog.SetDetailedDiagnosticsEnabled,
+        diagnosticRouterRunIdChanged: agentLog.SetRouterRunId,
+        diagnosticEventWriter: (eventName, level, message) =>
+            WriteAgentDiagnosticEventAsync(eventName, level, message),
+        modelManagementClient: new LlamaModelManagementClient(agentHttpClient),
+        structuredDiagnosticEventWriter: WriteAgentDiagnosticEventObjectAsync);
     using var controlCancellation = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
     var controlTask = AgentControlPipe.ListenForShutdownAsync(
         shutdown.Cancel,
         controlCancellation.Token);
     string? lastSupervisorMessage = null;
+    string? lastSupervisorFailureSignature = null;
+    string? supervisorFailureBurstId = null;
+    var supervisorFailureBurstFirstSeen = DateTimeOffset.MinValue;
+    var supervisorFailureLastSeen = DateTimeOffset.MinValue;
+    var supervisorFailureRepeatCount = 0;
 
     Console.WriteLine("Agent 正在监督本次 Local 客户端会话。按 Ctrl+C 退出。");
     try
@@ -209,7 +253,10 @@ static async Task RunAsync(string[] args)
 
         if (!initialSwitchReady)
         {
-            await WriteAgentLogAsync("warning", "Local configuration was not committed within the startup window; Agent is exiting without starting llama.");
+            await WriteAgentLogAsync(
+                "warning",
+                "Local configuration was not committed within the startup window; Agent is exiting without starting llama.",
+                "local_switch_startup_timeout");
             shutdown.Cancel();
         }
 
@@ -219,7 +266,7 @@ static async Task RunAsync(string[] args)
 
         if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
         {
-            await WriteAgentLogAsync("info", "OpenAI mode needs no resident Local Agent; exiting.");
+            await WriteAgentLogAsync("info", "OpenAI mode needs no resident Local Agent; exiting.", "agent_openai_mode_exit");
         }
         else
         {
@@ -245,28 +292,28 @@ static async Task RunAsync(string[] args)
 
             if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
             {
-                await WriteAgentLogAsync("info", "Local mode ended before the client started; Agent is exiting.");
+                await WriteAgentLogAsync("info", "Local mode ended before the client started; Agent is exiting.", "local_mode_ended_before_client_start");
             }
             else if (!clientDetector.IsRunning())
             {
-                await WriteAgentLogAsync("warning", "ChatGPT did not start within the Local session window; stopping Local services.");
+                await WriteAgentLogAsync("warning", "ChatGPT did not start within the Local session window; stopping Local services.", "chatgpt_client_start_timeout");
             }
             else
             {
-                await WriteAgentLogAsync("info", "ChatGPT client detected; Local session supervision is active.");
+                await WriteAgentLogAsync("info", "ChatGPT client detected; Local session supervision is active.", "chatgpt_client_detected");
                 using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
                 while (await timer.WaitForNextTickAsync(shutdown.Token))
                 {
                     if (!clientDetector.IsRunning())
                     {
-                        await WriteAgentLogAsync("info", "ChatGPT client closed; stopping Local services.");
+                        await WriteAgentLogAsync("info", "ChatGPT client closed; stopping Local services.", "chatgpt_client_closed");
                         break;
                     }
 
                     reconcileResult = await ReconcileSupervisorAsync();
                     if (reconcileResult?.SelectedMode == ProviderMode.OpenAI)
                     {
-                        await WriteAgentLogAsync("info", "Local mode ended; Agent is exiting.");
+                        await WriteAgentLogAsync("info", "Local mode ended; Agent is exiting.", "local_mode_ended");
                         break;
                     }
                 }
@@ -288,11 +335,17 @@ static async Task RunAsync(string[] args)
         }
         catch (Exception exception)
         {
-            await WriteAgentLogAsync("error", $"Agent control channel stopped unexpectedly: {exception.Message}");
+            await WriteAgentDiagnosticEventObjectAsync(new DiagnosticEvent(
+                "agent_control_channel_failed",
+                "error",
+                "Agent control channel stopped unexpectedly.",
+                DiagnosticSanitizer.CreateExceptionProperties(
+                    exception,
+                    includeStackTrace: agentLog.DetailedDiagnosticsEnabled)));
         }
     }
 
-    await WriteAgentLogAsync("info", "Agent stopped.");
+    await WriteAgentLogAsync("info", "Agent stopped.", "agent_stopped");
 
     async Task<LocalRouterReconcileResult?> ReconcileSupervisorAsync()
     {
@@ -303,7 +356,16 @@ static async Task RunAsync(string[] args)
             if (!string.IsNullOrWhiteSpace(message) && !string.Equals(message, lastSupervisorMessage, StringComparison.Ordinal))
             {
                 Console.WriteLine($"Agent: {message}");
-                await WriteAgentLogAsync("info", message);
+                await WriteAgentDiagnosticEventObjectAsync(new DiagnosticEvent(
+                    "supervisor_state_changed",
+                    "info",
+                    "The Local Router supervisor reported a state transition.",
+                    new Dictionary<string, object?>
+                    {
+                        ["action"] = result.Action.ToString(),
+                        ["selectedMode"] = result.SelectedMode.ToString(),
+                        ["routerProcessId"] = result.RouterProcessId,
+                    }));
             }
 
             lastSupervisorMessage = message;
@@ -315,7 +377,40 @@ static async Task RunAsync(string[] args)
             if (!string.Equals(message, lastSupervisorMessage, StringComparison.Ordinal))
             {
                 Console.WriteLine($"Agent: {message}");
-                await WriteAgentLogAsync("error", message);
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var signatureText = (exception.GetType().FullName ?? exception.GetType().Name)
+                + "|" + DiagnosticSanitizer.SanitizeText(exception.Message, 1_000);
+            var signature = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(signatureText)))[..16];
+            if (!string.Equals(signature, lastSupervisorFailureSignature, StringComparison.Ordinal)
+                || now - supervisorFailureLastSeen > TimeSpan.FromMinutes(2))
+            {
+                lastSupervisorFailureSignature = signature;
+                supervisorFailureBurstId = Guid.NewGuid().ToString("N");
+                supervisorFailureBurstFirstSeen = now;
+                supervisorFailureRepeatCount = 0;
+            }
+
+            supervisorFailureRepeatCount++;
+            supervisorFailureLastSeen = now;
+            if (agentLog.DetailedDiagnosticsEnabled
+                || supervisorFailureRepeatCount is 1 or 2 or 5 or 10
+                || supervisorFailureRepeatCount % 50 == 0)
+            {
+                var failureProperties = DiagnosticSanitizer.CreateExceptionProperties(
+                    exception,
+                    includeStackTrace: agentLog.DetailedDiagnosticsEnabled);
+                failureProperties["failureBurstId"] = supervisorFailureBurstId;
+                failureProperties["failureRepeatCount"] = supervisorFailureRepeatCount;
+                failureProperties["failureFirstSeenUtc"] = supervisorFailureBurstFirstSeen;
+                failureProperties["failureLastSeenUtc"] = supervisorFailureLastSeen;
+                failureProperties["reconcileAction"] = "retry_on_next_supervision_cycle";
+                await WriteAgentDiagnosticEventObjectAsync(new DiagnosticEvent(
+                    "supervisor_reconcile_failed",
+                    "error",
+                    "Local Router reconciliation failed and will be retried.",
+                    failureProperties));
             }
 
             lastSupervisorMessage = message;
@@ -323,16 +418,67 @@ static async Task RunAsync(string[] args)
         }
     }
 
-    async Task WriteAgentLogAsync(string level, string message)
+    async Task WriteAgentLogAsync(
+        string level,
+        string message,
+        string eventName = "agent_event",
+        IReadOnlyDictionary<string, object?>? properties = null)
+    {
+        await WriteAgentDiagnosticEventObjectAsync(new DiagnosticEvent(eventName, level, message, properties));
+    }
+
+    async Task WriteAgentDiagnosticEventAsync(
+        string eventName,
+        string level,
+        string message,
+        IReadOnlyDictionary<string, object?>? properties = null)
+    {
+        await WriteAgentDiagnosticEventObjectAsync(new DiagnosticEvent(eventName, level, message, properties));
+    }
+
+    async Task WriteAgentDiagnosticEventObjectAsync(DiagnosticEvent diagnosticEvent)
     {
         try
         {
-            await agentLog.AppendAsync(level, message, CancellationToken.None);
+            await agentLog.AppendEventAsync(diagnosticEvent, CancellationToken.None);
         }
         catch (Exception exception)
         {
-            // Agent supervision must remain available even when diagnostics cannot be written.
-            Console.Error.WriteLine($"Agent diagnostic logging failed: {exception.GetType().Name}: {exception.Message}");
+            await ReportAgentDiagnosticWriteFailureAsync(exception, diagnosticEvent.EventName);
+        }
+    }
+
+    async Task ReportAgentDiagnosticWriteFailureAsync(Exception exception, string source)
+    {
+        try
+        {
+            await WriteEmergencyDiagnosticAsync(
+                "diagnostic_write_failed",
+                "Agent diagnostic logging failed; an emergency record was written when possible.",
+                new Dictionary<string, object?>
+                {
+                    ["source"] = source,
+                    ["exceptionType"] = exception.GetType().FullName,
+                    ["hResult"] = $"0x{exception.HResult:X8}",
+                    ["message"] = DiagnosticSanitizer.SanitizeText(exception.Message),
+                },
+                agentLog.DetailedDiagnosticsEnabled,
+                agentLog.SessionId);
+        }
+        catch (Exception fallbackException)
+        {
+            try
+            {
+                Console.Error.WriteLine(
+                    "Agent diagnostic logging and emergency fallback failed: "
+                    + DiagnosticSanitizer.SanitizeText(
+                        fallbackException.GetType().Name + ": " + fallbackException.Message,
+                        500));
+            }
+            catch
+            {
+                // The background Agent must continue supervising Router even if diagnostics fail.
+            }
         }
     }
 
@@ -770,9 +916,55 @@ static void EnsureLauncherIsStopped()
     }
 }
 
+static Task WriteEmergencyDiagnosticAsync(
+    string eventName,
+    string message,
+    IReadOnlyDictionary<string, object?> properties,
+    bool detailedDiagnosticsEnabled,
+    string? sessionId = null)
+{
+    var directory = Path.Combine(Path.GetTempPath(), "ChatGPTLocalLauncher");
+    var log = new JsonLineDiagnosticLog(
+        Path.Combine(directory, "Launcher.Agent.emergency.jsonl"),
+        maximumBytes: 1024 * 1024,
+        retainedFiles: 1);
+    return log.AppendEventAsync(
+        new DiagnosticEvent(eventName, "error", message, properties),
+        sessionId: sessionId,
+        diagnosticMode: detailedDiagnosticsEnabled ? "full" : "concise");
+}
+
 static void ReportFatalError(Exception exception)
 {
-    var summary = $"Launcher.Agent 已安全停止：{exception.GetType().Name}: {exception.Message}";
+    var detailedDiagnosticsEnabled = false;
+    var paths = LauncherDataPaths.ForCurrentUser();
+    try
+    {
+        if (File.Exists(paths.SettingsFile))
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(paths.SettingsFile));
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    if (string.Equals(property.Name, "DetailedDiagnosticsEnabled", StringComparison.OrdinalIgnoreCase)
+                        && property.Value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                    {
+                        detailedDiagnosticsEnabled = property.Value.GetBoolean();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    catch (Exception settingsException) when (
+        settingsException is IOException or UnauthorizedAccessException or JsonException)
+    {
+        // Fatal diagnostics remain available in concise mode if settings cannot be read.
+    }
+
+    var summary = "Launcher.Agent 已安全停止："
+        + DiagnosticSanitizer.SanitizeText(exception.GetType().Name + ": " + exception.Message, 500);
 
     try
     {
@@ -785,14 +977,33 @@ static void ReportFatalError(Exception exception)
 
     try
     {
-        var directory = Path.Combine(Path.GetTempPath(), "ChatGPTLocalLauncher");
-        Directory.CreateDirectory(directory);
-        var logPath = Path.Combine(directory, "Launcher.Agent.fatal.log");
-        var diagnostic = $"{DateTimeOffset.Now:O} {summary}{Environment.NewLine}{exception}{Environment.NewLine}";
-        File.AppendAllText(logPath, diagnostic, Encoding.UTF8);
+        var modeAwareLog = new ModeAwareJsonLineDiagnosticLog(
+            paths.AgentConciseLogFile,
+            paths.AgentFullLogFile,
+            detailedDiagnosticsEnabled);
+        modeAwareLog.AppendEventAsync(new DiagnosticEvent(
+            "agent_fatal_error",
+            "error",
+            "Launcher.Agent stopped after an unhandled exception.",
+            DiagnosticSanitizer.CreateExceptionProperties(
+                exception,
+                includeStackTrace: detailedDiagnosticsEnabled))).GetAwaiter().GetResult();
     }
     catch
     {
-        // Failure reporting must never turn a recoverable startup failure into a Windows crash dialog.
+        try
+        {
+            WriteEmergencyDiagnosticAsync(
+                "agent_fatal_error",
+                "Launcher.Agent stopped after an unhandled exception; the standard diagnostic log was unavailable.",
+                DiagnosticSanitizer.CreateExceptionProperties(
+                    exception,
+                    includeStackTrace: detailedDiagnosticsEnabled),
+                detailedDiagnosticsEnabled).GetAwaiter().GetResult();
+        }
+        catch
+        {
+            // Failure reporting must never turn a recoverable startup failure into a Windows crash dialog.
+        }
     }
 }

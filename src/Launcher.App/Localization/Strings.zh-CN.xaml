@@ -32,6 +32,8 @@
     <sys:String x:Key="SwitchToLightTheme">切换到浅色模式</sys:String>
     <sys:String x:Key="SwitchToDarkTheme">切换到深色模式</sys:String>
     <sys:String x:Key="StartAtLogin">开机时启动 Egg Launcher</sys:String>
+    <sys:String x:Key="DetailedLogRecording">详细日志记录</sys:String>
+    <sys:String x:Key="DetailedLogRecordingToolTip">开启后记录更完整的请求阶段与 llama.cpp 原生日志。启动器生成的结构化日志不记录对话正文或认证信息；日志文件会更大。</sys:String>
     <sys:String x:Key="DiagnosticLogs">诊断日志</sys:String>
     <sys:String x:Key="AboutEggLauncher">关于 Egg Launcher</sys:String>
     <sys:String x:Key="ModePageHint">单击预选，启动时应用</sys:String>
@@ -102,6 +104,11 @@
     <sys:String x:Key="LocalDataDirectory">本地数据目录</sys:String>
     <sys:String x:Key="LocalDataBody">模型与 Runtime 数据位于用户自行选择的 llama.cpp 目录。删除应用文件不会自动删除这些数据。</sys:String>
     <sys:String x:Key="ChangelogTab">更新日志</sys:String>
+    <sys:String x:Key="ReleaseNote094Title">0.9.4 · 公开测试版</sys:String>
+    <sys:String x:Key="ReleaseNote094Item1">• 优化参数控件、卡片对齐、侧栏和窗口自适应。</sys:String>
+    <sys:String x:Key="ReleaseNote094Item2">• 增加精简/详细日志和更完整的故障诊断。</sys:String>
+    <sys:String x:Key="ReleaseNote094Item3">• 完善上下文、压缩余量、工具结果上限联动与滚动能力检测。</sys:String>
+    <sys:String x:Key="ReleaseNote094Item4">• 完善沙箱联网兼容、常用目录快捷选择和可选 Gradle 用户目录。</sys:String>
     <sys:String x:Key="ReleaseNote093Title">0.9.3 · 2026-09-25</sys:String>
     <sys:String x:Key="ReleaseNote093Item1">• 关于页面增加更新日志，集中展示各版本的主要变化。</sys:String>
     <sys:String x:Key="ReleaseNote093Item2">• 增加 EXE 安装、升级与安全卸载流程。</sys:String>
@@ -179,7 +186,7 @@
     <sys:String x:Key="ContextSelectionTip">请按模型声明的上下文能力和本机可用显存/内存选择；Egg Launcher 不提供硬件无关的推荐值。</sys:String>
     <sys:String x:Key="CustomContextTip">输入不超过模型上限、且为 256 整数倍的 token 数；支持 96K 这样的写法。</sys:String>
     <sys:String x:Key="CompactionReserve">压缩安全余量</sys:String>
-    <sys:String x:Key="CompactionReserveTip">Codex 在下一次推理前至少保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。</sys:String>
+    <sys:String x:Key="CompactionReserveTip">可输入整数 tokens 或 K（1K=1,024）。至少 1,024，严格小于 Context。Codex 在下一次推理前保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。</sys:String>
     <sys:String x:Key="GpuLayersTip">Auto 交给 llama.cpp 决定；All 尝试把全部可卸载层放入 GPU；0 使用 CPU。</sys:String>
     <sys:String x:Key="GpuLayersCustomTip">输入非负整数 GPU 卸载层数。</sys:String>
     <sys:String x:Key="FlashAttentionTip">支持时可减少注意力计算的显存带宽开销；不确定时使用 Auto。</sys:String>
@@ -279,6 +286,23 @@
     <sys:String x:Key="SwaFullCacheTip">默认不覆盖；开启会增加部分架构的 KV 内存使用。</sys:String>
     <sys:String x:Key="ContextCheckpoints">上下文检查点</sys:String>
     <sys:String x:Key="ContextCheckpointsTip">对应 llama.cpp --ctx-checkpoints：留空使用 Runtime 默认值；0 关闭检查点，可能降低长前缀恢复效率并增加预填充时间。此项不改变 Codex 的上下文压缩。</sys:String>
+    <sys:String x:Key="LongConversationSettings">长对话与上下文</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimit">工具结果历史上限</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimitTip">可输入整数 tokens 或 K（1K=1,024）。对应 Codex tool_output_token_limit，只限制单个工具返回结果写入历史的预算，不限制整轮命令数量或模型生成命令参数。默认沿用现有 Codex 设置；如设置具体值，必须小于压缩安全余量。</sys:String>
+    <sys:String x:Key="KeepInitialTokens">保留开头 token（--keep）</sys:String>
+    <sys:String x:Key="KeepInitialTokensTip">留空时不写入 --keep，沿用 llama.cpp 默认值。设置前请先填写明确的 Context 数值。填写非负整数后，llama.cpp 在上下文滚动时保留开头的这些 token；较大的值会减少可滚动空间，必须小于 Context。</sys:String>
+    <sys:String x:Key="ContextShiftEnabled">上下文滚动（开启 / 关闭）</sys:String>
+    <sys:String x:Key="ContextShiftTip">当上下文达到生成容量上限时，llama.cpp 可丢弃较早的上下文以继续生成；这可能使模型忘记先前内容。此项不会修改 Codex 历史，也不会执行 Codex 上下文压缩。</sys:String>
+    <sys:String x:Key="ContextShiftBlockedByVisionStatus">视觉模块启用时无法开启上下文滚动。请先关闭视觉模块。</sys:String>
+    <sys:String x:Key="ContextShiftVisionConflictStatus">llama.cpp 不支持同时启用视觉模块与上下文滚动。请关闭其中一项。</sys:String>
+    <sys:String x:Key="ContextShiftUnsupportedStatus">当前 llama.cpp Runtime 未报告 --context-shift，无法启用此项。</sys:String>
+    <sys:String x:Key="ContextShiftUnsupportedEnabledStatus">当前 llama.cpp Runtime 未报告 --context-shift。已保留此项原有的启用状态，请关闭后再保存。</sys:String>
+    <sys:String x:Key="ContextShiftUnknownStatus">无法读取 llama.cpp Runtime 能力；在确认支持前无法启用此项。</sys:String>
+    <sys:String x:Key="ContextShiftUnknownEnabledStatus">无法读取 llama.cpp Runtime 能力。已保留此项原有的启用状态，请关闭后再保存。</sys:String>
+    <sys:String x:Key="ContextShiftUnsupportedSaveError">当前 llama.cpp Runtime 未报告 --context-shift。请关闭上下文滚动后再保存。</sys:String>
+    <sys:String x:Key="ContextShiftUnknownSaveError">无法读取当前 llama.cpp Runtime 能力，无法确认其支持 --context-shift。请关闭上下文滚动后再保存。</sys:String>
+    <sys:String x:Key="ContextShiftVisionConflictError">llama.cpp 不支持同时启用视觉模块与上下文滚动（开启 / 关闭）。请关闭其中一项后再保存。</sys:String>
+    <sys:String x:Key="ContextShiftErrorTitle">上下文滚动设置无效</sys:String>
     <sys:String x:Key="WeightRepack">权重 Repack</sys:String>
     <sys:String x:Key="WeightRepackTip">默认由 llama.cpp 决定；关闭可能降低部分后端性能。</sys:String>
     <sys:String x:Key="OperationOffloadTip">控制主机 Tensor 操作是否卸载到设备；保持默认通常最安全。</sys:String>
@@ -327,4 +351,11 @@
     <sys:String x:Key="SystemLanguageEnabled">已恢复跟随 Windows 显示语言。</sys:String>
     <sys:String x:Key="LanguageSaveFailed">语言设置保存失败：{0}</sys:String>
     <sys:String x:Key="ThemeSaveFailed">主题设置保存失败：{0}</sys:String>
+    <sys:String x:Key="ContextShiftRedetect">重新检测滚动能力</sys:String>
+    <sys:String x:Key="CancelDetection">取消检测</sys:String>
+    <sys:String x:Key="SandboxAllowNetwork">允许命令联网</sys:String>
+    <sys:String x:Key="SandboxNetworkCompatibility">联网兼容模式</sys:String>
+    <sys:String x:Key="SandboxCompatibilityHint">自动传递固定系统代理，并提供兼容 HTTPS 请求与下载工具。保存后重启客户端生效；不修改系统代理。</sys:String>
+    <sys:String x:Key="SandboxCheckNetwork">检查联网</sys:String>
+    <sys:String x:Key="SandboxNetworkDetails">详细信息</sys:String>
 </ResourceDictionary>

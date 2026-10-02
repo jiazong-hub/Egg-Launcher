@@ -250,7 +250,7 @@ public sealed class ChatGptConfigTransactionServiceTests
     }
 
     [Fact]
-    public async Task ApplyLocal_AllowsDesktopPermissionChangesAndRestoresOfficialDefaults()
+    public async Task ApplyLocal_PreservesDesktopApprovalChangesWhenRestoringOfficialMode()
     {
         var root = CreateTemporaryDirectory();
         try
@@ -276,8 +276,8 @@ public sealed class ChatGptConfigTransactionServiceTests
 
             await service.RestoreOpenAIAsync(paths.RecoveryFile);
             var restoredText = await File.ReadAllTextAsync(configPath);
-            Assert.Contains("approval_policy = \"never\"", restoredText, StringComparison.Ordinal);
-            Assert.Contains("approvals_reviewer = \"user\"", restoredText, StringComparison.Ordinal);
+            Assert.Contains("approval_policy = \"on-request\"", restoredText, StringComparison.Ordinal);
+            Assert.Contains("approvals_reviewer = \"auto_review\"", restoredText, StringComparison.Ordinal);
         }
         finally
         {

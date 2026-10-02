@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="Tomlyn" Version="2.10.1" />
+    <None Update="Networking\egg-network.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -3,6 +3,28 @@ using System.Text.Json;
 
 namespace Launcher.Runtime.Router;
 
+public sealed class RouterReadinessException : TimeoutException
+{
+    public RouterReadinessException(
+        TimeSpan startupTimeout,
+        RouterHealthSnapshot? lastSnapshot,
+        bool processExited)
+        : base(processExited
+            ? "Router exited before its health endpoints became ready."
+            : $"Router did not become ready within {startupTimeout.TotalSeconds:0.#} seconds.")
+    {
+        StartupTimeout = startupTimeout;
+        LastSnapshot = lastSnapshot;
+        ProcessExited = processExited;
+    }
+
+    public TimeSpan StartupTimeout { get; }
+
+    public RouterHealthSnapshot? LastSnapshot { get; }
+
+    public bool ProcessExited { get; }
+}
+
 public sealed class RouterHealthClient(HttpClient httpClient) : IRouterControlClient
 {
     private const int MaximumRouteProbeResponseBytes = 64 * 1024;
@@ -191,7 +213,7 @@ public sealed class RouterHealthClient(HttpClient httpClient) : IRouterControlCl
             cancellationToken.ThrowIfCancellationRequested();
             if (hasExited?.Invoke() == true)
             {
-                throw new InvalidOperationException("Router 在健康检查完成前已经退出。");
+                throw new RouterReadinessException(timeout, lastSnapshot, processExited: true);
             }
 
             lastSnapshot = await ProbeAsync(baseUri, cancellationToken).ConfigureAwait(false);
@@ -203,7 +225,7 @@ public sealed class RouterHealthClient(HttpClient httpClient) : IRouterControlCl
             await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken).ConfigureAwait(false);
         }
 
-        throw new TimeoutException($"Router 未在 {timeout.TotalSeconds:0.#} 秒内就绪。最后状态：{lastSnapshot?.Diagnostic ?? "无响应"}");
+        throw new RouterReadinessException(timeout, lastSnapshot, processExited: false);
     }
 
     private static async Task<string[]> ReadModelIdsAsync(

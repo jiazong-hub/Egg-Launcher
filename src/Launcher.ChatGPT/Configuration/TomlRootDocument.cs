@@ -71,6 +71,51 @@ internal sealed class TomlRootDocument
             : throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是布尔值。");
     }
 
+    public string? GetTableStringValue(string tableKey, string itemKey)
+    {
+        var assignment = FindSingleTableAssignment(tableKey, itemKey);
+        if (assignment is null) return null;
+        return assignment.Value is StringValueSyntax { Value: not null } value ? value.Value
+            : throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是字符串。");
+    }
+
+    // Read a map without rewriting it. Accept both an inline map and a TOML table.
+    public IReadOnlyDictionary<string, string>? GetTableStringMap(string tableKey, string itemKey)
+    {
+        var assignment = FindSingleTableAssignment(tableKey, itemKey);
+        var table = FindSingleTable(tableKey + "." + itemKey);
+        if (assignment is null && table is null) return null;
+        IEnumerable<KeyValueSyntax> entries;
+        if (assignment is not null)
+        {
+            if (assignment.Value is not InlineTableSyntax inline)
+                throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是字符串映射。");
+            entries = inline.Items.Select(item => item.KeyValue
+                ?? throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 包含缺失规则。"));
+        }
+        else entries = table!.Items;
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in entries)
+        {
+            var name = GetKeyPath(entry.Key);
+            if (name.Length != 1 || entry.Value is not StringValueSyntax { Value: not null } value)
+                throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 包含无法识别的过滤规则。");
+            result.Add(name[0], value.Value);
+        }
+        return result;
+    }
+
+    public void RequireExplicitTableForm(string tableKey)
+    {
+        var target = ParseManagedKey(tableKey);
+        if (_syntax.KeyValues.Any(item => GetKeyPath(item.Key).Take(target.Length).SequenceEqual(target)))
+            throw new InvalidDataException($"ChatGPT 配置项 {tableKey} 使用内联表或点分键；请改为 [{tableKey}] 表格式后再设置 Gradle 用户目录。");
+        var table = FindSingleTable(tableKey);
+        if (table is not null && table.Items.Any(item =>
+            GetKeyPath(item.Key) is { Length: > 1 } path && path[0] is "filters" or "set" or "include_only" or "exclude"))
+            throw new InvalidDataException($"ChatGPT 配置表 {tableKey} 使用点分键；请将子表改为显式表格式后再设置 Gradle 用户目录。");
+    }
+
     public IReadOnlyList<string>? GetTableStringArrayValue(string tableKey, string itemKey)
     {
         var assignment = FindSingleTableAssignment(tableKey, itemKey);
@@ -271,6 +316,26 @@ internal sealed class TomlRootDocument
         }
 
         return new TomlRootDocument(insertionText + normalizedDefinition + lineEnding);
+    }
+
+    // Preserve unrelated environment entries and comments while editing a table leaf.
+    public TomlRootDocument SetTableString(string tableKey, string itemKey, string value)
+    {
+        var table = FindSingleTable(tableKey);
+        var assignmentText = System.Text.Json.JsonSerializer.Serialize(itemKey) + " = "
+            + System.Text.Json.JsonSerializer.Serialize(value);
+        if (GetAssignment(tableKey) is not null)
+            throw new InvalidDataException("代理环境配置使用内联格式，无法安全合并；请将 shell_environment_policy.set 改为独立 TOML 表。");
+        var existing = FindSingleTableAssignment(tableKey, itemKey);
+        if (existing is not null)
+            return new TomlRootDocument(_text[..existing.Span.Offset] + assignmentText + DetectLineEnding()
+                + _text[(existing.Span.Offset + existing.Span.Length)..]);
+        if (table is null)
+            return new TomlRootDocument(_text + DetectLineEnding() + "[" + tableKey + "]"
+                + DetectLineEnding() + assignmentText + DetectLineEnding());
+        var end = table.Span.Offset + table.Span.Length;
+        return new TomlRootDocument(_text[..end] + DetectLineEnding() + assignmentText
+            + DetectLineEnding() + _text[end..]);
     }
 
     public override string ToString() => _text;

@@ -13,9 +13,17 @@ public sealed record LauncherDataPaths(
     string RouterPresetFile,
     string LogsDirectory)
 {
-    public string AgentLogFile => Path.Combine(LogsDirectory, "agent.log");
+    public string AgentLogFile => AgentConciseLogFile;
 
-    public string ProxyLogFile => Path.Combine(LogsDirectory, "proxy.jsonl");
+    public string AgentConciseLogFile => Path.Combine(LogsDirectory, "agent.concise.jsonl");
+
+    public string AgentFullLogFile => Path.Combine(LogsDirectory, "agent.full.jsonl");
+
+    public string ProxyLogFile => ProxyConciseLogFile;
+
+    public string ProxyConciseLogFile => Path.Combine(LogsDirectory, "proxy.concise.jsonl");
+
+    public string ProxyFullLogFile => Path.Combine(LogsDirectory, "proxy.full.jsonl");
 
     public string ModeSwitchLockFile => Path.Combine(Root, "mode-switch.lock");
 

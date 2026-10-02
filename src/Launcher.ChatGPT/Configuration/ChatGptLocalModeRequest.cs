@@ -17,6 +17,8 @@ public sealed record ChatGptLocalModeRequest
 
     public required int AutoCompactTokenLimit { get; init; }
 
+    public int? ToolOutputTokenLimit { get; init; }
+
     public ModelSandboxSettings? SandboxSettings { get; init; }
 
     public LauncherSettings? OriginalLauncherSettings { get; init; }

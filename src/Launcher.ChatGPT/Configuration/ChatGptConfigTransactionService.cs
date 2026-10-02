@@ -28,6 +28,8 @@ public sealed class ChatGptConfigTransactionService
         "sandbox_mode",
         "sandbox_workspace_write",
         LauncherPermissionProfileKey,
+        "shell_environment_policy.set",
+        "developer_instructions",
     ];
 
     private static readonly string[] ManagedKeys =
@@ -40,6 +42,7 @@ public sealed class ChatGptConfigTransactionService
         "model_context_window",
         "model_auto_compact_token_limit",
         "model_auto_compact_token_limit_scope",
+        "tool_output_token_limit",
         "model_reasoning_effort",
         "model_reasoning_summary",
         "model_supports_reasoning_summaries",
@@ -51,7 +54,8 @@ public sealed class ChatGptConfigTransactionService
         .. SandboxManagedKeys,
     ];
 
-    // Approval fields remain snapshot-only: they are controlled by ChatGPT Desktop
+    // Approval fields are historical metadata only and are never replayed on restore.
+    // They are controlled by ChatGPT Desktop
     // and are not sandbox permissions. SandboxManagedKeys are owned while Local mode
     // is active so changing or restoring model-specific sandbox settings is atomic.
     private static readonly string[] OwnershipKeys =
@@ -150,7 +154,7 @@ public sealed class ChatGptConfigTransactionService
 
             var originalAssignments = CaptureAssignments(originalDocument);
 
-            var localDocument = BuildLocalDocument(originalDocument, request, originalAssignments);
+            var localDocument = BuildLocalDocument(originalDocument, request, originalAssignments, dataPaths.Root);
             var localText = localDocument.ToString();
             var transactionId = Guid.NewGuid();
 
@@ -204,7 +208,7 @@ public sealed class ChatGptConfigTransactionService
                     configPath,
                     localText,
                     originalState.Revision,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, dataPaths.Root).ConfigureAwait(false);
 
                 var applied = prepared with { Stage = ConfigTransactionStage.LocalApplied };
                 await WriteJsonAtomicallyAsync(dataPaths.RecoveryFile, applied, cancellationToken).ConfigureAwait(false);
@@ -339,7 +343,7 @@ public sealed class ChatGptConfigTransactionService
                 snapshot.ConfigPath,
                 compatibleDocument.ToString(),
                 state.Revision,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
             await WriteJsonAtomicallyAsync(
                 recoveryPath,
                 prepared with
@@ -394,7 +398,7 @@ public sealed class ChatGptConfigTransactionService
             var currentState = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
             var currentDocument = new TomlRootDocument(currentState.Text);
             EnsureAssignmentsStillOwned(currentDocument, snapshot.AppliedAssignments);
-            var updatedDocument = BuildLocalDocument(currentDocument, request, snapshot.OriginalAssignments);
+            var updatedDocument = BuildLocalDocument(currentDocument, request, snapshot.OriginalAssignments, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!);
             var prepared = snapshot with
             {
                 Stage = ConfigTransactionStage.LocalUpdatePrepared,
@@ -414,7 +418,7 @@ public sealed class ChatGptConfigTransactionService
                     snapshot.ConfigPath,
                     updatedDocument.ToString(),
                     currentState.Revision,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
                 var applied = prepared with { Stage = ConfigTransactionStage.LocalUpdateApplied };
                 await WriteJsonAtomicallyAsync(recoveryPath, applied, cancellationToken).ConfigureAwait(false);
                 return applied;
@@ -483,7 +487,7 @@ public sealed class ChatGptConfigTransactionService
                     snapshot.ConfigPath,
                     updatedDocument.ToString(),
                     currentState.Revision,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
                 var applied = prepared with { Stage = ConfigTransactionStage.LocalUpdateApplied };
                 await WriteJsonAtomicallyAsync(recoveryPath, applied, cancellationToken).ConfigureAwait(false);
                 return applied;
@@ -574,7 +578,7 @@ public sealed class ChatGptConfigTransactionService
                     snapshot.ConfigPath,
                     previousDocument.ToString(),
                     currentState.Revision,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
             }
             else if (!AssignmentsMatch(currentDocument, snapshot.PreviousAppliedAssignments))
             {
@@ -653,7 +657,7 @@ public sealed class ChatGptConfigTransactionService
                 snapshot,
                 restoredDocument,
                 currentState.Revision,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
             var restored = snapshot with
             {
                 Stage = ConfigTransactionStage.Restored,
@@ -831,7 +835,7 @@ public sealed class ChatGptConfigTransactionService
                             snapshot,
                             restoredDocument,
                             currentState.Revision,
-                            cancellationToken).ConfigureAwait(false);
+                            cancellationToken, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
                         snapshot = snapshot with
                         {
                             OfficialCompatibilityOwned = IsOfficialCompatibilityOwned(snapshot),
@@ -1082,10 +1086,15 @@ public sealed class ChatGptConfigTransactionService
     private static TomlRootDocument BuildLocalDocument(
         TomlRootDocument source,
         ChatGptLocalModeRequest request,
-        IReadOnlyDictionary<string, string?> originalAssignments)
+        IReadOnlyDictionary<string, string?> originalAssignments, string diagnosticRoot)
     {
         var contextWindow = request.ContextWindow.ToString(CultureInfo.InvariantCulture);
         var autoCompactTokenLimit = request.AutoCompactTokenLimit.ToString(CultureInfo.InvariantCulture);
+        var toolOutputTokenLimit = request.ToolOutputTokenLimit is int limit
+            ? $"tool_output_token_limit = {limit.ToString(CultureInfo.InvariantCulture)}"
+            : originalAssignments.TryGetValue("tool_output_token_limit", out var originalLimit)
+                ? originalLimit
+                : null;
 
         // This threshold tells Codex when to run its own native semantic compaction.
         // It is deliberately distinct from max_output_tokens: the launcher neither
@@ -1101,6 +1110,7 @@ public sealed class ChatGptConfigTransactionService
                 "model_auto_compact_token_limit",
                 $"model_auto_compact_token_limit = {autoCompactTokenLimit}")
             .SetRawAssignment("model_auto_compact_token_limit_scope", null)
+            .SetRawAssignment("tool_output_token_limit", toolOutputTokenLimit)
             .SetRawAssignment("model_reasoning_effort", null)
             .SetRawAssignment("model_reasoning_summary", null)
             .SetRawAssignment("model_supports_reasoning_summaries", null)
@@ -1108,7 +1118,82 @@ public sealed class ChatGptConfigTransactionService
             .SetRawAssignment("service_tier", null)
             .SetRawAssignment(LocalProviderKey, BuildLocalProviderAssignment(request.OpenAIBaseUrl));
 
-        return ApplyModelSandboxSettings(localDocument, request.SandboxSettings, originalAssignments);
+        localDocument = ApplyModelSandboxSettings(localDocument, request.SandboxSettings, originalAssignments);
+        localDocument = ApplyNetworkCompatibility(localDocument, request.SandboxSettings, originalAssignments);
+        return ApplyGradleUserHome(localDocument, request.SandboxSettings, originalAssignments, diagnosticRoot);
+    }
+
+    private static TomlRootDocument ApplyGradleUserHome(TomlRootDocument document,
+        ModelSandboxSettings? settings, IReadOnlyDictionary<string, string?> originals, string diagnosticRoot)
+    {
+        var permission = settings?.AdditionalPaths.SingleOrDefault(p => p.UseAsGradleUserHome);
+        if (permission is null) return document;
+        const string key = "shell_environment_policy.set";
+        if (!originals.ContainsKey(key))
+            throw new ChatGptConfigConflictException("旧恢复记录未包含环境快照，请先切换回 OpenAI，再启用 Gradle 用户目录配置。");
+        try { ShellEnvironmentFilterPolicy.EnsureExplicitValueSurvives(document, "GRADLE_USER_HOME"); }
+        catch (Exception exception) when (exception is ChatGptConfigConflictException or InvalidDataException)
+        {
+            RecordGradleEnvironmentAsync(diagnosticRoot, "filter_conflict", false, permission.Path).GetAwaiter().GetResult();
+            throw;
+        }
+        var path = Path.GetFullPath(permission.Path);
+        var existing = document.GetTableStringValue(key, "GRADLE_USER_HOME")
+            ?? Environment.GetEnvironmentVariable("GRADLE_USER_HOME");
+        if (!string.IsNullOrWhiteSpace(existing))
+        {
+            bool same;
+            try
+            {
+                same = Path.IsPathFullyQualified(existing) && string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(existing)),
+                Path.TrimEndingDirectorySeparator(path), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException) { same = false; }
+            if (!same && !permission.ReplaceExistingGradleUserHome)
+            {
+                RecordGradleEnvironmentAsync(diagnosticRoot, "conflict", false, path).GetAwaiter().GetResult();
+                throw new ChatGptConfigConflictException($"已有 Gradle 用户目录：{existing}\n所选目录：{path}\n请沿用原目录，或在该路径下明确勾选允许替换已有 Gradle 用户目录；原值将在关闭功能或返回在线模式时恢复。");
+            }
+        }
+        return document.SetTableString(key, "GRADLE_USER_HOME", path);
+    }
+
+    private static TomlRootDocument ApplyNetworkCompatibility(
+        TomlRootDocument document, ModelSandboxSettings? settings,
+        IReadOnlyDictionary<string, string?> originals)
+    {
+        const string key = "shell_environment_policy.set";
+        // Old recovery snapshots have no environment ownership; leave them untouched.
+        if (originals.TryGetValue(key, out var original))
+            document = document.SetRawDefinition(key, original);
+        if (originals.TryGetValue("developer_instructions", out var originalInstructions))
+            document = document.SetRawDefinition("developer_instructions", originalInstructions);
+        if (settings?.NetworkCompatibilityEnabled != true) return document;
+        if (!originals.ContainsKey(key))
+            throw new ChatGptConfigConflictException("旧恢复记录未包含代理环境快照，请先切换回 OpenAI，再重新启动本地模型以启用联网兼容模式。");
+        if (!originals.ContainsKey("developer_instructions"))
+            throw new ChatGptConfigConflictException("旧恢复记录未包含兼容指令快照，请先切换回 OpenAI，再重新启动本地模型。");
+        if (settings.NetworkAccess != SandboxNetworkAccess.Full)
+            throw new ArgumentException("联网兼容模式需要允许命令联网。");
+        var proxy = Launcher.ChatGPT.Networking.SystemProxyReader.Read();
+        foreach (var pair in proxy.EnvironmentValues)
+            document = document.SetTableString(key, pair.Key, pair.Value);
+        if (proxy.EnvironmentValues.Count > 0)
+        {
+            var bypass = document.GetTableStringValue(key, "NO_PROXY")
+                ?? Environment.GetEnvironmentVariable("NO_PROXY") ?? string.Empty;
+            var hosts = bypass.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Concat(new[] { "localhost", "127.0.0.1", "::1" }).Distinct(StringComparer.OrdinalIgnoreCase);
+            document = document.SetTableString(key, "NO_PROXY", string.Join(",", hosts));
+        }
+        var runtime = Launcher.ChatGPT.Networking.NetworkCompatibilityRuntime.Resolve();
+        document = document.SetTableString(key, "EGG_NETWORK_PYTHON", runtime.PythonPath)
+            .SetTableString(key, "EGG_NETWORK_HELPER", runtime.HelperPath);
+        var existingInstructions = document.GetStringValue("developer_instructions");
+        document = document.SetString("developer_instructions", string.IsNullOrWhiteSpace(existingInstructions)
+            ? runtime.Instructions : existingInstructions + "\n\n" + runtime.Instructions);
+        return document;
     }
 
     private static TomlRootDocument ApplyModelSandboxSettings(
@@ -1349,6 +1434,7 @@ public sealed class ChatGptConfigTransactionService
     {
         foreach (var key in ManagedKeys)
         {
+            if (key is "approval_policy" or "approvals_reviewer") continue;
             if (!assignments.TryGetValue(key, out var assignment))
             {
                 continue;
@@ -1463,7 +1549,7 @@ public sealed class ChatGptConfigTransactionService
                 prepared,
                 restoredDocument,
                 currentState.Revision,
-                CancellationToken.None).ConfigureAwait(false);
+                CancellationToken.None, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!).ConfigureAwait(false);
         }
         else if (!AssignmentsMatch(currentDocument, prepared.OriginalAssignments))
         {
@@ -1486,7 +1572,7 @@ public sealed class ChatGptConfigTransactionService
         ManagedConfigSnapshot snapshot,
         TomlRootDocument restoredDocument,
         ConfigFileRevision expectedRevision,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string diagnosticRoot)
     {
         var restoredText = restoredDocument.ToString();
         if (!snapshot.OriginalConfigExisted && string.IsNullOrWhiteSpace(restoredText))
@@ -1502,7 +1588,7 @@ public sealed class ChatGptConfigTransactionService
             snapshot.ConfigPath,
             restoredText,
             expectedRevision,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken, diagnosticRoot).ConfigureAwait(false);
     }
 
     private void EnsureClientClosed()
@@ -1536,6 +1622,11 @@ public sealed class ChatGptConfigTransactionService
                 nameof(request),
                 "Codex 自动压缩线必须至少为 1,024 tokens，且小于模型上下文容量。");
         }
+
+        var conversationErrors = LongConversationLimits.Validate(
+            request.ContextWindow, request.ContextWindow - request.AutoCompactTokenLimit, request.ToolOutputTokenLimit);
+        if (conversationErrors.Count > 0)
+            throw new ArgumentException(string.Join(Environment.NewLine, conversationErrors), nameof(request));
 
         if (!request.OpenAIBaseUrl.IsAbsoluteUri
             || request.OpenAIBaseUrl.Scheme != Uri.UriSchemeHttp
@@ -1612,9 +1703,14 @@ public sealed class ChatGptConfigTransactionService
         string path,
         string content,
         ConfigFileRevision expectedRevision,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, string diagnosticRoot)
     {
-        _ = new TomlRootDocument(content);
+        var nextDocument = new TomlRootDocument(content);
+        var nextGradle = nextDocument.GetTableStringValue("shell_environment_policy.set", "GRADLE_USER_HOME");
+        var previousGradle = File.Exists(path)
+            ? new TomlRootDocument(await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false))
+                .GetTableStringValue("shell_environment_policy.set", "GRADLE_USER_HOME")
+            : null;
         await WriteTextAtomicallyAsync(
             path,
             content,
@@ -1628,6 +1724,40 @@ public sealed class ChatGptConfigTransactionService
         }
 
         _ = new TomlRootDocument(persisted);
+        if (previousGradle != nextGradle || nextGradle is not null)
+            await RecordGradleEnvironmentAsync(diagnosticRoot, nextDocument.GetStringValue("model_provider") == LocalProviderId
+                ? "configured" : "restored", true, nextGradle).ConfigureAwait(false);
+    }
+
+    private static async Task RecordGradleEnvironmentAsync(string diagnosticRoot, string result, bool configVerified, string? path)
+    {
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(diagnosticRoot);
+            var detailed = false;
+            if (File.Exists(paths.SettingsFile))
+            {
+                using var settings = JsonDocument.Parse(await File.ReadAllTextAsync(paths.SettingsFile).ConfigureAwait(false));
+                foreach (var field in settings.RootElement.EnumerateObject())
+                    if (string.Equals(field.Name, "DetailedDiagnosticsEnabled", StringComparison.OrdinalIgnoreCase))
+                        detailed = field.Value.ValueKind == JsonValueKind.True;
+            }
+            var properties = new Dictionary<string, object?>
+            {
+                ["result"] = result,
+                ["configWriteVerified"] = configVerified,
+                ["variablePresent"] = path is not null,
+                ["scope"] = "codex_command_environment",
+                ["sandboxExecutionVerified"] = false,
+            };
+            if (detailed) properties["gradleUserHome"] = Launcher.Core.Diagnostics.DiagnosticSanitizer.SanitizeText(path, 500);
+            var log = new Launcher.Core.Diagnostics.ModeAwareJsonLineDiagnosticLog(
+                Path.Combine(paths.LogsDirectory, "sandbox-environment.concise.jsonl"),
+                Path.Combine(paths.LogsDirectory, "sandbox-environment.full.jsonl"), detailed);
+            await log.AppendEventAsync(new Launcher.Core.Diagnostics.DiagnosticEvent("gradle_environment_configuration",
+                result is "conflict" or "filter_conflict" ? "warning" : "info", Properties: properties)).ConfigureAwait(false);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException) { }
     }
 
     private static async Task DeleteConfigIfUnchangedAsync(

@@ -4,10 +4,12 @@ using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
 using Launcher.Models.Profiles;
+using Launcher.Core.Configuration;
 using Launcher.Models.Scanning;
 using Launcher.Runtime.Detection;
 using WpfCheckBox = System.Windows.Controls.CheckBox;
 using WpfTextBox = System.Windows.Controls.TextBox;
+using Control = System.Windows.Controls.Control;
 
 namespace Launcher.App;
 
@@ -17,6 +19,10 @@ public partial class ProfileEditorWindow : Window
     private const string CustomGpuLayersChoice = "__custom__";
     private const int FallbackContextLimit = 128 * 1024;
     private const int ContextAlignment = 256;
+    private bool _updatingConversationLimits;
+    private bool _populatingConversationLimits;
+    private int? _choiceContext;
+    private int? _choiceReserve;
 
     private static readonly IReadOnlyList<Choice<int>> CompactionSafetyReserveChoices =
     [
@@ -28,6 +34,13 @@ public partial class ProfileEditorWindow : Window
         new("16K", 16384),
         new("24K", 24576),
         new("32K", 32768),
+    ];
+
+    private readonly IReadOnlyList<Choice<int>> ToolOutputTokenLimitChoices =
+    [
+        new(AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"), 0),
+        new("1K", 1024), new("2K", 2048), new("4K", 4096),
+        new("8K", 8192), new("12K", 12288), new("16K", 16384), new("24K", 24576),
     ];
 
     private readonly IReadOnlyList<Choice<string>> GpuLayerChoices =
@@ -93,6 +106,7 @@ public partial class ProfileEditorWindow : Window
         "threads", "threads-batch", "kv-offload", "no-kv-offload", "load-mode", "lazy-mode",
         "fit", "fit-target", "fit-ctx", "n-cpu-ffn", "split-mode", "tensor-split", "main-gpu",
         "numa", "swa-full", "ctx-checkpoints", "swa-checkpoints", "repack", "no-repack", "op-offload", "no-op-offload", "no-host",
+        "context-shift", "no-context-shift", "keep",
         "rope-scaling", "rope-scale", "rope-freq-base", "rope-freq-scale", "yarn-orig-ctx",
         "yarn-ext-factor", "yarn-attn-factor", "yarn-beta-slow", "yarn-beta-fast", "override-tensor",
         "cpu-moe", "n-cpu-moe",
@@ -153,13 +167,12 @@ public partial class ProfileEditorWindow : Window
         new(AppLanguageManager.Choose("禁用", "Disabled"), -1),
     ];
 
-    private readonly IReadOnlyList<Choice<SandboxNetworkAccess>> SandboxNetworkChoices =
-    [
-        new(AppLanguageManager.Choose("沿用 Codex 默认联网设置", "Inherit Codex network setting"), SandboxNetworkAccess.InheritCodexSettings),
-        new(AppLanguageManager.Choose("禁止命令联网", "Disable command network access"), SandboxNetworkAccess.Disabled),
-        new(AppLanguageManager.Choose("完整联网", "Full network access"), SandboxNetworkAccess.Full),
-    ];
-
+    private readonly Func<ModelProfile, CancellationToken, Task<ContextShiftCapabilityResult>>? _contextShiftProbe;
+    private CancellationTokenSource? _contextShiftCancellation;
+    private bool _changingContextShift;
+    private bool _populatingProfile;
+    private ModelProfile? _probeProfile;
+    private ContextShiftCapabilityResult? _shiftCapability;
     private readonly string _runtimeRoot;
     private readonly ModelProfile _originalProfile;
     private readonly int? _modelContextLimit;
@@ -168,6 +181,8 @@ public partial class ProfileEditorWindow : Window
     private bool? _runtimeSupportsMtp;
     private bool? _runtimeSupportsExternalMtp;
     private bool? _runtimeSupportsContextCheckpoints;
+    private bool? _runtimeSupportsContextShift;
+    private bool? _runtimeSupportsKeep;
     private bool _isPopulatingMtp;
     private MtpCapabilityStatus _displayedMtpCapabilityStatus = MtpCapabilityStatus.Unknown;
     private bool? _runtimeSupportsVision;
@@ -179,16 +194,31 @@ public partial class ProfileEditorWindow : Window
     public ProfileEditorWindow(
         ModelProfile profile,
         string runtimeRoot,
-        IReadOnlySet<string>? runtimeCapabilities = null)
+        IReadOnlySet<string>? runtimeCapabilities = null,
+        Func<ModelProfile, CancellationToken, Task<ContextShiftCapabilityResult>>? contextShiftProbe = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         _originalProfile = profile;
+        _contextShiftProbe = contextShiftProbe;
         _runtimeRoot = Path.GetFullPath(runtimeRoot);
         _modelContextLimit = TryReadModelContextLimit(profile, _runtimeRoot);
         _hasEmbeddedMtpCandidate = TryReadModelMetadata(profile, _runtimeRoot)?.HasEmbeddedMtp == true;
         _contextChoices = BuildContextChoices(_modelContextLimit);
         InitializeComponent();
+        CommonSandboxPathsButton.Content = AppLanguageManager.Choose("添加常用目录 ▾", "Add common directories ▾");
+        CompactionSafetyReserveComboBox.AddHandler(WpfTextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateLongConversationSummary()));
+        ToolOutputTokenLimitComboBox.AddHandler(WpfTextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateLongConversationSummary()));
+        ToolOutputTokenLimitComboBox.SelectionChanged += (_, _) => UpdateLongConversationSummary();
+        Closed += (_, _) => _contextShiftCancellation?.Cancel();
+        ProfileEditorTabs.AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,
+            new SelectionChangedEventHandler((_, e) => InvalidateShiftForParameterChange(e.OriginalSource)));
+        ProfileEditorTabs.AddHandler(WpfTextBox.TextChangedEvent,
+            new TextChangedEventHandler((_, e) => InvalidateShiftForParameterChange(e.OriginalSource)));
+        ProfileEditorTabs.AddHandler(System.Windows.Controls.Primitives.ToggleButton.CheckedEvent,
+            new RoutedEventHandler((_, e) => InvalidateShiftForParameterChange(e.OriginalSource)));
+        ProfileEditorTabs.AddHandler(System.Windows.Controls.Primitives.ToggleButton.UncheckedEvent,
+            new RoutedEventHandler((_, e) => InvalidateShiftForParameterChange(e.OriginalSource)));
         UiMotion.AttachWindowEntrance(this);
         InitializeAdvancedChoices();
         InitializeMtpChoices();
@@ -245,10 +275,17 @@ public partial class ProfileEditorWindow : Window
         var isCustom = ContextSizeComboBox.SelectedValue is CustomContextSizeChoice;
         CustomContextSizeTextBox.Visibility = isCustom ? Visibility.Visible : Visibility.Collapsed;
         UpdateContextRisk();
+        UpdateLongConversationSummary();
     }
 
-    private void CustomContextSizeTextBox_TextChanged(object sender, TextChangedEventArgs e) =>
+    private void CustomContextSizeTextBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
         UpdateContextRisk();
+        UpdateLongConversationSummary();
+    }
+
+    private void CompactionSafetyReserveComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) =>
+        UpdateLongConversationSummary();
 
     private void GpuLayersComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -280,7 +317,108 @@ public partial class ProfileEditorWindow : Window
         UpdateMtpUiState();
     }
 
-    private void VisionEnableCheckBox_Changed(object sender, RoutedEventArgs e) => UpdateVisionUiState();
+    private void VisionEnableCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdateVisionUiState();
+        UpdateContextShiftUiState();
+    }
+
+    private void InvalidateShiftForParameterChange(object source)
+    {
+        if (!IsLoaded || _populatingProfile || _changingContextShift || _contextShiftCancellation is not null) return;
+        // Sandbox controls do not change llama.cpp context-shift capability.
+        // Exclude the entire tab, including dynamically generated path controls.
+        for (var ancestor = source as FrameworkElement; ancestor is not null;
+             ancestor = ancestor.Parent as FrameworkElement
+                 ?? System.Windows.Media.VisualTreeHelper.GetParent(ancestor) as FrameworkElement)
+            if (ReferenceEquals(ancestor, SandboxSettingsTab)) return;
+        if (source is System.Windows.Controls.Primitives.ToggleButton && source is not WpfCheckBox) return;
+        var element = source as FrameworkElement;
+        while (element?.TemplatedParent is FrameworkElement owner) element = owner;
+        while (element is not null && (string.IsNullOrWhiteSpace(element.Name) || element.Name.StartsWith("PART_", StringComparison.Ordinal)))
+            element = System.Windows.Media.VisualTreeHelper.GetParent(element) as FrameworkElement;
+        if (element is null || element.Name is "ContextShiftCheckBox" or "ProfileEditorTabs"
+            or "CompactionSafetyReserveComboBox" or "ToolOutputTokenLimitComboBox"
+            or "DisplayNameTextBox") return;
+        _shiftCapability = null;
+        _changingContextShift = true;
+        ContextShiftCheckBox.IsChecked = false;
+        _changingContextShift = false;
+        UpdateContextShiftUiState();
+    }
+
+    private async void ContextShiftCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_changingContextShift || !IsLoaded) return;
+        if (ContextShiftCheckBox.IsChecked != true) { UpdateContextShiftUiState(); return; }
+        _changingContextShift = true;
+        ContextShiftCheckBox.IsChecked = false;
+        _changingContextShift = false;
+        await DetectContextShiftAsync(force: false);
+    }
+
+    private async void ContextShiftDetectButton_Click(object sender, RoutedEventArgs e) => await DetectContextShiftAsync(force: true);
+    private void ContextShiftCancelButton_Click(object sender, RoutedEventArgs e) => _contextShiftCancellation?.Cancel();
+
+    private async Task DetectContextShiftAsync(bool force)
+    {
+        if (_contextShiftCancellation is not null) return;
+        _changingContextShift = true;
+        ContextShiftCheckBox.IsChecked = false;
+        _changingContextShift = false;
+        _probeProfile = null;
+        CompleteSave(false, captureForProbe: true);
+        if (_probeProfile is null) return;
+        var candidate = _probeProfile with { ContextShiftEnabled = true };
+        _shiftCapability = force ? null : ContextShiftCapabilityCache.Read(candidate, _runtimeRoot);
+        if (_shiftCapability?.Supported is not null)
+        {
+            _changingContextShift = true;
+            ContextShiftCheckBox.IsChecked = _shiftCapability.Supported == true;
+            _changingContextShift = false;
+            UpdateContextShiftUiState();
+            return;
+        }
+        if (_contextShiftProbe is null || _runtimeSupportsContextShift != true || candidate.VisionEnabled)
+        {
+            _shiftCapability = new(false, AppLanguageManager.Choose("当前 Runtime 或视觉配置不支持滚动。", "The runtime or vision configuration does not support shifting."), DateTimeOffset.UtcNow);
+            UpdateContextShiftUiState();
+            return;
+        }
+        _contextShiftCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(15));
+        ProfileEditorTabs.IsEnabled = false;
+        SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = RestoreModelDefaultsButton.IsEnabled = false;
+        ContextShiftCancelButton.Visibility = Visibility.Visible;
+        UpdateContextShiftUiState();
+        try
+        {
+            _shiftCapability = await _contextShiftProbe(candidate, _contextShiftCancellation.Token);
+            _changingContextShift = true;
+            ContextShiftCheckBox.IsChecked = _shiftCapability.Supported == true;
+            _changingContextShift = false;
+        }
+        catch (OperationCanceledException)
+        {
+            _shiftCapability = new(null, AppLanguageManager.Choose("检测已取消或超时；滚动保持关闭。", "Detection canceled or timed out; shifting remains off."), DateTimeOffset.UtcNow);
+        }
+        catch (Exception exception)
+        {
+            _shiftCapability = ContextShiftCapabilityCache.Read(candidate, _runtimeRoot) is { Supported: false } disabled
+                ? disabled : new(null, exception.Message, DateTimeOffset.UtcNow);
+        }
+        finally
+        {
+            _contextShiftCancellation.Dispose();
+            _contextShiftCancellation = null;
+            ProfileEditorTabs.IsEnabled = true;
+            UpdateLongConversationSummary();
+            RestoreModelDefaultsButton.IsEnabled = _originalProfile.DefaultParameters is not null;
+            ContextShiftCancelButton.Visibility = Visibility.Collapsed;
+            UpdateContextShiftUiState();
+        }
+    }
+
+    private void KeepTokensTextBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateKeepUiState();
 
     private void VisionParameter_Changed(object sender, RoutedEventArgs e)
     {
@@ -290,18 +428,42 @@ public partial class ProfileEditorWindow : Window
         }
     }
 
-    private void SandboxNetworkAccess_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (!_isPopulatingSandbox)
-        {
-            _sandboxSettingsEdited = true;
-        }
-    }
-
     private void AddSandboxPathButton_Click(object sender, RoutedEventArgs e) => AddSandboxPathRow(markEdited: true);
 
-    private void CompleteSave(bool saveAsModelDefault)
+    private void CompleteSave(bool saveAsModelDefault, bool captureForProbe = false)
     {
+        var contextShiftEnabled = ContextShiftCheckBox.IsChecked == true;
+        var visionEnabled = VisionEnableCheckBox.IsChecked == true;
+        if (visionEnabled && contextShiftEnabled)
+        {
+            MessageBox.Show(
+                this,
+                AppLanguageManager.Text("ContextShiftVisionConflictError"),
+                AppLanguageManager.Text("ContextShiftErrorTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!captureForProbe && contextShiftEnabled && _runtimeSupportsContextShift != true)
+        {
+            var errorKey = _runtimeSupportsContextShift is null
+                ? "ContextShiftUnknownSaveError"
+                : "ContextShiftUnsupportedSaveError";
+            MessageBox.Show(
+                this,
+                AppLanguageManager.Text(errorKey),
+                AppLanguageManager.Text("ContextShiftErrorTitle"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryGetConversationLimits(out var reserve, out var toolLimit, out var limitsError))
+        {
+            MessageBox.Show(this, limitsError, AppLanguageManager.Choose("长对话参数无效", "Invalid Conversation Limits"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         if (!TryGetSelectedContextSize(out var contextSize, out var contextError))
         {
             MessageBox.Show(
@@ -354,7 +516,7 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
-        if (mtp.Enabled
+        if (!captureForProbe && mtp.Enabled
             && SelectedValue<int>(ParallelComboBox) > 1
             && MessageBox.Show(
                 this,
@@ -374,7 +536,8 @@ public partial class ProfileEditorWindow : Window
             SchemaVersion = ModelProfile.CurrentSchemaVersion,
             DisplayName = DisplayNameTextBox.Text.Trim(),
             ContextSize = contextSize,
-            CompactionSafetyReserve = SelectedValue<int>(CompactionSafetyReserveComboBox),
+            CompactionSafetyReserve = reserve,
+            ToolOutputTokenLimit = toolLimit,
             GpuLayers = gpuLayers,
             Device = NullWhenWhiteSpace(DeviceTextBox.Text),
             MoeExpertPlacement = moePlacement,
@@ -390,6 +553,7 @@ public partial class ProfileEditorWindow : Window
             ChatTemplateRelativePath = NullWhenWhiteSpace(ChatTemplatePathTextBox.Text),
             ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsEnabled
                 && ReasoningEffortCheckBox.IsChecked == true,
+            ContextShiftEnabled = contextShiftEnabled,
             MtpEnabled = mtp.Enabled,
             MtpSource = mtp.Source,
             MtpCapabilityStatus = mtp.CapabilityStatus,
@@ -428,6 +592,17 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
+        if (captureForProbe) { _probeProfile = updated; return; }
+        if (updated.ContextShiftEnabled && ContextShiftCapabilityCache.Read(updated, _runtimeRoot)?.Supported != true)
+        {
+            _changingContextShift = true;
+            ContextShiftCheckBox.IsChecked = false;
+            _changingContextShift = false;
+            _shiftCapability = null;
+            UpdateContextShiftUiState();
+            MessageBox.Show(this, AppLanguageManager.Choose("当前参数尚未验证滚动能力，请重新开启开关进行检测。", "Shifting is not verified for these parameters. Enable the switch again to detect support."));
+            return;
+        }
         if (saveAsModelDefault)
         {
             var answer = MessageBox.Show(
@@ -454,6 +629,8 @@ public partial class ProfileEditorWindow : Window
 
     private void Populate(ModelProfile profile, bool populateSandbox = true)
     {
+        _populatingConversationLimits = true;
+        _populatingProfile = true;
         DisplayNameTextBox.Text = profile.DisplayName;
         AliasTextBox.Text = profile.Alias;
         ModelPathTextBox.Text = profile.ModelRelativePath;
@@ -492,6 +669,21 @@ public partial class ProfileEditorWindow : Window
             CompactionSafetyReserveChoices,
             profile.CompactionSafetyReserve,
             profile.CompactionSafetyReserve.ToString("N0"));
+        PopulateChoices(
+            ToolOutputTokenLimitComboBox,
+            ToolOutputTokenLimitChoices,
+            profile.ToolOutputTokenLimit ?? 0,
+            profile.ToolOutputTokenLimit?.ToString("N0") ?? AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"));
+        CompactionSafetyReserveComboBox.Text = FormatContextSize(profile.CompactionSafetyReserve);
+        ToolOutputTokenLimitComboBox.Text = profile.ToolOutputTokenLimit is int storedLimit
+            ? FormatContextSize(storedLimit) : AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
+        _choiceContext = _choiceReserve = null;
+        _shiftCapability = ContextShiftCapabilityCache.Read(profile, _runtimeRoot);
+        _probeProfile = profile;
+        _changingContextShift = true;
+        ContextShiftCheckBox.IsChecked = profile.ContextShiftEnabled && _shiftCapability?.Supported == true;
+        _changingContextShift = false;
+        UpdateContextShiftUiState();
         if (GpuLayerChoices.Any(choice => choice.Value == profile.GpuLayers))
         {
             GpuLayersComboBox.ItemsSource = GpuLayerChoices;
@@ -533,14 +725,22 @@ public partial class ProfileEditorWindow : Window
         }
 
         UpdateContextRisk();
+        _populatingConversationLimits = false;
+        UpdateLongConversationSummary();
+        _populatingProfile = false;
     }
 
     private void PopulateSandbox(ModelProfile profile)
     {
         _isPopulatingSandbox = true;
-        SandboxNetworkAccessComboBox.ItemsSource = SandboxNetworkChoices;
-        SandboxNetworkAccessComboBox.SelectedValue = profile.SandboxSettings?.NetworkAccess
-            ?? SandboxNetworkAccess.InheritCodexSettings;
+        SandboxNetworkCheckBox.IsChecked = profile.SandboxSettings?.NetworkAccess switch
+        {
+            SandboxNetworkAccess.Full => true,
+            SandboxNetworkAccess.Disabled => false,
+            _ => null,
+        };
+        SandboxCompatibilityCheckBox.IsChecked = profile.SandboxSettings?.NetworkCompatibilityEnabled == true;
+        UpdateSandboxNetworkState();
         SandboxPathsPanel.Children.Clear();
         _sandboxPathRows.Clear();
         foreach (var permission in profile.SandboxSettings?.AdditionalPaths ?? Array.Empty<SandboxPathPermission>())
@@ -555,7 +755,9 @@ public partial class ProfileEditorWindow : Window
         SandboxPathPermission? permission = null,
         bool markEdited = false)
     {
-        var row = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        var row = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -565,7 +767,7 @@ public partial class ProfileEditorWindow : Window
         {
             Text = permission?.Path ?? string.Empty,
             Margin = new Thickness(0, 0, 8, 0),
-            Padding = new Thickness(9, 7, 9, 7),
+            Padding = new Thickness(10, 0, 10, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
             ToolTip = AppLanguageManager.Choose("输入或选择要开放给此模型的绝对路径。", "Enter or browse to an absolute path for this model."),
         };
@@ -588,6 +790,9 @@ public partial class ProfileEditorWindow : Window
         var browseButton = new Button
         {
             Content = AppLanguageManager.Choose("浏览…", "Browse…"),
+            MinHeight = 32,
+            Height = 32,
+            VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(10, 6, 10, 6),
             Margin = new Thickness(0, 0, 8, 0),
         };
@@ -598,13 +803,45 @@ public partial class ProfileEditorWindow : Window
         var removeButton = new Button
         {
             Content = AppLanguageManager.Choose("移除", "Remove"),
+            MinHeight = 32,
+            Height = 32,
+            VerticalAlignment = VerticalAlignment.Center,
             Padding = new Thickness(10, 6, 10, 6),
         };
-        var pathRow = new SandboxPathRow(row, pathTextBox, allowWriteCheckBox);
+        var gradleCheckBox = new WpfCheckBox
+        {
+            Content = AppLanguageManager.Choose("同时设为 Gradle 用户目录", "Also use as Gradle user home"),
+            IsChecked = permission?.UseAsGradleUserHome == true,
+            IsEnabled = allowWriteCheckBox.IsChecked == true,
+        };
+        var replaceGradleCheckBox = new WpfCheckBox
+        {
+            Content = AppLanguageManager.Choose("允许替换已有 Gradle 用户目录（仅本地模式）", "Allow replacing existing Gradle user home (Local mode only)"),
+            IsChecked = permission?.ReplaceExistingGradleUserHome == true,
+            IsEnabled = gradleCheckBox.IsChecked == true,
+            Margin = new Thickness(0, 6, 0, 0),
+        };
+        var isGradleDirectory = permission?.IsGradleDirectory == true || permission?.UseAsGradleUserHome == true;
+        gradleCheckBox.Checked += (_, _) => { replaceGradleCheckBox.IsEnabled = true; MarkSandboxSettingsEdited(); };
+        gradleCheckBox.Unchecked += (_, _) => { replaceGradleCheckBox.IsChecked = false; replaceGradleCheckBox.IsEnabled = false; MarkSandboxSettingsEdited(); };
+        replaceGradleCheckBox.Checked += (_, _) => MarkSandboxSettingsEdited();
+        replaceGradleCheckBox.Unchecked += (_, _) => MarkSandboxSettingsEdited();
+        allowWriteCheckBox.Checked += (_, _) => gradleCheckBox.IsEnabled = true;
+        allowWriteCheckBox.Unchecked += (_, _) =>
+        {
+            if (gradleCheckBox.IsChecked == true && !_isPopulatingSandbox)
+                System.Windows.MessageBox.Show(this, AppLanguageManager.Choose("改为只读后，已取消 Gradle 用户目录配置。", "Gradle user home configuration was disabled when access became read-only."));
+            gradleCheckBox.IsChecked = false;
+            gradleCheckBox.IsEnabled = false;
+        };
+        var pathRow = new SandboxPathRow(row, pathTextBox, allowWriteCheckBox, gradleCheckBox, replaceGradleCheckBox, isGradleDirectory);
+        if (isGradleDirectory) AddGradleDirectoryControls(pathRow);
         removeButton.Click += (_, _) =>
         {
+            if (gradleCheckBox.IsChecked == true)
+                System.Windows.MessageBox.Show(this, AppLanguageManager.Choose("移除此路径将同时取消 Gradle 用户目录配置；保存并重新启动后生效。", "Removing this path also disables Gradle user home configuration; save and restart to apply."));
             SandboxPathsPanel.Children.Remove(row);
-            _sandboxPathRows.Remove(pathRow);
+            _sandboxPathRows.RemoveAll(candidate => ReferenceEquals(candidate.Container, row));
             MarkSandboxSettingsEdited();
         };
         Grid.SetColumn(removeButton, 3);
@@ -618,6 +855,23 @@ public partial class ProfileEditorWindow : Window
         }
 
         return pathRow;
+    }
+
+    private static void AddGradleDirectoryControls(SandboxPathRow pathRow)
+    {
+        var options = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
+        options.Children.Add(pathRow.GradleCheckBox);
+        options.Children.Add(pathRow.ReplaceGradleCheckBox);
+        options.Children.Add(new TextBlock
+        {
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 5, 0, 0),
+            Text = AppLanguageManager.Choose("用于缓存、用户配置及初始化脚本。保存后重启客户端，并新建聊天。", "Used for caches, user configuration and init scripts. Save, restart the client and start a new chat.")
+        });
+        Grid.SetRow(options, 1);
+        Grid.SetColumnSpan(options, 4);
+        pathRow.Container.Children.Add(options);
     }
 
     private void BrowseSandboxPath(WpfTextBox pathTextBox)
@@ -652,17 +906,21 @@ public partial class ProfileEditorWindow : Window
             return true;
         }
 
-        var networkAccess = SelectedValue<SandboxNetworkAccess>(SandboxNetworkAccessComboBox);
+        var networkAccess = CurrentSandboxNetworkAccess;
         var paths = _sandboxPathRows
             .Where(row => !string.IsNullOrWhiteSpace(row.PathTextBox.Text))
             .Select(row => new SandboxPathPermission
             {
                 Path = row.PathTextBox.Text.Trim(),
                 AllowWrite = row.AllowWriteCheckBox.IsChecked == true,
+                IsGradleDirectory = row.IsGradleDirectory,
+                UseAsGradleUserHome = row.GradleCheckBox.IsChecked == true,
+                ReplaceExistingGradleUserHome = row.ReplaceGradleCheckBox.IsChecked == true && row.GradleCheckBox.IsChecked == true,
             })
             .ToArray();
 
-        if (networkAccess == SandboxNetworkAccess.InheritCodexSettings && paths.Length == 0)
+        if (networkAccess == SandboxNetworkAccess.InheritCodexSettings && paths.Length == 0
+            && SandboxCompatibilityCheckBox.IsChecked != true)
         {
             settings = null;
             error = string.Empty;
@@ -672,6 +930,7 @@ public partial class ProfileEditorWindow : Window
         settings = new ModelSandboxSettings
         {
             NetworkAccess = networkAccess,
+            NetworkCompatibilityEnabled = SandboxCompatibilityCheckBox.IsChecked == true,
             AdditionalPaths = paths,
         };
         var validationErrors = ModelSandboxSettingsValidator.Validate(settings);
@@ -767,7 +1026,11 @@ public partial class ProfileEditorWindow : Window
             _runtimeSupportsMtp = null;
             _runtimeSupportsExternalMtp = null;
             _runtimeSupportsContextCheckpoints = null;
+            _runtimeSupportsContextShift = null;
+            _runtimeSupportsKeep = null;
             UpdateContextCheckpointsUiState();
+            UpdateContextShiftUiState();
+            UpdateKeepUiState();
             _runtimeSupportsVision = null;
             UpdateMtpUiState();
             UpdateVisionUiState();
@@ -778,9 +1041,13 @@ public partial class ProfileEditorWindow : Window
         _runtimeSupportsExternalMtp = capabilities.Contains("spec-draft-model");
         _runtimeSupportsContextCheckpoints = capabilities.Contains("ctx-checkpoints")
             || capabilities.Contains("swa-checkpoints");
+        _runtimeSupportsContextShift = capabilities.Contains("context-shift");
+        _runtimeSupportsKeep = capabilities.Contains("keep");
         _runtimeSupportsVision = capabilities.Contains("mmproj");
 
         UpdateContextCheckpointsUiState();
+        UpdateContextShiftUiState();
+        UpdateKeepUiState();
 
         foreach (var (control, option) in new (FrameworkElement, string)[]
                  {
@@ -1069,6 +1336,9 @@ public partial class ProfileEditorWindow : Window
             CtxCheckpointsTextBox.Text = ReadArgument(extra, "swa-checkpoints");
         }
         UpdateContextCheckpointsUiState();
+        KeepTokensTextBox.Text = extra.FirstOrDefault(
+            pair => pair.Key.Equals("keep", StringComparison.OrdinalIgnoreCase)).Value ?? string.Empty;
+        UpdateKeepUiState();
         Select(RepackComboBox, extra.ContainsKey("no-repack") ? "off" : extra.ContainsKey("repack") ? "on" : string.Empty);
         Select(OpOffloadComboBox, extra.ContainsKey("no-op-offload") ? "off" : extra.ContainsKey("op-offload") ? "on" : string.Empty);
         Select(NoHostComboBox, extra.ContainsKey("no-host") ? "on" : string.Empty);
@@ -1333,6 +1603,105 @@ public partial class ProfileEditorWindow : Window
                 : Visibility.Collapsed;
     }
 
+    private void UpdateLongConversationSummary()
+    {
+        if (_updatingConversationLimits || _populatingConversationLimits
+            || ConversationValidationTextBlock is null || SaveProfileButton is null) return;
+        _updatingConversationLimits = true;
+        try
+        {
+            var hasContext = TryGetSelectedContextSize(out var context, out var contextError);
+            if (hasContext && context <= 0)
+            {
+                hasContext = false;
+                contextError = AppLanguageManager.Choose("请设置明确的 Context，才能校验长对话参数关系。", "Set an explicit Context to validate the conversation limits.");
+            }
+            var hasReserve = TryParseContextSize(CompactionSafetyReserveComboBox.Text, out var reserve);
+            var toolText = ToolOutputTokenLimitComboBox.Text.Trim();
+            var inherit = toolText == AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
+            var hasTool = TryParseContextSize(toolText, out var tool);
+
+            if (hasContext && _choiceContext != context)
+            {
+                RebuildLimitChoices(CompactionSafetyReserveComboBox,
+                    LongConversationLimits.MinimumReserve(context), LongConversationLimits.MaximumReserve(context), false);
+                _choiceContext = context;
+            }
+            if (hasReserve && _choiceReserve != reserve)
+            {
+                RebuildLimitChoices(ToolOutputTokenLimitComboBox, LongConversationLimits.MinimumTokens,
+                    reserve - 1, true);
+                _choiceReserve = reserve;
+            }
+
+            var errors = new List<string>();
+            var warnings = new List<string>();
+            if (!hasContext) errors.Add(contextError);
+            if (!hasReserve) errors.Add(AppLanguageManager.Choose("请输入有效的安全余量：整数 tokens 或 K。", "Enter a valid reserve in integer tokens or K."));
+            if (!inherit && !hasTool) errors.Add(AppLanguageManager.Choose("请输入有效的工具结果上限：整数 tokens 或 K。", "Enter a valid tool limit in integer tokens or K."));
+            if (hasContext && hasReserve)
+                errors.AddRange(LongConversationLimits.Validate(context, reserve, !inherit && hasTool ? tool : null));
+
+            ReserveRangeTextBlock.Text = hasContext
+                ? LongConversationLimits.MinimumReserve(context) <= LongConversationLimits.MaximumReserve(context)
+                    ? AppLanguageManager.Choose($"范围：{LongConversationLimits.MinimumReserve(context):N0}～{LongConversationLimits.MaximumReserve(context):N0} tokens", $"Range: {LongConversationLimits.MinimumReserve(context):N0}–{LongConversationLimits.MaximumReserve(context):N0} tokens")
+                    : AppLanguageManager.Choose("当前上下文没有可用的安全余量范围。", "No valid reserve range for this context.")
+                : AppLanguageManager.Choose("请先输入有效 Context。", "Enter a valid Context first.");
+            ToolRangeTextBlock.Text = hasReserve && reserve > LongConversationLimits.MinimumTokens
+                ? AppLanguageManager.Choose($"显式值范围：1,024～{reserve - 1:N0} tokens", $"Explicit range: 1,024–{reserve - 1:N0} tokens")
+                : AppLanguageManager.Choose("当前余量没有可用的显式工具上限；至少需要 1,025 tokens 余量。", "No valid explicit tool limit; the reserve must be at least 1,025 tokens.");
+            var reserveInvalid = !hasReserve || (hasContext
+                && (reserve < LongConversationLimits.MinimumReserve(context) || reserve > LongConversationLimits.MaximumReserve(context)));
+            var toolInvalid = !inherit && (!hasTool || tool < LongConversationLimits.MinimumTokens || !hasReserve || tool >= reserve);
+            ReserveRangeTextBlock.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, reserveInvalid ? "ProfileWarningBrush" : "MutedBrush");
+            ToolRangeTextBlock.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, toolInvalid ? "ProfileWarningBrush" : "MutedBrush");
+            if (reserveInvalid) CompactionSafetyReserveComboBox.SetResourceReference(Control.BorderBrushProperty, "DangerBrush");
+            else CompactionSafetyReserveComboBox.ClearValue(Control.BorderBrushProperty);
+            if (toolInvalid) ToolOutputTokenLimitComboBox.SetResourceReference(Control.BorderBrushProperty, "DangerBrush");
+            else ToolOutputTokenLimitComboBox.ClearValue(Control.BorderBrushProperty);
+            if (hasContext && hasReserve && reserve > 0 && reserve < context)
+            {
+                var threshold = context - reserve;
+                AutoCompactThresholdTextBlock.Text = AppLanguageManager.Choose(
+                    $"Codex 自动压缩线：{FormatContextSize(threshold)}（{threshold:N0} tokens）", $"Codex auto-compaction: {FormatContextSize(threshold)} ({threshold:N0} tokens)");
+            }
+            else AutoCompactThresholdTextBlock.Text = AppLanguageManager.Choose("自动压缩线：等待有效参数。", "Auto-compaction: awaiting valid values.");
+
+            if (inherit) warnings.Add(AppLanguageManager.Choose("继承值未知，无法校验与安全余量的关系；可改为显式输入。", "Inherited value is unknown; its relation to the reserve cannot be validated. You can enter an explicit value."));
+            if (hasReserve && hasTool && !inherit && tool < reserve && reserve - tool < 1024)
+                warnings.Add(AppLanguageManager.Choose("工具上限接近安全余量，其他新增内容可用空间不足 1K。", "The tool limit is close to the reserve; less than 1K remains for other new content."));
+            if (hasContext && hasReserve && (long)reserve * 2 > context)
+                warnings.Add(AppLanguageManager.Choose("安全余量超过上下文的一半，可能增加压缩频率。", "The reserve exceeds half the context and may increase compaction frequency."));
+            warnings.Add(AppLanguageManager.Choose("10% 摘要预留是经验保护；实际压缩输入可能超过触发线，不能保证不溢出。", "The 10% summary allowance is empirical; actual compaction input can exceed the trigger, so overflow is still possible."));
+            ConversationValidationTextBlock.Text = string.Join(Environment.NewLine, errors.Concat(warnings));
+            ConversationValidationTextBlock.Visibility = Visibility.Visible;
+            CompactionSafetyReserveComboBox.ToolTip = ReserveRangeTextBlock.Text;
+            ToolOutputTokenLimitComboBox.ToolTip = ToolRangeTextBlock.Text;
+            SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = errors.Count == 0 && _contextShiftCancellation is null;
+        }
+        finally { _updatingConversationLimits = false; }
+    }
+
+    private static void RebuildLimitChoices(ComboBox combo, int minimum, int maximum, bool inherit)
+    {
+        var text = combo.Text;
+        var editor = combo.Template?.FindName("PART_EditableTextBox", combo) as WpfTextBox;
+        var caret = editor?.SelectionStart ?? 0;
+        var selection = editor?.SelectionLength ?? 0;
+        var values = new SortedSet<int>();
+        foreach (var k in new[] { 1, 2, 4, 8, 12, 16, 20, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512 })
+            if (k * 1024 >= minimum && k * 1024 <= maximum) values.Add(k * 1024);
+        for (long value = 1024 * 1024; value <= maximum; value *= 2)
+            if (value >= minimum) values.Add((int)value);
+        if (TryParseContextSize(text, out var current) && current >= minimum && current <= maximum) values.Add(current);
+        if (values.Count == 0 && minimum <= maximum) values.Add(minimum);
+        var choices = values.Select(value => new Choice<int>(FormatContextSize(value), value)).ToList();
+        if (inherit) choices.Insert(0, new Choice<int>(AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"), 0));
+        combo.ItemsSource = choices;
+        combo.Text = text;
+        if (editor is not null) editor.Select(Math.Min(caret, text.Length), Math.Min(selection, Math.Max(0, text.Length - caret)));
+    }
+
     private static int? TryReadModelContextLimit(ModelProfile profile, string runtimeRoot)
         => TryReadModelMetadata(profile, runtimeRoot)?.ContextLength;
 
@@ -1417,6 +1786,8 @@ public partial class ProfileEditorWindow : Window
             {
                 return false;
             }
+
+            if (kibibytes <= 0 || kibibytes > int.MaxValue / 1024m) return false;
 
             var tokenCount = kibibytes * 1024;
             if (tokenCount != decimal.Truncate(tokenCount) || tokenCount is <= 0 or > int.MaxValue)
@@ -1533,6 +1904,10 @@ public partial class ProfileEditorWindow : Window
         {
             extra.Remove(key);
         }
+        foreach (var key in extra.Keys.Where(key => key.Equals("keep", StringComparison.OrdinalIgnoreCase)).ToArray())
+        {
+            extra.Remove(key);
+        }
 
         if (!ValidateOptionalNonNegativeIntegers(
                 out error,
@@ -1541,7 +1916,8 @@ public partial class ProfileEditorWindow : Window
                 (AppLanguageManager.Choose("Fit 最低上下文", "Fit Minimum Context"), FitContextTextBox.Text, false),
                 (AppLanguageManager.Choose("CPU Dense FFN 层数", "CPU Dense FFN Layers"), CpuFfnLayersTextBox.Text, true),
                 (AppLanguageManager.Choose("主 GPU", "Main GPU"), MainGpuTextBox.Text, true),
-                (AppLanguageManager.Choose("上下文检查点", "Context Checkpoints"), CtxCheckpointsTextBox.Text, true)))
+                (AppLanguageManager.Choose("上下文检查点", "Context Checkpoints"), CtxCheckpointsTextBox.Text, true),
+                ("--keep", KeepTokensTextBox.Text, true)))
         {
             arguments = extra;
             return false;
@@ -1557,9 +1933,19 @@ public partial class ProfileEditorWindow : Window
             return false;
         }
 
+        if (!string.IsNullOrWhiteSpace(KeepTokensTextBox.Text) && _runtimeSupportsKeep != true)
+        {
+            arguments = extra;
+            error = AppLanguageManager.Choose(
+                "无法确认当前 llama.cpp Runtime 支持 --keep；清空此项后才能保存。",
+                "Support for --keep cannot be confirmed in the current llama.cpp Runtime. Clear this field before saving.");
+            return false;
+        }
+
         AddOptional(extra, "threads", ThreadsTextBox.Text);
         AddOptional(extra, "threads-batch", ThreadsBatchTextBox.Text);
         AddOptional(extra, "ctx-checkpoints", CtxCheckpointsTextBox.Text);
+        AddOptional(extra, "keep", KeepTokensTextBox.Text);
         AddToggle(extra, KvOffloadComboBox, "kv-offload", "no-kv-offload");
         AddOptional(extra, "load-mode", _originalProfile.ModelType == ModelType.MoE
             ? SelectedValue<string>(MoeLoadModeComboBox)
@@ -1614,6 +2000,68 @@ public partial class ProfileEditorWindow : Window
 
         CtxCheckpointsTextBox.IsEnabled = true;
         CtxCheckpointsTextBox.SetResourceReference(FrameworkElement.ToolTipProperty, "ContextCheckpointsTip");
+    }
+
+    private void UpdateKeepUiState()
+    {
+        if (KeepTokensTextBox is null || KeepTokensStatusTextBlock is null)
+        {
+            return;
+        }
+
+        var hasValue = !string.IsNullOrWhiteSpace(KeepTokensTextBox.Text);
+        KeepTokensTextBox.IsEnabled = hasValue || _runtimeSupportsKeep == true;
+        KeepTokensStatusTextBlock.Visibility = _runtimeSupportsKeep == true
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        KeepTokensStatusTextBlock.Text = _runtimeSupportsKeep switch
+        {
+            false => AppLanguageManager.Choose(
+                "当前 llama.cpp Runtime 未报告 --keep。", "The current llama.cpp Runtime does not report --keep."),
+            _ => AppLanguageManager.Choose(
+                "尚未确认当前 Runtime 是否支持 --keep。", "Support for --keep has not yet been confirmed for this Runtime."),
+        };
+    }
+
+    private bool TryGetConversationLimits(out int reserve, out int? toolLimit, out string error)
+    {
+        toolLimit = null;
+        var toolText = ToolOutputTokenLimitComboBox?.Text?.Trim() ?? string.Empty;
+        var inherit = toolText == AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
+        if (!TryParseContextSize(CompactionSafetyReserveComboBox?.Text, out reserve) || reserve < 1024
+            || (!inherit && (!TryParseContextSize(toolText, out var tool) || tool < 1024 || tool >= reserve)))
+        {
+            error = AppLanguageManager.Choose("安全余量至少为 1,024 tokens；工具上限至少为 1,024 tokens 且严格小于安全余量。输入整数 tokens 或整数 K（1K=1,024）。", "Reserve must be at least 1,024 tokens. A tool limit must be at least 1,024 and smaller than the reserve. Enter integer tokens or integer K (1K=1,024).");
+            return false;
+        }
+        if (!inherit) { TryParseContextSize(toolText, out var parsedTool); toolLimit = parsedTool; }
+        if (!TryGetSelectedContextSize(out var context, out error)) return false;
+        if (context <= 0)
+        {
+            error = AppLanguageManager.Choose("请设置明确的 Context，才能校验长对话参数关系。", "Set an explicit Context to validate the conversation limits.");
+            return false;
+        }
+        var errors = LongConversationLimits.Validate(context, reserve, toolLimit);
+        if (errors.Count > 0) { error = string.Join(Environment.NewLine, errors); return false; }
+        error = string.Empty;
+        return true;
+    }
+
+    private void UpdateContextShiftUiState()
+    {
+        if (ContextShiftCheckBox is null || ContextShiftStatusTextBlock is null) return;
+        var busy = _contextShiftCancellation is not null;
+        var blocked = _shiftCapability?.Supported == false || _runtimeSupportsContextShift == false
+            || VisionEnableCheckBox.IsChecked == true;
+        ContextShiftCheckBox.IsEnabled = !busy && !blocked;
+        ContextShiftDetectButton.IsEnabled = !busy && _runtimeSupportsContextShift == true && VisionEnableCheckBox.IsChecked != true;
+        ContextShiftStatusTextBlock.Visibility = Visibility.Visible;
+        ContextShiftStatusTextBlock.Text = busy
+            ? AppLanguageManager.Choose("正在加载模型并确认实际滚动；可能需要几分钟，可取消。", "Loading the model and confirming actual shifting; this may take several minutes. You can cancel.")
+            : (_shiftCapability?.Reason ?? AppLanguageManager.Choose("尚未验证当前配置；首次开启时检测。", "This configuration is unverified; checked on first enable."))
+                + Environment.NewLine + (ContextShiftCheckBox.IsChecked == true
+                    ? AppLanguageManager.Choose("开启：显式使用 --context-shift。", "On: explicitly uses --context-shift.")
+                    : AppLanguageManager.Choose("关闭：显式使用 --no-context-shift；触顶停止，工具参数仍可能被截断。", "Off: explicitly uses --no-context-shift; generation stops at capacity, and tool arguments may be truncated."));
     }
 
     private static bool ValidateOptionalNonNegativeIntegers(
@@ -1750,7 +2198,10 @@ public partial class ProfileEditorWindow : Window
     private sealed record SandboxPathRow(
         Grid Container,
         WpfTextBox PathTextBox,
-        WpfCheckBox AllowWriteCheckBox);
+        WpfCheckBox AllowWriteCheckBox,
+        WpfCheckBox GradleCheckBox,
+        WpfCheckBox ReplaceGradleCheckBox,
+        bool IsGradleDirectory);
 
     private sealed record Choice<T>(string Label, T Value)
     {

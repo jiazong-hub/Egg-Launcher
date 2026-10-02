@@ -61,6 +61,8 @@ public static class BatchScriptGenerator
             arguments.Add($"--parallel {profile.Parallel.ToString(CultureInfo.InvariantCulture)}");
         }
 
+        arguments.Add(profile.ContextShiftEnabled ? "--context-shift" : "--no-context-shift");
+
         arguments.Add(profile.Jinja ? "--jinja" : "--no-jinja");
         if (!string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
         {
@@ -82,6 +84,12 @@ public static class BatchScriptGenerator
 
         foreach (var argument in profile.ExtraArguments.OrderBy(pair => pair.Key, StringComparer.Ordinal))
         {
+            if (argument.Key.Equals("context-shift", StringComparison.OrdinalIgnoreCase)
+                || argument.Key.Equals("no-context-shift", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             arguments.Add(argument.Value is null
                 ? $"--{argument.Key}"
                 : $"--{argument.Key} {QuoteValue(argument.Value)}");

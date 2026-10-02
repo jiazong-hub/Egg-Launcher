@@ -6,6 +6,7 @@ namespace Launcher.Core.Diagnostics;
 
 public sealed class JsonLineDiagnosticLog
 {
+    private const int MaximumEventLineBytes = 64 * 1024;
     private readonly string _path;
     private readonly long _maximumBytes;
     private readonly int _retainedFiles;
@@ -31,20 +32,78 @@ public sealed class JsonLineDiagnosticLog
 
     public string Path => _path;
 
-    public async Task AppendAsync(
+    public Task AppendAsync(
         string level,
         string message,
         CancellationToken cancellationToken = default)
+        => AppendEventAsync("agent_event", level, message, null, null, null, cancellationToken);
+
+    public async Task AppendEventAsync(
+        string eventName,
+        string level,
+        string message,
+        string? sessionId = null,
+        string? routerRunId = null,
+        string? diagnosticMode = null,
+        CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventName);
         ArgumentException.ThrowIfNullOrWhiteSpace(level);
         ArgumentNullException.ThrowIfNull(message);
 
-        var line = JsonSerializer.Serialize(new
+        await AppendEventAsync(
+            new DiagnosticEvent(eventName, level, message),
+            sessionId,
+            routerRunId,
+            diagnosticMode,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task AppendEventAsync(
+        DiagnosticEvent diagnosticEvent,
+        string? sessionId = null,
+        string? routerRunId = null,
+        string? diagnosticMode = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(diagnosticEvent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(diagnosticEvent.EventName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(diagnosticEvent.Level);
+
+        var record = new
         {
+            schemaVersion = 2,
+            eventId = Guid.NewGuid().ToString("N"),
             timestampUtc = DateTimeOffset.UtcNow,
-            level,
-            message,
-        });
+            eventName = DiagnosticSanitizer.SanitizeText(diagnosticEvent.EventName, 120),
+            sessionId,
+            routerRunId,
+            diagnosticMode,
+            level = DiagnosticSanitizer.SanitizeText(diagnosticEvent.Level, 24),
+            message = DiagnosticSanitizer.SanitizeText(diagnosticEvent.Message),
+            properties = DiagnosticSanitizer.SanitizeProperties(diagnosticEvent.Properties),
+        };
+        var line = JsonSerializer.Serialize(record);
+        if (Encoding.UTF8.GetByteCount(line) > MaximumEventLineBytes)
+        {
+            line = JsonSerializer.Serialize(new
+            {
+                schemaVersion = 2,
+                record.eventId,
+                record.timestampUtc,
+                record.eventName,
+                record.sessionId,
+                record.routerRunId,
+                record.diagnosticMode,
+                record.level,
+                message = "<omitted: diagnostic event exceeded 64 KiB>",
+                properties = new Dictionary<string, object?>
+                {
+                    ["eventDataOmitted"] = true,
+                    ["reason"] = "maximum_event_line_bytes_exceeded",
+                },
+            });
+        }
 
         await _writeLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try

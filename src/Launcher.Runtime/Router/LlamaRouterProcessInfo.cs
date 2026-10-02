@@ -6,5 +6,7 @@ public sealed record LlamaRouterProcessInfo(
     Uri BaseUri,
     string StandardOutputLogPath,
     string StandardErrorLogPath,
-    RouterHealthSnapshot InitialHealth);
-
+    RouterHealthSnapshot InitialHealth)
+{
+    public string DiagnosticRunId { get; init; } = string.Empty;
+}

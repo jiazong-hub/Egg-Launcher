@@ -9,6 +9,8 @@ public sealed record ModelSandboxSettings
 {
     public SandboxNetworkAccess NetworkAccess { get; init; } = SandboxNetworkAccess.InheritCodexSettings;
 
+    public bool NetworkCompatibilityEnabled { get; init; }
+
     public IReadOnlyList<SandboxPathPermission> AdditionalPaths { get; init; } =
         Array.Empty<SandboxPathPermission>();
 }
@@ -29,4 +31,10 @@ public sealed record SandboxPathPermission
     public string Path { get; init; } = string.Empty;
 
     public bool AllowWrite { get; init; }
+
+    public bool UseAsGradleUserHome { get; init; }
+
+    public bool IsGradleDirectory { get; init; }
+
+    public bool ReplaceExistingGradleUserHome { get; init; }
 }
