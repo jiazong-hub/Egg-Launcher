@@ -26,6 +26,19 @@ Qwen／Unsloth 模板兼容与管理，以及 Kotlin Daemon 沙箱常用目录�
 
 候选日志：`artifacts/release-installer-0.9.5-candidate.log`。正式提交后重新执行完整签名流程，确保包内 ProductVersion 对应发布源码提交。最终提交、包摘要和 GitHub 校验在发布后追加；该后续文档提交不移动版本标签。
 
+## 最终发布与回下载核验
+
+- 正式源码提交：`d13c74c8cc35a3b18f02452f4d7804062d7897da`；标签 `v0.9.5` 指向该提交，已与 main 一并推送 GitHub。
+- 工作树干净后完整重跑门禁成功：314/314 .NET 测试、0 跳过、0 已知依赖漏洞、Release 构建和格式检查、Agent 自检、自包含封装及签名全部通过。
+- 包内 ProductVersion：`0.9.5+d13c74c8cc35a3b18f02452f4d7804062d7897da`；安装程序文件版本为 0.9.5。
+- 签署者指纹：`44A03B7EA758C184DB1F15E5ADC6DE7EBDC8153C`。PowerShell 状态为 NotTrusted，原因是既有作者自签名证书不属于 Windows 公共信任；脚本已验证签署者一致及文件签名完整性，没有安装信任根。
+- 安装包大小：67,608,192 bytes；SHA-256：`beab7cd50b8eef33496f2dc501bdfeeeffb982c2d829b25627648e4614dd6c58`。
+- [0.9.5 Release](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.5) 已公开，draft=false、prerelease=false，GitHub latest 为 v0.9.5。附带 EXE 与独立 SHA-256 文件，0.9.4 保留。
+- GitHub 上传 digest 与本地一致；从公开下载链接重新下载 EXE，实际计算 SHA-256 一致，公开校验文件也一致。
+- 标签源码 ZIP 已实际下载并通过容器检查；README、版本文件和 CHANGELOG 与标签提交逐字节一致。测试机详细报告、原始日志、临时脚本和 artifacts 未纳入源码。
+- README 快捷下载入口与 Release 的实际资产地址一致。
+- 最终日志：`artifacts/release-installer-0.9.5-final.log`；回下载结果：`artifacts/release-0.9.5-download-verification/result.json`。本段发布后记录作为独立文档提交，不重打包、不移动 v0.9.5 标签。
+
 ## 已有真机证据
 
 用户反馈模板适配后 27B 模型连续输出五个多小时。提供的日志中 11 次 Codex 压缩均成功，没有发现原严格消息位置错误或压缩触发的 Worker 重启。测试机详细分析与原始资料仅保留本地，不提交或分发。
