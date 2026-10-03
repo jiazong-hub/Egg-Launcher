@@ -575,6 +575,36 @@ public sealed class LoopbackSafetyProxyTests
         }
     }
 
+    [Theory]
+    [InlineData("Jinja Exception: System message must be at the beginning.", "chat_template_message_order")]
+    [InlineData("Unexpected backend failure", "upstream_server_error")]
+    public async Task SafetyProxy_ClassifiesTemplateErrorWithoutChangingResponse(string message, string category)
+    {
+        var log = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".jsonl");
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, 0));
+        await using var upstream = builder.Build();
+        var body = JsonSerializer.Serialize(new { error = new { type = "server_error", message } });
+        upstream.MapPost("/v1/responses", async context =>
+        {
+            context.Response.StatusCode = 500;
+            await context.Response.WriteAsync(body);
+        });
+        await upstream.StartAsync();
+        try
+        {
+            await using var proxy = new LoopbackSafetyProxy(log);
+            await proxy.StartAsync(new Uri("http://127.0.0.1:0/"), new Uri(upstream.Urls.Single()));
+            using var http = new HttpClient();
+            using var response = await http.PostAsync(new Uri(proxy.PublicBaseUri!, "v1/responses"), new StringContent("{}", Encoding.UTF8, "application/json"));
+            Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+            Assert.Equal(body, await response.Content.ReadAsStringAsync());
+            Assert.Contains(category, await File.ReadAllTextAsync(log));
+        }
+        finally { await upstream.StopAsync(); if (File.Exists(log)) File.Delete(log); }
+    }
+
     private static int ReserveAvailableLoopbackPort()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);

@@ -195,12 +195,14 @@ public partial class ProfileEditorWindow : Window
         ModelProfile profile,
         string runtimeRoot,
         IReadOnlySet<string>? runtimeCapabilities = null,
-        Func<ModelProfile, CancellationToken, Task<ContextShiftCapabilityResult>>? contextShiftProbe = null)
+        Func<ModelProfile, CancellationToken, Task<ContextShiftCapabilityResult>>? contextShiftProbe = null,
+        Func<ModelProfile, CancellationToken, Task<ModelProfile>>? templateProbe = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         _originalProfile = profile;
         _contextShiftProbe = contextShiftProbe;
+        _templateProbe = templateProbe;
         _runtimeRoot = Path.GetFullPath(runtimeRoot);
         _modelContextLimit = TryReadModelContextLimit(profile, _runtimeRoot);
         _hasEmbeddedMtpCandidate = TryReadModelMetadata(profile, _runtimeRoot)?.HasEmbeddedMtp == true;
@@ -210,7 +212,7 @@ public partial class ProfileEditorWindow : Window
         CompactionSafetyReserveComboBox.AddHandler(WpfTextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateLongConversationSummary()));
         ToolOutputTokenLimitComboBox.AddHandler(WpfTextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateLongConversationSummary()));
         ToolOutputTokenLimitComboBox.SelectionChanged += (_, _) => UpdateLongConversationSummary();
-        Closed += (_, _) => _contextShiftCancellation?.Cancel();
+        Closed += (_, _) => { _contextShiftCancellation?.Cancel(); _templateCancellation?.Cancel(); };
         ProfileEditorTabs.AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,
             new SelectionChangedEventHandler((_, e) => InvalidateShiftForParameterChange(e.OriginalSource)));
         ProfileEditorTabs.AddHandler(WpfTextBox.TextChangedEvent,
@@ -229,6 +231,7 @@ public partial class ProfileEditorWindow : Window
         RestoreModelDefaultsButton.IsEnabled = profile.DefaultParameters is not null;
         Populate(profile);
         ApplyRuntimeCapabilities(runtimeCapabilities);
+        UpdateTemplateStatus();
     }
 
     public ModelProfile UpdatedProfile { get; private set; }

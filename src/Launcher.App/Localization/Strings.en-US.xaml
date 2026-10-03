@@ -104,6 +104,9 @@
     <sys:String x:Key="LocalDataDirectory">Local Data Directory</sys:String>
     <sys:String x:Key="LocalDataBody">Model and Runtime data remain in the llama.cpp directory selected by the user. Removing the application files does not automatically remove that data.</sys:String>
     <sys:String x:Key="ChangelogTab">Changelog</sys:String>
+    <sys:String x:Key="ReleaseNote095Title">0.9.5 · 2026-10-04</sys:String>
+    <sys:String x:Key="ReleaseNote095Item1">• Added Qwen/Unsloth template adaptation and management: detection and generation, source and validation status, folder access and built-in template restoration; extensible rules support future model families.</sys:String>
+    <sys:String x:Key="ReleaseNote095Item2">• Added Kotlin Daemon cache to common sandbox directories, with optional read/write access.</sys:String>
     <sys:String x:Key="ReleaseNote094Title">0.9.4 · 2026-10-02</sys:String>
     <sys:String x:Key="ReleaseNote094Item1">• Refined parameter controls, card alignment, sidebar and adaptive window layout.</sys:String>
     <sys:String x:Key="ReleaseNote094Item2">• Added concise/detailed logging and expanded fault diagnostics.</sys:String>
@@ -203,7 +206,10 @@
     <sys:String x:Key="EnableJinja">Enable Jinja chat template</sys:String>
     <sys:String x:Key="EnableJinjaTip">Codex/Responses mode usually requires llama.cpp to apply the model chat template.</sys:String>
     <sys:String x:Key="ChatTemplateFile">Chat Template File (Optional)</sys:String>
-    <sys:String x:Key="ChatTemplateFileTip">A .jinja file relative to Runtime Root. Leave blank to use the embedded GGUF template. If a strict template is incompatible with Codex, Egg Launcher generates a model-specific compatible file loaded by llama.cpp with --chat-template-file.</sys:String>
+    <sys:String x:Key="ChatTemplateFileTip">A .jinja file relative to Runtime Root. A blank path uses the embedded GGUF template and does not imply Codex compatibility. The launcher can generate overrides for supported structures and select them after rendering checks pass.</sys:String>
+    <sys:String x:Key="CheckChatTemplate">Check and Generate</sys:String>
+    <sys:String x:Key="OpenTemplateFolder">Open Template Folder</sys:String>
+    <sys:String x:Key="RestoreEmbeddedTemplate">Use Embedded Template</sys:String>
     <sys:String x:Key="ExpertPlacement">Expert Placement</sys:String>
     <sys:String x:Key="ExpertPlacementTip">Default does not override llama.cpp. Placing all or the first N expert layers on CPU can reduce VRAM use but usually lowers generation speed.</sys:String>
     <sys:String x:Key="CpuExpertLayers">CPU Expert Layers</sys:String>

@@ -1340,6 +1340,10 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                     : string.Empty;
             var diagnostic = $"{code} {type} {message}";
 
+            if (message.Contains("jinja", StringComparison.Ordinal)
+                && message.Contains("system message must be at the beginning.", StringComparison.Ordinal))
+                return "chat_template_message_order";
+
             if (diagnostic.Contains("exceed_context_size", StringComparison.Ordinal)
                 || diagnostic.Contains("context size", StringComparison.Ordinal)
                 || diagnostic.Contains("context length", StringComparison.Ordinal))

@@ -62,6 +62,48 @@ public sealed class ModelArtifactTransactionTests
         }
     }
 
+    [Fact]
+    public async Task ExecuteAsync_RollsBackTemplateBackupValidationAndStagedFile()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var directory = Path.Combine(root, "scripts", "templates");
+            Directory.CreateDirectory(directory);
+            var backup = Path.Combine(directory, "model.embedded.jinja");
+            var cache = Path.Combine(directory, "model.validation.json");
+            var staged = Path.Combine(directory, "model.staged.codex-compatible.jinja");
+            await File.WriteAllTextAsync(backup, "original backup");
+            await Assert.ThrowsAsync<InvalidOperationException>(() => new ModelArtifactTransaction().ExecuteAsync<bool>(
+                root, "model", Path.Combine(root, "router.ini"), false, async token =>
+                {
+                    await File.WriteAllTextAsync(backup, "changed", token);
+                    await File.WriteAllTextAsync(cache, "cache", token);
+                    await File.WriteAllTextAsync(staged, "candidate", token);
+                    throw new InvalidOperationException("injected failure");
+                }, additionalTargets: [staged]));
+            Assert.Equal("original backup", await File.ReadAllTextAsync(backup));
+            Assert.False(File.Exists(cache));
+            Assert.False(File.Exists(staged));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_RejectsAdditionalPathsOutsideTemplates()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var called = false;
+            await Assert.ThrowsAsync<InvalidDataException>(() => new ModelArtifactTransaction().ExecuteAsync(
+                root, "model", Path.Combine(root, "router.ini"), false, _ => { called = true; return Task.FromResult(true); },
+                additionalTargets: [Path.Combine(root, "outside.txt")]));
+            Assert.False(called);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private static string CreateTemporaryDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "ChatGPTLocalLauncher.Tests", Guid.NewGuid().ToString("N"));

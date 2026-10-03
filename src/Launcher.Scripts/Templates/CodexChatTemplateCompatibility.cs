@@ -40,7 +40,8 @@ public static class CodexChatTemplateCompatibility
     public static async Task<CodexChatTemplateCompatibilityResult> EnsureAsync(
         ModelProfile profile,
         string runtimeRoot,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? templateFileName = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
@@ -59,11 +60,14 @@ public static class CodexChatTemplateCompatibility
         }
 
         var sourceTemplate = embeddedTemplate!;
+        if (templateFileName is not null && (Path.GetFileName(templateFileName) != templateFileName
+            || !templateFileName.EndsWith(".jinja", StringComparison.OrdinalIgnoreCase)))
+            throw new ArgumentException("模板文件名无效。", nameof(templateFileName));
 
         var relativeTemplatePath = Path.Combine(
             "scripts",
             "templates",
-            profile.Id + ".codex-compatible.jinja");
+            templateFileName ?? profile.Id + ".codex-compatible.jinja");
         var outputPath = Path.GetFullPath(Path.Combine(root, relativeTemplatePath));
         var expectedPrefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             + Path.DirectorySeparatorChar;
@@ -72,16 +76,10 @@ public static class CodexChatTemplateCompatibility
             throw new InvalidDataException("生成的 Chat Template 路径逃逸 Runtime Root。");
         }
 
-        var sourceHash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(sourceTemplate)));
-        var output = OwnershipMarker + "\n"
-            + $"{{# Embedded template SHA-256: {sourceHash} #}}\n"
-            + compatibleTemplate.TrimStart('\uFEFF');
-        if (!output.EndsWith('\n'))
-        {
-            output += "\n";
-        }
-
-        await WriteOwnedAtomicallyAsync(outputPath, output, cancellationToken).ConfigureAwait(false);
+        var output = CreateOwnedOutput(sourceTemplate, compatibleTemplate);
+        await WriteOwnedAtomicallyAsync(outputPath, output, cancellationToken, sourceTemplate).ConfigureAwait(false);
+        var backupPath = Path.Combine(root, "scripts", "templates", profile.Id + ".embedded.jinja");
+        await WriteOwnedAtomicallyAsync(backupPath, CreateOwnedOutput(sourceTemplate, sourceTemplate), cancellationToken).ConfigureAwait(false);
 
         var updatedDefaults = profile.DefaultParameters is null
             ? null
@@ -149,35 +147,29 @@ public static class CodexChatTemplateCompatibility
 
     public static bool TryCreateCompatibleTemplate(string? embeddedTemplate, out string compatibleTemplate)
     {
-        compatibleTemplate = string.Empty;
-        if (string.IsNullOrWhiteSpace(embeddedTemplate))
-        {
-            return false;
-        }
+        var analysis = ChatTemplateRules.Analyze(embeddedTemplate);
+        compatibleTemplate = analysis.RepairedTemplate ?? string.Empty;
+        return analysis.Kind == ChatTemplateMatchKind.Repairable;
+    }
 
-        var normalized = embeddedTemplate.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var guardIndex = normalized.IndexOf(StrictSystemGuard, StringComparison.Ordinal);
-        if (!normalized.Contains("<|im_start|>", StringComparison.Ordinal)
-            || guardIndex < 0
-            || normalized.IndexOf(
-                StrictSystemGuard,
-                guardIndex + StrictSystemGuard.Length,
-                StringComparison.Ordinal) >= 0)
-        {
-            return false;
-        }
-
-        compatibleTemplate = string.Concat(
-            normalized.AsSpan(0, guardIndex),
-            CompatibleSystemGuard,
-            normalized.AsSpan(guardIndex + StrictSystemGuard.Length));
-        return true;
+    public static string CreateOwnedOutput(string sourceTemplate, string template)
+    {
+        var analysis = ChatTemplateRules.Analyze(sourceTemplate);
+        var sourceHash = ChatTemplateValidationCache.Hash(sourceTemplate);
+        var payload = template.TrimStart('\uFEFF');
+        if (!payload.EndsWith('\n')) payload += "\n";
+        return OwnershipMarker + "\n"
+            + $"{{# Embedded template SHA-256: {sourceHash} #}}\n"
+            + $"{{# Compatibility rule: {analysis.RuleId ?? "none"}:{analysis.RuleVersion} #}}\n"
+            + $"{{# Template body SHA-256: {ChatTemplateValidationCache.Hash(payload)} #}}\n"
+            + payload;
     }
 
     private static async Task WriteOwnedAtomicallyAsync(
         string path,
         string content,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sourceTemplate = null)
     {
         var directory = Path.GetDirectoryName(path)
             ?? throw new InvalidOperationException("Chat Template 必须位于一个目录中。");
@@ -201,6 +193,8 @@ public static class CodexChatTemplateCompatibility
             {
                 return;
             }
+            if (!IsUnmodifiedOwnedOutput(existing, sourceTemplate))
+                throw new InvalidDataException($"拒绝覆盖已修改或无法验证的 Chat Template：{path}");
         }
 
         var temporaryPath = Path.Combine(directory, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
@@ -224,6 +218,25 @@ public static class CodexChatTemplateCompatibility
                 // Preserve the original write result; temp templates are never referenced.
             }
         }
+    }
+
+    public static bool IsUnmodifiedOwnedOutput(string text, string? sourceTemplate = null)
+    {
+        if (!text.StartsWith(OwnershipMarker + "\n", StringComparison.Ordinal)) return false;
+        const string hashPrefix = "{# Template body SHA-256: ";
+        var lines = text.Split('\n');
+        if (lines.Length > 4 && lines[3].StartsWith(hashPrefix, StringComparison.Ordinal) && lines[3].EndsWith(" #}", StringComparison.Ordinal))
+        {
+            var declared = lines[3][hashPrefix.Length..^3];
+            return declared == ChatTemplateValidationCache.Hash(string.Join('\n', lines.Skip(4)));
+        }
+        // Legacy files have only a source hash. Reconstruct the old exact transformation
+        // from the same GGUF before allowing an upgrade; a marker alone proves no integrity.
+        if (sourceTemplate is null) return false;
+        var normalized = sourceTemplate.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var legacy = normalized.Replace(StrictSystemGuard, CompatibleSystemGuard, StringComparison.Ordinal).TrimStart('\uFEFF');
+        if (!legacy.EndsWith('\n')) legacy += "\n";
+        return text == OwnershipMarker + "\n" + $"{{# Embedded template SHA-256: {ChatTemplateValidationCache.Hash(sourceTemplate)} #}}\n" + legacy;
     }
 
     private static GgufValueType ReadValueType(BinaryReader reader)

@@ -14,7 +14,8 @@ public sealed class ModelArtifactTransaction
         string routerPresetPath,
         bool includeRouterPreset,
         Func<CancellationToken, Task<T>> action,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyList<string>? additionalTargets = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
@@ -33,10 +34,23 @@ public sealed class ModelArtifactTransaction
             Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".json.bak"),
             BatchScriptGenerator.GetOutputPath(root, profileId),
             Path.Combine(root, "scripts", "templates", profileId + ".codex-compatible.jinja"),
+            Path.Combine(root, "scripts", "templates", profileId + ".embedded.jinja"),
+            Path.Combine(root, "scripts", "templates", profileId + ".validation.json"),
         };
         if (includeRouterPreset)
         {
             targets.Add(Path.GetFullPath(routerPresetPath));
+        }
+        if (additionalTargets is not null)
+        {
+            var templateRoot = Path.GetFullPath(Path.Combine(root, "scripts", "templates")) + Path.DirectorySeparatorChar;
+            foreach (var additional in additionalTargets)
+            {
+                var fullPath = Path.GetFullPath(additional);
+                if (!fullPath.StartsWith(templateRoot, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("附加模板事务路径不在 templates 目录中。");
+                targets.Add(fullPath);
+            }
         }
 
         var snapshots = new List<FileSnapshot>(targets.Count);

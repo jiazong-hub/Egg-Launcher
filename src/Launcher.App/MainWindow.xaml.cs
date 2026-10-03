@@ -712,6 +712,7 @@ public partial class MainWindow : Window
         RenderEnvironmentStatus();
         RefreshEggUiState(refreshModeCards: false);
         await RefreshMonitoringAsync(forceHardwareRefresh: false);
+        await CheckRuntimeTemplateErrorAsync();
     }
 
     private async void TelemetryRefreshTimer_Tick(object? sender, EventArgs e)
@@ -1231,10 +1232,8 @@ public partial class MainWindow : Window
             async transactionCancellationToken =>
             {
                 BatchScriptGenerator.EnsureCanWrite(runtimeRoot, profile.Id);
-                var result = await CodexChatTemplateCompatibility.EnsureAsync(
-                    profile,
-                    runtimeRoot,
-                    transactionCancellationToken);
+                // Adding a model never silently enables an unvalidated template.
+                var result = new CodexChatTemplateCompatibilityResult(profile, TemplateGenerated: false);
                 _ = BatchScriptGenerator.Generate(result.Profile, runtimeRoot);
                 await _profileStore.SaveAsync(
                     runtimeRoot,
@@ -1888,7 +1887,7 @@ public partial class MainWindow : Window
                 updateActivePreset,
                 async transactionCancellationToken =>
                 {
-                    var result = await CodexChatTemplateCompatibility.EnsureAsync(
+                    var result = await PrepareChatTemplateAsync(
                         activeProfile,
                         runtimeRoot,
                         transactionCancellationToken);

@@ -1274,7 +1274,7 @@ public partial class MainWindow
         var capabilities = await Launcher.Runtime.Detection.LlamaRuntimeOptionDetector.DetectAsync(
             _settings.LlamaRoot,
             _lifetime.Token);
-        var editor = new ProfileEditorWindow(profile, _settings.LlamaRoot, capabilities, DetectContextShiftAsync) { Owner = this };
+        var editor = new ProfileEditorWindow(profile, _settings.LlamaRoot, capabilities, DetectContextShiftAsync, CheckEditorChatTemplateAsync) { Owner = this };
         if (editor.ShowDialog() != true)
         {
             StatusText.Text = AppLanguageManager.Choose("已取消编辑，模型参数未改变。", "Editing canceled; model parameters were not changed.");

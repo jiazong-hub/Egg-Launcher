@@ -13,6 +13,8 @@ internal static class CommonSandboxDirectories
     {
         cancellationToken.ThrowIfCancellationRequested();
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var localAppData = Absolute(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        var kotlinDaemon = localAppData is null ? null : System.IO.Path.Combine(localAppData, "kotlin", "daemon");
         var npm = QueryAsync("if (Get-Command npm.cmd -ErrorAction SilentlyContinue) { & npm.cmd config get cache 2>$null }", cancellationToken);
         var pip = QueryAsync("if (Get-Command python.exe -ErrorAction SilentlyContinue) { & python.exe -m pip cache dir 2>$null } elseif (Get-Command py.exe -ErrorAction SilentlyContinue) { & py.exe -m pip cache dir 2>$null }", cancellationToken);
         await Task.WhenAll(npm, pip);
@@ -25,6 +27,7 @@ internal static class CommonSandboxDirectories
         return
         [
             new(AppLanguageManager.Choose("Gradle 缓存", "Gradle cache"), Absolute(gradle), true),
+            new(AppLanguageManager.Choose("Kotlin Daemon 缓存", "Kotlin Daemon cache"), kotlinDaemon, true),
             new(AppLanguageManager.Choose("Maven 本地仓库", "Maven repository"), MavenRepository(home), true),
             new(AppLanguageManager.Choose("npm 缓存", "npm cache"), Absolute(await npm), true),
             new(AppLanguageManager.Choose("pip 缓存", "pip cache"), Absolute(await pip), true),
