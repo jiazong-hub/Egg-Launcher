@@ -22,3 +22,16 @@
 0.9.6 正式包全新安装、升级、卸载恢复、Windows 11、ROCm 和完整语言/主题/缩放矩阵尚未独立验收。保持 Lazy Mode、后台 Agent 核心机制、MTP/视觉验证规则及推理后端现状。
 
 沿用作者自签名证书，不安装信任根或导出私钥。签名完整性与 Windows 公共信任分开记录。
+
+## 最终发布与公开下载核验
+
+- 正式源码提交：`025f20d3087e50627f9a2d9eae4d80ed488b6615`；标签 `v0.9.6` 指向该提交，已与 main 推送 GitHub。
+- 从干净工作树重建正式包：Release 零警告/零错误、格式检查、323/323 自动测试（0 跳过）、在线依赖审计（0 已知漏洞）、自包含发布、Agent 自检、Runtime 许可、签名及哈希检查均再次通过。
+- 包内 ProductVersion：`0.9.6+025f20d3087e50627f9a2d9eae4d80ed488b6615`，安装程序产品版本 0.9.6。
+- 安装包、应用、Agent 及卸载程序沿用原作者自签名证书。签署者指纹：`44A03B7EA758C184DB1F15E5ADC6DE7EBDC8153C`。本次 PowerShell 安装包签名状态显示 UnknownError，状态消息为“已处理证书链，但是在不受信任提供程序信任的根证书中终止”，属于自签名根不被公共信任；脚本已核对签署者及签名读取，没有安装信任根或导出私钥。
+- 安装包大小：67,609,616 bytes；SHA-256：`7d533fae1bdf37a6fe4b1cbbceaa8fe49b8a765f1917975a1a956f8e8d5e0e91`。
+- [0.9.6 Release](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.6) 已公开，draft=false、prerelease=false，GitHub latest 为 v0.9.6。EXE 与独立 SHA-256 文件已上传，0.9.5 历史 Release 保留。
+- GitHub 资产 digest 与本地一致；从公开链接重新下载 EXE，实际 SHA-256 与本地及公开校验文件一致。
+- 标签源码 ZIP 已实际下载并完成容器检查；README、CHANGELOG、版本文件和 0.9.6 发布说明与标签源码逐字节一致。源码中没有 artifacts、测试包或私钥。
+- README 下载入口与正式资产地址一致。最终日志：`artifacts/release-installer-0.9.6-final.log`；公开下载核验结果：`artifacts/release-0.9.6-download-verification/result.json`。
+- 本段为发布后的独立文档记录，不重打包、不移动 v0.9.6 标签；当前 main 保留完整最终核验结果。
