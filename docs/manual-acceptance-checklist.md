@@ -114,8 +114,8 @@
    - 若模型内置模板含已知的严格 Qwen 系统消息守卫，确认 Profile 显示 `scripts\templates\<模型>.codex-compatible.jinja`，生成的 BAT 包含 `--chat-template-file`。
    - 编辑模型 A，选择“保存并设为此模型默认”，再改变并保存 A 的参数；“恢复此模型默认”应回到 A 的快照。
    - 模型 B 的参数不得改变，也不得继承 A 的专用默认；未建立专用默认的模型应禁用“恢复此模型默认”。
-   - 自动适配正在运行时不得同时启动 Local 服务；应用建议后确认对应 BAT 与当前 Local Router preset 使用同一组参数。
-   - Local 客户端、后台 Agent 或 llama-server 运行时，所有模型的“编辑参数”和“由 llama 自动适配”均应禁用；选择“停止服务并退出”且进程完全结束后可再次编辑。若模式仍为 Local，修改当前模型后应立即更新 Catalog、Codex 压缩线和 Router preset，但不得自行重启服务。
+   - 自动适配要求先切回 OpenAI，并停止当前 Runtime 的 llama-server；Local 模式或原生服务仍运行时应拒绝执行。应用建议后确认对应 Profile/BAT 已更新，下次切换到该模型时生成相应 Router preset。
+   - Local 客户端、后台 Agent 或当前 Runtime 的 llama-server 任一运行时，当前配置模型的“编辑参数”应禁用；其他可用模型仍可编辑，保存只更新它自己的 Profile/BAT，不覆盖当前 Local preset/Catalog。停止客户端、Agent 与 llama 服务后可编辑当前模型。若模式仍为 Local，保存当前模型后应立即更新 Profile、BAT、Catalog 与 Router preset，但 Codex 配置保持不变，且不得自行启动或重载服务；下次冷启动时确认 Codex 的 Context、压缩线、工具输出预算和沙箱设置按已保存 Profile 应用。
    - 更改 Context 后确认提示“已配置 xx，重新加载后生效”；服务重载前左侧运行上限可以继续显示旧值，重载后必须更新。
    - 对未验证思考档位的模型确认参数页开关禁用；在模型管理检测到明确档位后才可启用。开关关闭时启动 Local 不得执行档位探测或因探测超时失败。
 5. 选中该模型，点击“切换并启动”。确认 Launcher.Agent 和无模型 Router 启动成功。

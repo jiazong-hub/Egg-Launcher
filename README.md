@@ -57,7 +57,7 @@
 - Local 模式由后台 Agent、回环安全代理与 llama.cpp Router 支持直接启动 ChatGPT Desktop；为了共享原生项目和历史，Codex 会保留官方账户外壳（包括左下角账户名称），但只加载 local-only 模型 Catalog。这不是一个独立的“本地账户登录”。本地 Provider 复用现有登录状态但使用独立 Provider 身份，使 Codex 选择自己的本地语义压缩，而不是向 llama.cpp 发送 OpenAI 专用 compaction item。
 - 安全代理只公开必需的 Responses、模型清单和健康检查路由，拒绝浏览器 Origin 和管理接口；它剥离官方认证、Cookie 和账户元数据，除必要的传输解压外，不解析或改写请求正文，也不改写 llama.cpp 响应。Agent 为私有 llama 管理端点生成随机 API key，状态文件只保存当前 Windows 用户可解开的 DPAPI 密文。
 - 每个模型保存独立的“压缩安全余量”，Launcher 只把 `Context - 压缩安全余量` 写成 Codex 的原生自动压缩线。该余量不是单次输出 token 限制；Codex 仍负责判断安全节点、请求当前模型生成摘要并重建历史，Launcher 不生成摘要，也不保存第二套对话。代理只记录 `turn/compaction`、输入项类型和协议形态等无正文诊断。
-- Context、压缩安全余量、KV Cache、GPU Offload 等参数最终由用户按模型决定；可选的“由 llama 自动适配”直接调用同一 Runtime 的 `llama-fit-params`，先展示结果、经确认后才应用，且不会覆盖其他模型。Launcher 不提供硬件无关的内置推荐。Local 客户端、后台 Agent 或当前 Runtime 的 llama 服务运行期间，所有模型的参数编辑与自动适配均被禁止；服务完全停止后允许编辑。若修改当前 Local 模型，保存事务会立即同步 Profile、BAT、Catalog、Codex 配置和 Router preset；非当前模型在下次切换时同步。
+- Context、压缩安全余量、KV Cache、GPU Offload 等参数最终由用户按模型决定；可选的“由 llama 自动适配”直接调用同一 Runtime 的 `llama-fit-params`，先展示结果、经确认后才应用，且不会覆盖其他模型。Launcher 不提供硬件无关的内置推荐。Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtime 的 llama 服务任一运行时禁止编辑参数；服务完全停止后允许编辑，其他可用模型仍可编辑。自动适配要求先切回 OpenAI，并停止当前 Runtime 的 llama 服务。保存事务更新该模型的 Profile 与 BAT；若它是当前配置的 Local 模型，还同步更新 Catalog 和 Router preset，失败时回滚这些文件。保存不修改 Codex 配置，也不启动或重载服务；下次冷启动或切换到该模型时重新读取已保存 Profile，通过模式配置事务应用 Codex 的上下文、压缩线、工具输出预算和沙箱设置。
 - Context 低于 16K 时，参数窗口、模型列表和 Local 启动确认会显示非阻断风险提醒；用户仍可保存、生成 BAT 和启动。Launcher 不自动提高 Context，也不改变用户设置的压缩安全余量。
 - 参数文件只校验缓存类型等原生参数的安全格式，不用固定枚举阻止未来 llama.cpp 新增的合法值；最终支持性与错误信息仍由所选 Runtime 决定。
 - 主窗口位于前台时以低频率刷新运行状态；最小化、隐藏到托盘或退出过程中停止周期探测。进入模型管理、打开托盘菜单或请求托盘状态时按需刷新一次，避免重复昂贵检测。本地模型页的嵌套列表在到达自身滚动边界后会继续滚动整个页面。

@@ -33,7 +33,9 @@ Desktop-facing 回环层只做以下工作：
 
 Local 模式把回环地址声明为一个使用现有 OpenAI 登录状态、但身份不是 OpenAI 的自定义 Provider。这样 Desktop 继续使用同一账户外壳、项目和本地历史，安全代理仍会在进入 llama.cpp 前剥离认证；与此同时 Codex 会使用其原生本地 compaction：Codex 监控 token、通过普通 Responses 请求让当前本地模型生成摘要，并由 Codex 自己重建“摘要 + 保留历史”。Launcher 只把每模型的 `Context - 压缩安全余量` 写成 Codex 自动压缩线，并记录不含正文的压缩诊断；它不限制单次输出、不生成摘要、不解析摘要，也不创建 compaction item。
 
-Local 客户端、后台 Agent 或当前 Runtime 的 llama-server 运行时禁止修改任何模型参数；Local 模式已经保存但服务完全停止时仍允许编辑。保存当前 Local 模型时，模型文件事务内嵌模式配置事务，把 Profile、BAT、Context、压缩线、Catalog 和 Router preset 一并提交或回滚；非当前模型先更新 Profile/BAT，并在下次切换时提交其运行配置，避免运行中热改产生配置与已加载服务不一致。
+Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtime 的 llama-server 任一运行时禁止编辑参数；服务完全停止后允许编辑。其他可用模型仍可编辑，其保存不会覆盖当前 Local 配置。自动适配另有运行条件：必须处于 OpenAI 模式，且当前 Runtime 没有运行中的 llama-server。
+
+参数保存与模式配置使用两个独立入口。`SaveProfileArtifactsAsync` 调用 `ModelArtifactWriter`，由模型文件事务提交或回滚 Profile、备份与 BAT；保存当前配置的 Local 模型时，也将 Catalog 和 Router preset 纳入同一文件事务。保存入口不调用 Codex 配置事务，不启动或重载服务。`ActivateLocalAsync` 在冷启动或切换模型时重新读取已保存 Profile，再调用 `ModeSwitchCoordinator`，通过已有模式配置事务应用 Codex 的 Context、压缩线、工具输出预算和沙箱设置，并更新 Catalog 与 Router preset。客户端已运行且仍使用同一 Local 模型时，满足复用条件的启动操作可复用现有服务，不重新应用参数。
 
 ## 明确不做
 

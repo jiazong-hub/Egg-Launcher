@@ -32,7 +32,7 @@
 14. 模型状态、加载、释放、缓存清单和缓存删除调用 llama Router 原生接口；缓存删除必须同时通过 llama `can_remove` 与 Launcher 下载来源校验，Local 运行期间禁止删除。
 15. 运行监控以 llama `/models`、`/metrics`、`/slots` 和 Windows/驱动公开计数为准；未返回的数据不得估算。当前版本不加入性能基准测试。
 16. Local 必须使用保留现有 OpenAI 登录状态、但具有独立身份的回环 Provider，使 Codex 选择原生本地 compaction，并把摘要生成作为普通 Responses 推理交给当前 llama.cpp 模型。Launcher 不生成、解析或存储摘要，不创建 compaction item；每个模型保存独立的压缩安全余量，Launcher 仅把 `Context - 压缩安全余量` 同步为 Codex 原生自动压缩线。
-17. 压缩安全余量不是单次输出 token 限制。Codex 负责在下一次推理前检查阈值、选择安全压缩节点、生成摘要请求和重建历史；llama.cpp 只执行推理并管理硬性 Context。Local 客户端、后台 Agent 或当前 Runtime 的 llama 服务运行期间，不允许修改任何模型的配置参数；Local 模式已经保存但服务完全停止时允许编辑，并事务性同步当前模型配置。
+17. 压缩安全余量不是单次输出 token 限制。Codex 负责在下一次推理前检查阈值、选择安全压缩节点、生成摘要请求和重建历史；llama.cpp 只执行推理并管理硬性 Context。Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtime 的 llama 服务任一运行时禁止编辑；其他可用模型仍可编辑。当前模型在服务完全停止后允许编辑。保存只事务性更新 Profile/BAT，以及当前 Local 模型的 Catalog/preset；Codex 的上下文、压缩线、工具输出预算和沙箱设置在下次冷启动或切换到该模型时通过模式配置事务应用。自动适配要求先切回 OpenAI，并停止当前 Runtime 的 llama 服务。
 18. llama.cpp 上游端口必须随机且仅监听回环；启动与绑定之间若发生竞态，只能对明确的地址占用错误执行有限换端口重试，不能掩盖模型或参数错误。Desktop-facing 端口首次进入 Local 时随机生成并持久化；若后续被占用，不得结束未知进程，只能在 Desktop 已关闭时通过同一配置事务迁移 Provider、Launcher 设置与恢复记录。App 只能探测 Agent 状态中通过协议、进程身份和心跳校验的实际端点。
 19. 模型下载界面必须忠实显示 llama Router 的原生阶段、SSE 字节进度和最终缓存路径。若 llama 没有返回当前模型的进度或终止事件，Launcher 应有限等待并停止临时 Router；允许把本次原生日志中已知的连接、DNS、TLS 与 HTTPS 构建错误映射为不含原文和凭据的诊断，但不得自行接管下载、续传、重试或完整性校验。
 
@@ -1165,7 +1165,7 @@ V1.0 不应自动声称所有模型都能安全扩展。
 Codex 自动压缩线 = Context - 压缩安全余量
 ```
 
-例如 Context 32K、压缩安全余量 8K，则自动压缩线为 24K。该参数不等于一次完整回答、工具调用或命令执行的最大输出量，也不得映射为 llama.cpp 的输出 token 上限。用户改变 Context 或安全余量后必须重新校验 `1K <= 安全余量 < Context`；Local 运行期间禁止修改，下一次切换到 Local 时必须把最新结果同时同步到 Codex 配置、Catalog 和 llama Router preset。
+例如 Context 32K、压缩安全余量 8K，则自动压缩线为 24K。该参数不等于一次完整回答、工具调用或命令执行的最大输出量，也不得映射为 llama.cpp 的输出 token 上限。用户改变 Context 或安全余量后必须重新校验 `1K <= 安全余量 < Context`；当前 Local 模型在客户端、Agent 或当前 Runtime 的 llama 服务任一运行时禁止编辑，其他可用模型仍可编辑。保存当前 Local 模型时更新 Profile/BAT、Catalog 和 Router preset，Codex 配置在下次冷启动或切换模型时应用；非当前模型先保存 Profile/BAT，下次切换到它时再更新运行配置。
 
 ---
 
