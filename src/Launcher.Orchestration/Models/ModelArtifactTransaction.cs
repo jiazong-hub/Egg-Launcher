@@ -15,7 +15,8 @@ public sealed class ModelArtifactTransaction
         bool includeRouterPreset,
         Func<CancellationToken, Task<T>> action,
         CancellationToken cancellationToken = default,
-        IReadOnlyList<string>? additionalTargets = null)
+        IReadOnlyList<string>? additionalTargets = null,
+        string? localModelCatalogPath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
@@ -40,6 +41,10 @@ public sealed class ModelArtifactTransaction
         if (includeRouterPreset)
         {
             targets.Add(Path.GetFullPath(routerPresetPath));
+            if (localModelCatalogPath is not null)
+            {
+                targets.Add(Path.GetFullPath(localModelCatalogPath));
+            }
         }
         if (additionalTargets is not null)
         {
@@ -128,6 +133,14 @@ public sealed class ModelArtifactTransaction
                 File.Delete(snapshot.Path);
             }
 
+            return;
+        }
+
+        // A failed atomic replacement can leave the original file untouched (and locked).
+        // Do not overwrite it again or prevent rollback of the artifacts that did change.
+        if (File.Exists(snapshot.Path)
+            && (await File.ReadAllBytesAsync(snapshot.Path).ConfigureAwait(false)).AsSpan().SequenceEqual(snapshot.Content))
+        {
             return;
         }
 

@@ -1,14 +1,12 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using Launcher.ChatGPT.Catalog;
 using Launcher.ChatGPT.Configuration;
 using Launcher.ChatGPT.Processes;
 using Launcher.Core.Configuration;
 using Launcher.Core.Persistence;
 using Launcher.Core.State;
 using Launcher.Models.Profiles;
-using Launcher.Scripts.RouterPreset;
 
 namespace Launcher.Orchestration.ModeSwitch;
 
@@ -327,35 +325,9 @@ public sealed class ModeSwitchCoordinator(
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    private async Task WriteGeneratedArtifactsAsync(
-        ModelProfile profile,
-        string runtimeRoot,
-        CancellationToken cancellationToken)
-    {
-        await LocalModelCatalogBuilder.WriteAtomicallyAsync(
-            dataPaths.LocalModelCatalogFile,
-            new LocalModelCatalogOptions
-            {
-                Slug = profile.Alias,
-                DisplayName = profile.DisplayName,
-                ContextWindow = profile.ContextSize,
-                SupportsImageInput = profile.VisionEnabled
-                                     && profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified,
-                SupportedReasoningLevels = profile.ExposeReasoningEffortInChatGpt
-                    && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
-                        ? profile.SupportedReasoningLevels
-                        : Array.Empty<string>(),
-                DefaultReasoningLevel = profile.ExposeReasoningEffortInChatGpt
-                    && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
-                        ? profile.DefaultReasoningLevel
-                        : null,
-            },
-            cancellationToken).ConfigureAwait(false);
-        await WriteTextAtomicallyAsync(
-            dataPaths.RouterPresetFile,
-            RouterPresetGenerator.Generate(profile, runtimeRoot, loadOnStartup: false),
-            cancellationToken).ConfigureAwait(false);
-    }
+    private Task WriteGeneratedArtifactsAsync(ModelProfile profile, string runtimeRoot, CancellationToken cancellationToken) =>
+        Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(
+            profile, runtimeRoot, dataPaths.RouterPresetFile, dataPaths.LocalModelCatalogFile, cancellationToken);
 
     private async Task<GeneratedArtifactsSnapshot> CaptureGeneratedArtifactsAsync(
         CancellationToken cancellationToken)

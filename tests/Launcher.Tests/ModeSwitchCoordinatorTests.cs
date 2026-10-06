@@ -208,6 +208,26 @@ public sealed class ModeSwitchCoordinatorTests
             var localBCatalog = await File.ReadAllTextAsync(dataPaths.LocalModelCatalogFile);
             Assert.Contains("\"context_window\": 32768", localBCatalog, StringComparison.Ordinal);
 
+            // Reopening the same model must apply changed parameters, including Codex limits.
+            await coordinator.SwitchToLocalAsync(request with
+            {
+                Profile = CreateProfile("local-coder-b", "Local Coder B", Path.Combine("models", "coder-b.gguf")) with
+                {
+                    ContextSize = 65536,
+                    CompactionSafetyReserve = 8192,
+                    ToolOutputTokenLimit = 1024,
+                    ModelType = ModelType.MoE,
+                    MoeExpertPlacement = MoeExpertPlacement.CpuFirstLayers,
+                    CpuMoeLayers = 46,
+                },
+            });
+            var reopenedConfig = await File.ReadAllTextAsync(Path.Combine(codexHome, "config.toml"));
+            Assert.Contains("model_context_window = 65536", reopenedConfig, StringComparison.Ordinal);
+            Assert.Contains("model_auto_compact_token_limit = 57344", reopenedConfig, StringComparison.Ordinal);
+            Assert.Contains("tool_output_token_limit = 1024", reopenedConfig, StringComparison.Ordinal);
+            Assert.Contains("n-cpu-moe = 46", await File.ReadAllTextAsync(dataPaths.RouterPresetFile), StringComparison.Ordinal);
+            Assert.Contains("\"context_window\": 65536", await File.ReadAllTextAsync(dataPaths.LocalModelCatalogFile), StringComparison.Ordinal);
+
             var openAi = await coordinator.SwitchToOpenAIAsync();
 
             Assert.True(openAi.Changed);

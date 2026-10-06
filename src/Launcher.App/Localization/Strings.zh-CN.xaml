@@ -104,6 +104,9 @@
     <sys:String x:Key="LocalDataDirectory">本地数据目录</sys:String>
     <sys:String x:Key="LocalDataBody">模型与 Runtime 数据位于用户自行选择的 llama.cpp 目录。删除应用文件不会自动删除这些数据。</sys:String>
     <sys:String x:Key="ChangelogTab">更新日志</sys:String>
+    <sys:String x:Key="ReleaseNote096Title">0.9.6 · 2026-10-06</sys:String>
+    <sys:String x:Key="ReleaseNote096Item1">• 同步保存 JSON、BAT 及当前 Local 的 Router/Catalog；首次启动应用最新参数与 Codex 设置。</sys:String>
+    <sys:String x:Key="ReleaseNote096Item2">• 补齐 BAT 的 MTP/视觉参数，统一生成规则并完善写入失败回滚。</sys:String>
     <sys:String x:Key="ReleaseNote095Title">0.9.5 · 2026-10-04</sys:String>
     <sys:String x:Key="ReleaseNote095Item1">• 增加 Qwen／Unsloth 模板兼容适配与管理：检测生成、来源与验证状态、打开位置和恢复内置模板；预留其他系列的扩展方式。</sys:String>
     <sys:String x:Key="ReleaseNote095Item2">• 沙箱常用目录新增 Kotlin Daemon 缓存，支持按需添加读写权限。</sys:String>

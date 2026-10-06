@@ -9,6 +9,7 @@
 
 > **0.9.1 公测版封存说明（2026-09-21）**：本文保留最初需求、阶段设计和早期验证记录，用于追溯产品意图。当前实现边界以 [ADR 0002](docs/architecture/0002-thin-launcher-boundary.md) 为准；实际页面与操作以 [用户功能说明](docs/user-guide.md) 为准；已验证范围和已知限制以 [0.9.1 公测版发布说明](docs/release-notes-0.9.1.md) 为准。文中早期硬件、模型、开发阶段和未来规划不代表 0.9.1 已承诺能力。
 > **0.9.2 实施边界（2026-09-24）**：当前版本以 [0.9.2 本地版本说明](docs/release-notes-0.9.2.md) 为准。下文“允许跨模型继续同一任务”是早期产品目标，并非现有 Desktop 的已验证能力；v0.9.2 仅实现跨模式历史查阅，原任务跨 Provider 续聊方案已放弃，依据见 [ADR 0004](docs/architecture/0004-cross-provider-history-boundary.md)。沙箱设置的实现边界见 [ADR 0003](docs/architecture/0003-per-model-codex-sandbox.md)。
+> **0.9.6 当前实现（2026-10-06）**：本需求文档保留历史设计；当前功能和验证范围以 [0.9.6 发布说明](docs/release-notes-0.9.6.md)、[检查记录](docs/release-checks-0.9.6.md)及用户指南为准。
 > 注意：本项目必须设计为通用软件，不允许把上述硬件、路径、显卡品牌、模型名称或参数硬编码为唯一适配对象。
 
 ## 0.1 已确认的产品边界（2026-09-10）

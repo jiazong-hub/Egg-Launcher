@@ -204,6 +204,13 @@
                     <StackPanel Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <Border Margin="0,0,0,14" Style="{StaticResource CardStyle}">
                             <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource ReleaseNote096Title}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote096Item1}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote096Item2}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Margin="0,0,0,14" Style="{StaticResource CardStyle}">
+                            <StackPanel>
                                 <TextBlock FontSize="18" FontWeight="SemiBold"
                                            Text="{DynamicResource ReleaseNote095Title}" />
                                 <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote095Item1}" />

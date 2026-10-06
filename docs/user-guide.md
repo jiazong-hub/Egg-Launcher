@@ -1,6 +1,6 @@
-# Egg Launcher 0.9.5 用户功能说明
+# Egg Launcher 0.9.6 用户功能说明
 
-本文说明 0.9.5 的功能，发布于 2026-10-04。启动器是 llama.cpp 与 ChatGPT Desktop 之间的管理外壳，不重复实现推理、KV Cache、模型调度或语义摘要。沙箱设置仍为 beta，实测范围与已知限制见[版本说明](release-notes-0.9.5.md)及[正式检查记录](release-checks-0.9.5.md)。
+本文说明 0.9.6 的功能，发布于 2026-10-06。启动器是 llama.cpp 与 ChatGPT Desktop 之间的管理外壳，不重复实现推理、KV Cache、模型调度或语义摘要。沙箱设置仍为 beta，实测范围与已知限制见[版本说明](release-notes-0.9.6.md)及[正式检查记录](release-checks-0.9.6.md)。
 
 ## 1. 模式与数据边界
 
@@ -82,6 +82,7 @@
 - 更改已确定的模型类型会重建该模型参数配置，避免 Dense/MoE 参数混用；模型文件保持不变。
 - 摘要显示名称、别名、来源、路径、总大小、分片、当前参数和专用默认值。模型文件被外部删除后条目变灰并提示不可用。
 - `编辑运行参数`：模型类型明确且文件存在时打开参数窗口。
+- 保存参数会同步写入该模型的 JSON 和 BAT；若它是当前选中的 Local 模型，也会同步更新 Router preset 和本地模型 Catalog。保存只写本地文件，不会启动或重新加载 llama.cpp；正在运行的模型仍须先结束会话才能修改。编辑其他模型不会覆盖当前 Local 模型的 preset。下次启动客户端时重新读取已保存参数，并应用对应的 Context、压缩、工具输出与沙箱设置。
 - `模型类型`：指定或更改 Dense/MoE；更改既有类型前会说明配置重建影响。
 - `由 llama 自动适配`：展示原生建议；可选择应用并保存为当前模型默认。
 - `模型详情`：显示文件、来源、大小、分片、架构、参数量、训练上下文、模态与运行参数；部分信息仅在 llama 已运行且返回时可用。
@@ -255,7 +256,7 @@ OpenAI 模式关闭启动器时会结束不再需要的 Agent。若正常停止�
 
 ## 10. 关于页
 
-- 产品：Egg Launcher；当前版本：0.9.5，关于页从程序集版本信息读取并显示版本及公测标识；开发者及版权主体：甲总不是贾总。
+- 产品：Egg Launcher；当前版本：0.9.6，关于页从程序集版本信息读取并显示版本及公测标识；开发者及版权主体：甲总不是贾总。
 - “关于产品”说明产品定位、公测边界、免费开源属性，以及发布包不包含 llama.cpp、模型或其他第三方推理 Runtime；自包含发布包会附带 .NET Runtime 组件及其许可文件。
 - “使用与隐私”提供《使用条款与免责声明》和《隐私说明》的离线全文；不设置首次启动同意步骤。
 - “更新日志”简要展示从 0.9.0-beta 开始各版本的主要变化。
@@ -269,7 +270,7 @@ OpenAI 模式关闭启动器时会结束不再需要的 Agent。若正常停止�
 - Launcher 数据与恢复记录：`%LOCALAPPDATA%\ChatGPTLocalLauncher`。
 - ChatGPT/Codex 官方配置：只修改受管理字段，不整目录覆盖 `.codex`。
 - 官方原始配置备份：当前 Windows 用户 DPAPI 加密。
-- 模型 Profile、BAT、模板和 preset：位于用户选择的 llama.cpp Runtime 中。
+- 模型 Profile、BAT、模板：位于所选 llama.cpp Runtime 的 `scripts` 目录；当前 Local 的 Router preset 与 Catalog 位于 `%LOCALAPPDATA%\ChatGPTLocalLauncher\generated`，分别为 `models.ini` 和 `local-models.json`。
 - 首页“详细日志记录”默认关闭。精简模式记录压缩、服务启停、状态变化和错误；开启后立即切换到完整模式，增加请求阶段、响应传输、异常链/堆栈和 llama.cpp 原生运行日志，正在运行的模型无需重启。
 - 日志按模式命名：`agent.concise.jsonl` / `agent.full.jsonl`、`proxy.concise.jsonl` / `proxy.full.jsonl`；Router 文件名包含 `routerRunId` 和模式。结构化日志使用 `schemaVersion=2`，提供 `eventId`、UTC 时间、级别、`sessionId`、`routerRunId` 和事件属性。代理请求使用 `requestId`；重复错误会共享 `failureBurstId`，并记录次数及首次/最近发生时间。
 - 日志空间有硬上限：Agent 每个模式最多 3 个 4 MiB 文件；代理每个模式最多 3 个 8 MiB 文件；Router 原生日志每段最多 16 MiB，停止后保留至多 10 个文件。完整模式会增加本地磁盘写入；不会增加模型加载或推理调用。
@@ -278,7 +279,7 @@ OpenAI 模式关闭启动器时会结束不再需要的 Agent。若正常停止�
 
 ## 12. 安装版与卸载
 
-- 0.9.5 EXE 安装包默认安装到当前用户程序目录，包含 .NET 运行时，不包含 ChatGPT Desktop、llama.cpp 或 GGUF 模型。开始菜单入口会创建，桌面入口由用户选择；安装器不会自动启用登录启动。全新安装和旧版升级已在 Windows 10 企业版 22H2 上验证；卸载及卸载时的配置恢复尚未测试。
+- 0.9.6 EXE 安装包默认安装到当前用户程序目录，包含 .NET 运行时，不包含 ChatGPT Desktop、llama.cpp 或 GGUF 模型。开始菜单入口会创建，桌面入口由用户选择；安装器不会自动启用登录启动。历史版本的全新安装和旧版升级曾在 Windows 10 企业版 22H2 上验证；0.9.6 正式包安装、升级、卸载及恢复尚未独立验收。
 - 从 0.9.2 便携版改用安装版时，原有设置和模型路径仍保留。若先前手动启用了登录启动，首次运行安装版时会按原设置修复启动路径；旧便携文件需用户自行处理。
 - 覆盖升级或卸载前，请正常退出 ChatGPT Desktop、Egg Launcher 和后台 Agent。卸载会在必要时先恢复 OpenAI 配置；若恢复失败，卸载会停止，安装文件不会被删除。
 - 卸载不会删除旧 Local 任务所需的离线历史 Provider、Launcher 数据、模型或 llama.cpp Runtime。仅移除安装版程序文件、快捷方式和指向该安装目录的登录启动项。

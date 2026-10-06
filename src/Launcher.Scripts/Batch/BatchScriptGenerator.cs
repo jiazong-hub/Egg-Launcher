@@ -56,10 +56,7 @@ public static class BatchScriptGenerator
         arguments.Add($"--flash-attn {QuoteValue(profile.FlashAttention)}");
         arguments.Add($"--cache-type-k {QuoteValue(profile.CacheTypeK)}");
         arguments.Add($"--cache-type-v {QuoteValue(profile.CacheTypeV)}");
-        if (profile.Parallel > 0)
-        {
-            arguments.Add($"--parallel {profile.Parallel.ToString(CultureInfo.InvariantCulture)}");
-        }
+        arguments.Add($"--parallel {profile.Parallel.ToString(CultureInfo.InvariantCulture)}");
 
         arguments.Add(profile.ContextShiftEnabled ? "--context-shift" : "--no-context-shift");
 
@@ -78,6 +75,21 @@ public static class BatchScriptGenerator
         if (profile.MicroBatchSize is not null)
         {
             arguments.Add($"--ubatch-size {profile.MicroBatchSize.Value.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        foreach (var argument in ModelFeatureArguments.Generate(profile, path => path))
+        {
+            if (argument.Key is "spec-draft-model" or "mmproj")
+            {
+                var relativePath = Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(root, argument.Value!)));
+                arguments.Add($"--{argument.Key} \"%LLAMA_ROOT%\\{EscapeLiteral(relativePath)}\"");
+            }
+            else
+            {
+                arguments.Add(argument.Value is null
+                    ? $"--{argument.Key}"
+                    : $"--{argument.Key} {QuoteValue(argument.Value)}");
+            }
         }
 
         arguments.Add($"--sleep-idle-seconds {profile.IdleSleepSeconds.ToString(CultureInfo.InvariantCulture)}");

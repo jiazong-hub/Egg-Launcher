@@ -18,12 +18,14 @@ public sealed class ModelArtifactTransactionTests
             var batchPath = BatchScriptGenerator.GetOutputPath(root, profileId);
             var templatePath = Path.Combine(root, "scripts", "templates", profileId + ".codex-compatible.jinja");
             var presetPath = Path.Combine(root, "state", "models.ini");
+            var catalogPath = Path.Combine(root, "state", "catalog.json");
             var originals = new Dictionary<string, string>
             {
                 [profilePath] = "old-profile",
                 [backupPath] = "old-backup",
                 [batchPath] = "old-batch",
                 [presetPath] = "old-preset",
+                [catalogPath] = "old-catalog",
             };
             foreach (var pair in originals)
             {
@@ -47,7 +49,7 @@ public sealed class ModelArtifactTransactionTests
                     Directory.CreateDirectory(Path.GetDirectoryName(templatePath)!);
                     await File.WriteAllTextAsync(templatePath, "generated", cancellationToken);
                     throw new InvalidOperationException("injected failure");
-                }));
+                }, localModelCatalogPath: catalogPath));
 
             foreach (var pair in originals)
             {

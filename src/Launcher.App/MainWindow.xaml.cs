@@ -1675,52 +1675,15 @@ public partial class MainWindow : Window
                     "Parameters cannot be saved for a running local model. Close the ChatGPT client before editing it."));
         }
 
-        await _modelArtifactTransaction.ExecuteAsync(
+        var updateActivePreset = _settings.SelectedMode == ProviderMode.Local
+            && string.Equals(_settings.SelectedModelId, profile.Id, StringComparison.Ordinal);
+        await new ModelArtifactWriter(_profileStore, _modelArtifactTransaction).SaveAsync(
+            profile,
             runtimeRoot,
-            profile.Id,
             _paths.RouterPresetFile,
-            includeRouterPreset: false,
-            async transactionCancellationToken =>
-            {
-                BatchScriptGenerator.EnsureCanWrite(runtimeRoot, profile.Id);
-                _ = BatchScriptGenerator.Generate(profile, runtimeRoot);
-                await _profileStore.SaveAsync(runtimeRoot, profile, transactionCancellationToken);
-                await BatchScriptGenerator.WriteOwnedAsync(runtimeRoot, profile, transactionCancellationToken);
-                return true;
-            },
+            _paths.LocalModelCatalogFile,
+            updateActivePreset,
             cancellationToken);
-    }
-
-    private async Task WriteRouterPresetAtomicallyAsync(
-        ModelProfile profile,
-        string runtimeRoot,
-        CancellationToken cancellationToken)
-    {
-        var target = Path.GetFullPath(_paths.RouterPresetFile);
-        var directory = Path.GetDirectoryName(target)
-            ?? throw new InvalidOperationException(AppLanguageManager.Choose("Router preset 缺少父目录。", "The Router preset has no parent directory."));
-        Directory.CreateDirectory(directory);
-        var temporary = Path.Combine(directory, $".router-preset.{Guid.NewGuid():N}.tmp");
-        try
-        {
-            await File.WriteAllTextAsync(
-                temporary,
-                RouterPresetGenerator.Generate(profile, runtimeRoot, loadOnStartup: false),
-                new System.Text.UTF8Encoding(false),
-                cancellationToken);
-            File.Move(temporary, target, overwrite: true);
-        }
-        finally
-        {
-            try
-            {
-                File.Delete(temporary);
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-            {
-                // Preserve the preset write result; Agent never reads temp files.
-            }
-        }
     }
 
     private bool CanEditModelParameters(ModelProfile? profile = null, bool forceClientRefresh = false)
@@ -1806,6 +1769,12 @@ public partial class MainWindow : Window
         {
             var runtimeRoot = _settings.LlamaRoot
                 ?? throw new InvalidOperationException(AppLanguageManager.Choose("尚未配置 llama.cpp Runtime。", "The llama.cpp Runtime has not been configured."));
+            // Read the saved profile at launch, rather than relying on a UI snapshot.
+            var savedProfiles = await _profileStore.LoadAsync(runtimeRoot, _lifetime.Token);
+            activeProfile = savedProfiles.Profiles.FirstOrDefault(profile => profile.Id == activeProfile.Id)
+                ?? throw new InvalidOperationException(AppLanguageManager.Choose(
+                    "模型配置不存在或无法读取，请重新检查模型参数。",
+                    "The model profile is missing or cannot be read. Check its parameters again."));
             if (activeProfile.ContextShiftEnabled
                 && ContextShiftCapabilityCache.Read(activeProfile, runtimeRoot)?.Supported != true)
             {
@@ -1878,6 +1847,15 @@ public partial class MainWindow : Window
                         "The current Local model is running, so its model-specific Chat Template cannot be checked or applied. Close ChatGPT Desktop completely first."));
             }
 
+            // Stop an idle previous session before regenerating its preset. Otherwise an old
+            // worker with the same alias could satisfy the readiness check for this launch.
+            if (!clientRunning && IsAgentRunning() && !await StopAgentForExitAsync())
+            {
+                throw new InvalidOperationException(AppLanguageManager.Choose(
+                    "后台服务未能完整停止，无法应用最新参数。",
+                    "Background services did not stop completely; the latest parameters cannot be applied."));
+            }
+
             var updateActivePreset = _settings.SelectedMode == ProviderMode.Local
                 && string.Equals(_settings.SelectedModelId, activeProfile.Id, StringComparison.Ordinal);
             var compatibility = await _modelArtifactTransaction.ExecuteAsync(
@@ -1891,7 +1869,7 @@ public partial class MainWindow : Window
                         activeProfile,
                         runtimeRoot,
                         transactionCancellationToken);
-                    if (!result.TemplateGenerated)
+                    if (!result.TemplateGenerated && clientRunning)
                     {
                         return result;
                     }
@@ -1908,15 +1886,15 @@ public partial class MainWindow : Window
                         transactionCancellationToken);
                     if (updateActivePreset)
                     {
-                        await WriteRouterPresetAtomicallyAsync(
-                            result.Profile,
-                            runtimeRoot,
-                            transactionCancellationToken);
+                        await LocalModelConfigurationWriter.WriteAsync(
+                            result.Profile, runtimeRoot, _paths.RouterPresetFile,
+                            _paths.LocalModelCatalogFile, transactionCancellationToken);
                     }
 
                     return result;
                 },
-                _lifetime.Token);
+                _lifetime.Token,
+                localModelCatalogPath: _paths.LocalModelCatalogFile);
             if (compatibility.TemplateGenerated)
             {
                 activeProfile = compatibility.Profile;
@@ -1931,7 +1909,9 @@ public partial class MainWindow : Window
                         "This model has no Context value for ChatGPT Desktop. Edit its profile based on the model and hardware; Egg Launcher will not choose one automatically."));
             }
 
-            if (isSameLocalModel && !compatibility.TemplateGenerated && !applyProfileOnLaunch)
+            // Cold launches also apply the saved Context/compaction/tool/sandbox settings
+            // through the existing mode transaction. Only an active client may reuse services.
+            if (isSameLocalModel && clientRunning && !compatibility.TemplateGenerated && !applyProfileOnLaunch)
             {
                 StatusText.Text = AppLanguageManager.Choose("正在确认 Local Router 与后台 Agent…", "Checking the Local Router and background Agent…");
                 if (!await EnsureAgentRunningAsync(_lifetime.Token, activeProfile.Id))

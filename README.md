@@ -4,7 +4,7 @@
 >
 > A Windows x64 launcher for switching between OpenAI and local llama.cpp modes in ChatGPT Desktop.
 
-**[下载 v0.9.5（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.5/Egg-Launcher-0.9.5-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.5) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.5/Egg-Launcher-0.9.5-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
+**[下载 v0.9.6（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.6/Egg-Launcher-0.9.6-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.6) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.6/Egg-Launcher-0.9.6-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
 
 ![Egg Launcher 双模式工作示意图](docs/images/egg-launcher-overview.svg)
 
@@ -16,7 +16,7 @@
 
 ## 当前发布状态
 
-- **0.9.5 于 2026-10-04 发布。** 增加 Qwen／Unsloth 模板兼容适配与管理，并新增 Kotlin Daemon 沙箱常用目录。见[0.9.5 发布说明](docs/release-notes-0.9.5.md)及[检查记录](docs/release-checks-0.9.5.md)。[旧版 0.9.4](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.4)仍保留。
+- **0.9.6 于 2026-10-06 发布。** 修复模型参数保存与首次启动同步，补齐 BAT 的 MTP/视觉参数并完善配置回滚。见[发布说明](docs/release-notes-0.9.6.md)及[检查记录](docs/release-checks-0.9.6.md)。[旧版 0.9.5](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.5)保留供回退。
 
 - 0.9.3 公开测试版已加入 EXE 安装包与“关于”页更新日志。用户已在 Windows 10 企业版 22H2（Build 19045.5371）验证启动、基本使用、模式切换与启动、全新安装和旧版升级；卸载及卸载时的配置恢复尚未测试。
 - NVIDIA CUDA 环境已有成功实测；AMD 7900XT 测试机的 27B 模型在模板适配后长会话及多次压缩正常，其他模型、驱动和后端组合仍需验证；ROCm 后端未测试。建议通过 Egg Launcher 切换模式并启动客户端，绕过启动器可能造成客户端接口状态不同步。
@@ -40,6 +40,8 @@
 - [0.9.4 正式发布检查记录](docs/release-checks-0.9.4.md)
 - [0.9.5 发布说明](docs/release-notes-0.9.5.md)
 - [0.9.5 正式发布检查记录](docs/release-checks-0.9.5.md)
+- [0.9.6 发布说明](docs/release-notes-0.9.6.md)
+- [0.9.6 正式发布检查记录](docs/release-checks-0.9.6.md)
 - [真机验收清单](docs/manual-acceptance-checklist.md)
 - [v0.9.1 已封存安全复核（0.9.2 尚待完整验收）](docs/release-security-review-0.9.1.md)
 - [变更记录](CHANGELOG.md)
