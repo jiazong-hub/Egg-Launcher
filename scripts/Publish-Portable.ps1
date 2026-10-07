@@ -455,6 +455,10 @@ try {
         -LiteralPath (Join-Path $repositoryRoot 'docs\release-checks-0.9.7.md') `
         -Destination $packageDocsPath
 
+    foreach ($document in @('release-notes-0.9.7.md', 'thinking-display-review-20261007.md', 'reasoning-default-review-20261007.md')) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot ('docs\' + $document)) -Destination $packageDocsPath
+    }
+
     $sourceFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File |
         Where-Object {
             $relative = [System.IO.Path]::GetRelativePath($repositoryRoot, $_.FullName)
