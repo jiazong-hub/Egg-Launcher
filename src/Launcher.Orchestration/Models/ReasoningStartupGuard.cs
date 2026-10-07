@@ -14,7 +14,7 @@ public static class ReasoningStartupGuard
     public static async Task<ModelProfile> EnsureAsync(ModelProfile profile, LauncherSettings settings,
         ISettingsStore settingsStore, LauncherDataPaths paths, IChatGptClientDetector client, CancellationToken token)
     {
-        if (profile.ThinkingEnabled is null && !profile.ExposeReasoningEffortInChatGpt) return profile;
+        if (profile.ThinkingEnabled is null && !profile.ExposeReasoningEffortInChatGpt && !profile.ShowThinkingProcess) return profile;
         var check = ReasoningValidationState.Check(profile, settings.LlamaRoot!);
         if (check.State == ReasoningValidationStateKind.Current) return profile;
         if (client.IsRunning()) throw new InvalidOperationException("思考验证已过期；请关闭 Codex 后重新保存或检测思考设置。后台未沿用旧验证结果。");

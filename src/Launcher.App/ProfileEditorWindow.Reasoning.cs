@@ -17,7 +17,7 @@ public partial class ProfileEditorWindow
 
     private ModelProfile EnsureCurrentReasoningValidation(ModelProfile profile)
     {
-        if (profile.ReasoningCapabilityCheckedAtUtc is null && profile.ThinkingEnabled is null && !profile.ExposeReasoningEffortInChatGpt) return profile;
+        if (profile.ReasoningCapabilityCheckedAtUtc is null && profile.ThinkingEnabled is null && !profile.ExposeReasoningEffortInChatGpt && !profile.ShowThinkingProcess) return profile;
         return ReasoningValidationState.Check(profile, _runtimeRoot).ApplyTo(profile);
     }
 
@@ -36,6 +36,9 @@ public partial class ProfileEditorWindow
         DetectReasoningButton.IsEnabled = !busy && _reasoningProbe is not null;
         ThinkingEnabledCheckBox.IsEnabled = !busy && profile.SupportsThinkingSwitch == true;
         ThinkingEnabledCheckBox.IsChecked = profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled;
+        ShowThinkingProcessCheckBox.IsEnabled = ThinkingEnabledCheckBox.IsEnabled
+            && (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) == true;
+        ShowThinkingProcessCheckBox.IsChecked = profile.ShowThinkingProcess;
         InheritThinkingButton.IsEnabled = !busy && profile.SupportsThinkingSwitch == true && profile.ThinkingEnabled.HasValue;
         ThinkingStateTextBlock.Text = profile.ThinkingEnabled is bool enabled
             ? AppLanguageManager.Choose(enabled ? "已设置：开启" : "已设置：关闭", enabled ? "Configured: on" : "Configured: off")
@@ -49,6 +52,17 @@ public partial class ProfileEditorWindow
         ReasoningEffortCheckBox.IsChecked = profile.ExposeReasoningEffortInChatGpt;
         ReverseReasoningOrderCheckBox.IsEnabled = ReasoningEffortCheckBox.IsEnabled && profile.ExposeReasoningEffortInChatGpt;
         ReverseReasoningOrderCheckBox.IsChecked = profile.ReverseReasoningLevelDisplayOrder;
+        PreferredReasoningLevelComboBox.Items.Clear();
+        var inherit = new ComboBoxItem { Content = AppLanguageManager.Text("InheritReasoningDefault"), Tag = null };
+        PreferredReasoningLevelComboBox.Items.Add(inherit);
+        PreferredReasoningLevelComboBox.SelectedItem = inherit;
+        foreach (var level in verified ? recognized : [])
+        {
+            var item = new ComboBoxItem { Content = FormatReasoningLevel(level), Tag = level };
+            PreferredReasoningLevelComboBox.Items.Add(item);
+            if (level == profile.PreferredReasoningLevel) PreferredReasoningLevelComboBox.SelectedItem = item;
+        }
+        PreferredReasoningLevelComboBox.IsEnabled = ReverseReasoningOrderCheckBox.IsEnabled;
         ReasoningCapabilityStatusTextBlock.Text = busy ? AppLanguageManager.Choose("正在隔离加载并检测思考能力…", "Loading in isolation and checking reasoning capabilities…")
             : profile.ReasoningCapabilityCheckedAtUtc is null ? AppLanguageManager.Choose("思考能力尚未检测，或结果已过期。", "Reasoning capabilities are not checked or the result has expired.")
             : AppLanguageManager.Choose(
@@ -57,8 +71,6 @@ public partial class ProfileEditorWindow
         if (!busy && _reasoningOutcome is not null) ReasoningCapabilityStatusTextBlock.Text = _reasoningOutcome + "\n" + ReasoningCapabilityStatusTextBlock.Text;
         ReasoningLevelsTextBlock.Text = AppLanguageManager.Choose("已确认档位：", "Verified levels: ")
             + (verified ? string.Join("、", profile.SupportedReasoningLevels.Select(FormatReasoningLevel)) : AppLanguageManager.Choose("未确认", "Unconfirmed"));
-        ReasoningDefaultTextBlock.Text = AppLanguageManager.Choose("默认档位：", "Default level: ")
-            + (profile.DefaultReasoningLevel is { } level ? FormatReasoningLevel(level) : AppLanguageManager.Choose("未确认", "Unconfirmed"));
         var details = profile.ReasoningValidationDetails ?? AppLanguageManager.Choose("检测使用基础参数中当前选定的模板。", "Detection uses the template selected in Basic Parameters.");
         if (profile.ReasoningLevelAliases.Count > 0)
             details += "\n" + AppLanguageManager.Choose("模板内部别名（不另列档位）：", "Template aliases (not separate levels): ")
@@ -102,6 +114,33 @@ public partial class ProfileEditorWindow
         {
             ReverseReasoningLevelDisplayOrder = ReverseReasoningOrderCheckBox.IsChecked == true
         };
+    }
+
+    private void ShowThinkingProcess_Changed(object sender, RoutedEventArgs e)
+    {
+        if (!_populatingReasoning) _reasoningProfile = _reasoningProfile with
+        {
+            ShowThinkingProcess = ShowThinkingProcessCheckBox.IsChecked == true
+        };
+    }
+
+    private void PreferredReasoningLevel_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_populatingReasoning) _reasoningProfile = _reasoningProfile with
+        {
+            PreferredReasoningLevel = (PreferredReasoningLevelComboBox.SelectedItem as ComboBoxItem)?.Tag as string
+        };
+    }
+
+    private void NormalizePreferredReasoningLevelForSave()
+    {
+        if (_reasoningProfile.ReasoningCapabilityStatus != ReasoningCapabilityStatus.Verified
+            || _reasoningProfile.PreferredReasoningLevel is not { } level
+            || (CodexReasoningLevels.IsRecognized(level) && _reasoningProfile.SupportedReasoningLevels.Contains(level, StringComparer.Ordinal))) return;
+        _reasoningProfile = _reasoningProfile with { PreferredReasoningLevel = null };
+        RefreshReasoningUi();
+        MessageBox.Show(this, AppLanguageManager.Text("InvalidReasoningDefault"),
+            AppLanguageManager.Text("PreferredReasoningLevel"), MessageBoxButton.OK, MessageBoxImage.Information);
     }
 
     private void InheritThinking_Click(object sender, RoutedEventArgs e)

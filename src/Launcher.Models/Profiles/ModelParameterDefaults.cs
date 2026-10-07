@@ -47,9 +47,15 @@ public sealed record ModelParameterDefaults
     public bool? ThinkingEnabled { get; init; }
 
     [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ShowThinkingProcess { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
     public bool ExposeReasoningEffortInChatGpt { get; init; }
 
     public bool ReverseReasoningLevelDisplayOrder { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? PreferredReasoningLevel { get; init; }
 
 
     public bool MtpEnabled { get; init; }
@@ -119,8 +125,10 @@ public sealed record ModelParameterDefaults
             IdleSleepSeconds = profile.IdleSleepSeconds,
             ChatTemplateRelativePath = profile.ChatTemplateRelativePath,
             ThinkingEnabled = profile.ThinkingEnabled,
+            ShowThinkingProcess = profile.ShowThinkingProcess,
             ExposeReasoningEffortInChatGpt = profile.ExposeReasoningEffortInChatGpt,
             ReverseReasoningLevelDisplayOrder = profile.ReverseReasoningLevelDisplayOrder,
+            PreferredReasoningLevel = profile.PreferredReasoningLevel,
             MtpEnabled = profile.MtpEnabled,
             MtpSource = profile.MtpSource,
             MtpDraftModelRelativePath = profile.MtpDraftModelRelativePath,
@@ -172,8 +180,10 @@ public sealed record ModelParameterDefaults
             IdleSleepSeconds = IdleSleepSeconds,
             ChatTemplateRelativePath = ChatTemplateRelativePath,
             ThinkingEnabled = profile.SupportsThinkingSwitch == true ? ThinkingEnabled : null,
+            ShowThinkingProcess = ShowThinkingProcess,
             ExposeReasoningEffortInChatGpt = ExposeReasoningEffortInChatGpt && profile.ReasoningResponsesVerified,
             ReverseReasoningLevelDisplayOrder = ReverseReasoningLevelDisplayOrder,
+            PreferredReasoningLevel = PreferredReasoningLevel,
             MtpEnabled = MtpEnabled && IsMtpSourceReady(profile),
             // MTP source association is model metadata, not a tunable default. Preserve the
             // current model's verified/detected source instead of restoring a stale file path.

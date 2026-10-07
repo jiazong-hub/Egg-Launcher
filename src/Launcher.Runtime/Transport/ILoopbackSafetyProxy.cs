@@ -12,6 +12,8 @@ public interface ILoopbackSafetyProxy : IAsyncDisposable
 
     void SetThinkingEnabled(bool? enabled) { }
 
+    void SetShowThinkingProcess(bool enabled) { }
+
     Task StartAsync(
         Uri publicBaseUri,
         Uri upstreamBaseUri,

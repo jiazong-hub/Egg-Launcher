@@ -42,6 +42,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
     private readonly LlamaModelManagementClient? _modelManagementClient;
     private LlamaRouterProcessInfo? _routerInfo;
     private RouterLaunchFingerprint? _activeFingerprint;
+    private string? _thinkingDisplayProfileStamp;
     private RuntimeState? _lastPublishedRuntimeState;
     private DateTimeOffset? _lastRuntimeStateWriteAtUtc;
     private ProviderMode _lastKnownSelectedMode = ProviderMode.OpenAI;
@@ -196,6 +197,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
                 }
             }
 
+            await RefreshThinkingDisplayAsync(settings, cancellationToken).ConfigureAwait(false);
             await PublishHeartbeatIfDueAsync().ConfigureAwait(false);
             await CaptureModelHealthIfDueAsync(settings, cancellationToken).ConfigureAwait(false);
 
@@ -512,10 +514,12 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         var proxyStartupStopwatch = Stopwatch.StartNew();
         var profiles = await new JsonModelProfileStore().LoadAsync(settings.LlamaRoot!, cancellationToken).ConfigureAwait(false);
         var activeProfile = profiles.Profiles.FirstOrDefault(profile => profile.Id == settings.SelectedModelId);
-        if (activeProfile is not null && (activeProfile.ThinkingEnabled is not null || activeProfile.ExposeReasoningEffortInChatGpt)
+        if (activeProfile is not null && (activeProfile.ThinkingEnabled is not null || activeProfile.ExposeReasoningEffortInChatGpt || activeProfile.ShowThinkingProcess)
             && Launcher.Scripts.Templates.ReasoningValidationState.Check(activeProfile, settings.LlamaRoot!).State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
             throw new InvalidOperationException("思考验证已过期，请关闭 Codex 后重新保存或检测设置。");
         _safetyProxy.SetThinkingEnabled(activeProfile?.SupportsThinkingSwitch == true ? activeProfile.ThinkingEnabled : null);
+        _safetyProxy.SetShowThinkingProcess(activeProfile?.ShowThinkingProcess == true && activeProfile.SupportsThinkingSwitch == true
+            && (activeProfile.ThinkingEnabled ?? activeProfile.DefaultThinkingEnabled) == true);
         var configuredPort = settings.RouterPort;
         var publicBaseUri = PublicBaseUri(settings.RouterPort);
         try
@@ -622,6 +626,24 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
             }).ConfigureAwait(false);
 
         return settings;
+    }
+
+    private async Task RefreshThinkingDisplayAsync(LauncherSettings settings, CancellationToken token)
+    {
+        var path = Path.Combine(JsonModelProfileStore.GetProfilesDirectory(settings.LlamaRoot!), $"{settings.SelectedModelId}.json");
+        var file = new FileInfo(path);
+        var stamp = $"{path}|{file.Exists}|{(file.Exists ? file.Length : 0)}|{(file.Exists ? file.LastWriteTimeUtc.Ticks : 0)}";
+        if (stamp == _thinkingDisplayProfileStamp) return;
+        _safetyProxy.SetShowThinkingProcess(false);
+        if (file.Exists)
+        {
+            var profile = System.Text.Json.JsonSerializer.Deserialize<ModelProfile>(await File.ReadAllTextAsync(path, token).ConfigureAwait(false));
+            if (profile is not null && profile.ShowThinkingProcess && profile.SupportsThinkingSwitch == true
+                && (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) == true
+                && Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, settings.LlamaRoot!).State == Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
+                _safetyProxy.SetShowThinkingProcess(true);
+        }
+        _thinkingDisplayProfileStamp = stamp;
     }
 
     private static bool IsAddressAlreadyInUse(Exception exception)

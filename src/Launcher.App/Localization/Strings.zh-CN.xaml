@@ -380,6 +380,13 @@
     <sys:String x:Key="ThinkingSettings">思考设置</sys:String>
     <sys:String x:Key="DetectThinkingCapability">检测思考能力</sys:String>
     <sys:String x:Key="EnableThinking">启用思考</sys:String>
+    <sys:String x:Key="ThinkingDetectionSection">检测思考能力</sys:String>
+    <sys:String x:Key="ThinkingEffortSection">调节思考强度</sys:String>
+    <sys:String x:Key="PreferredReasoningLevel">默认思考强度</sys:String>
+    <sys:String x:Key="InheritReasoningDefault">沿用模型默认</sys:String>
+    <sys:String x:Key="InvalidReasoningDefault">此前选择的默认思考强度已不在当前模型验证通过的档位中，已恢复为“沿用模型默认”。</sys:String>
+    <sys:String x:Key="ShowThinkingProcess">显示思考过程</sys:String>
+    <sys:String x:Key="ShowThinkingProcessTip">仅控制思考内容的显示，不影响模型思考及回答。保存后对后续请求生效。</sys:String>
     <sys:String x:Key="InheritThinking">沿用模板默认</sys:String>
     <sys:String x:Key="ThinkingDetectionDetails">检测详情</sys:String>
 </ResourceDictionary>

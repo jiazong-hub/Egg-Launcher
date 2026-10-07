@@ -345,7 +345,7 @@ public partial class ProfileEditorWindow : Window
             element = System.Windows.Media.VisualTreeHelper.GetParent(element) as FrameworkElement;
         if (element is null || element.Name is "ContextShiftCheckBox" or "ProfileEditorTabs"
             or "CompactionSafetyReserveComboBox" or "ToolOutputTokenLimitComboBox" or "CodexStreamIdleTimeoutComboBox"
-            or "DisplayNameTextBox" or "ThinkingEnabledCheckBox" or "ReasoningEffortCheckBox" or "ReverseReasoningOrderCheckBox") return;
+            or "DisplayNameTextBox" or "ThinkingEnabledCheckBox" or "ShowThinkingProcessCheckBox" or "ReasoningEffortCheckBox" or "ReverseReasoningOrderCheckBox" or "PreferredReasoningLevelComboBox") return;
         _shiftCapability = null;
         _changingContextShift = true;
         ContextShiftCheckBox.IsChecked = false;
@@ -545,6 +545,7 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
+        if (!captureForProbe) NormalizePreferredReasoningLevelForSave();
         var updated = _originalProfile with
         {
             SchemaVersion = ModelProfile.CurrentSchemaVersion,
@@ -569,11 +570,13 @@ public partial class ProfileEditorWindow : Window
             ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsChecked == true && _reasoningProfile.ReasoningResponsesVerified,
             ReverseReasoningLevelDisplayOrder = ReverseReasoningOrderCheckBox.IsChecked == true,
             ThinkingEnabled = _reasoningProfile.ThinkingEnabled,
+            ShowThinkingProcess = ShowThinkingProcessCheckBox.IsChecked == true,
             SupportsThinkingSwitch = _reasoningProfile.SupportsThinkingSwitch,
             DefaultThinkingEnabled = _reasoningProfile.DefaultThinkingEnabled,
             ReasoningCapabilityStatus = _reasoningProfile.ReasoningCapabilityStatus,
             SupportedReasoningLevels = _reasoningProfile.SupportedReasoningLevels,
             DefaultReasoningLevel = _reasoningProfile.DefaultReasoningLevel,
+            PreferredReasoningLevel = _reasoningProfile.PreferredReasoningLevel,
             ReasoningLevelAliases = _reasoningProfile.ReasoningLevelAliases,
             ReasoningResponsesVerified = _reasoningProfile.ReasoningResponsesVerified,
             ReasoningClientCompatible = _reasoningProfile.ReasoningClientCompatible,

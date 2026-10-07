@@ -380,6 +380,13 @@
     <sys:String x:Key="ThinkingSettings">Thinking Settings</sys:String>
     <sys:String x:Key="DetectThinkingCapability">Detect Thinking Capabilities</sys:String>
     <sys:String x:Key="EnableThinking">Enable thinking</sys:String>
+    <sys:String x:Key="ThinkingDetectionSection">Detect thinking capabilities</sys:String>
+    <sys:String x:Key="ThinkingEffortSection">Adjust reasoning effort</sys:String>
+    <sys:String x:Key="PreferredReasoningLevel">Default reasoning effort</sys:String>
+    <sys:String x:Key="InheritReasoningDefault">Inherit model default</sys:String>
+    <sys:String x:Key="InvalidReasoningDefault">The previously selected default effort is no longer among this model's verified levels. The selection has been reset to inherit the model default.</sys:String>
+    <sys:String x:Key="ShowThinkingProcess">Show thinking process</sys:String>
+    <sys:String x:Key="ShowThinkingProcessTip">Controls display only, without changing model reasoning or answers. Applies to subsequent requests after Save.</sys:String>
     <sys:String x:Key="InheritThinking">Inherit template default</sys:String>
     <sys:String x:Key="ThinkingDetectionDetails">Detection details</sys:String>
 </ResourceDictionary>

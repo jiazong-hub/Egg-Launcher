@@ -51,6 +51,7 @@ public sealed class ChatGptConfigTransactionService
         "model_reasoning_effort",
         "plan_mode_reasoning_effort",
         "model_reasoning_summary",
+        "show_raw_agent_reasoning",
         "model_supports_reasoning_summaries",
         "model_verbosity",
         "service_tier",
@@ -1143,6 +1144,7 @@ public sealed class ChatGptConfigTransactionService
                 ? $"model_reasoning_effort = {JsonSerializer.Serialize(effort)}" : null)
             .SetRawAssignment("plan_mode_reasoning_effort", null)
             .SetRawAssignment("model_reasoning_summary", null)
+            .SetRawAssignment("show_raw_agent_reasoning", $"show_raw_agent_reasoning = {request.ShowThinkingProcess.ToString().ToLowerInvariant()}")
             .SetRawAssignment("model_supports_reasoning_summaries", null)
             .SetRawAssignment("model_verbosity", null)
             .SetRawAssignment("service_tier", null)
@@ -1551,12 +1553,13 @@ public sealed class ChatGptConfigTransactionService
     private static async Task<ManagedConfigSnapshot> CompletePermissionBaselineAsync(
         ManagedConfigSnapshot snapshot, CancellationToken cancellationToken)
     {
-        if (PermissionBaselineKeys.All(snapshot.OriginalAssignments.ContainsKey)) return snapshot;
+        var baselineKeys = PermissionBaselineKeys.Append("show_raw_agent_reasoning").ToArray();
+        if (baselineKeys.All(snapshot.OriginalAssignments.ContainsKey)) return snapshot;
         // Missing legacy keys are unknown, not evidence that the original field was absent.
         var bytes = await VerifyOriginalBackupAsync(snapshot, cancellationToken).ConfigureAwait(false);
         var original = new TomlRootDocument(DecodeUtf8Config(bytes));
         var assignments = new Dictionary<string, string?>(snapshot.OriginalAssignments, StringComparer.Ordinal);
-        foreach (var key in PermissionBaselineKeys)
+        foreach (var key in baselineKeys)
             assignments.TryAdd(key, original.GetDefinition(key));
         return snapshot with { OriginalAssignments = assignments };
     }

@@ -9,6 +9,39 @@ namespace Launcher.Tests;
 
 public sealed class ChatGptConfigTransactionServiceTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LegacyRecoveryPreservesOriginalThinkingDisplaySetting(bool? originalDisplay)
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var configPath = Path.Combine(root, "config.toml");
+            var catalogPath = Path.Combine(root, "local-models.json");
+            var original = "model = \"online-model\"\n" + (originalDisplay.HasValue
+                ? $"show_raw_agent_reasoning = {originalDisplay.Value.ToString().ToLowerInvariant()}\n" : "");
+            await File.WriteAllTextAsync(configPath, original);
+            await WriteCatalogAsync(catalogPath, "local-coder");
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "launcher-data"));
+            var service = new ChatGptConfigTransactionService(new FakeClientDetector(false));
+            var applied = await service.ApplyLocalAsync(LocalRequest(configPath, catalogPath, "local-coder"), paths);
+            var originals = applied.OriginalAssignments.Where(pair => pair.Key != "show_raw_agent_reasoning").ToDictionary();
+            var assignments = applied.AppliedAssignments.Where(pair => pair.Key != "show_raw_agent_reasoning").ToDictionary();
+            await File.WriteAllTextAsync(paths.RecoveryFile, JsonSerializer.Serialize(applied with { OriginalAssignments = originals, AppliedAssignments = assignments }));
+            var local = await File.ReadAllTextAsync(configPath);
+            await File.WriteAllTextAsync(configPath, local.Replace("show_raw_agent_reasoning = false", "", StringComparison.Ordinal));
+            await service.UpdateLocalAsync(LocalRequest(configPath, catalogPath, "local-coder") with { ShowThinkingProcess = true }, paths.RecoveryFile);
+            Assert.Contains("show_raw_agent_reasoning = true", await File.ReadAllTextAsync(configPath), StringComparison.Ordinal);
+            await service.RestoreOpenAIAsync(paths.RecoveryFile);
+            var restored = await File.ReadAllTextAsync(configPath);
+            if (originalDisplay.HasValue) Assert.Contains($"show_raw_agent_reasoning = {originalDisplay.Value.ToString().ToLowerInvariant()}", restored, StringComparison.Ordinal);
+            else Assert.DoesNotContain("show_raw_agent_reasoning", restored, StringComparison.Ordinal);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
     [Fact]
     public async Task VerifiedDefaultIsWrittenExactlyAndOnlinePlanOverrideIsRestored()
     {
@@ -330,6 +363,7 @@ public sealed class ChatGptConfigTransactionServiceTests
                 "model = \"gpt-5.6-sol\"\n"
                 + "model_reasoning_effort = \"xhigh\"\n"
                 + "model_reasoning_summary = \"detailed\"\n"
+                + "show_raw_agent_reasoning = true\n"
                 + "model_supports_reasoning_summaries = true\n"
                 + "model_verbosity = \"high\"\n"
                 + "service_tier = \"default\"\n"
@@ -350,6 +384,7 @@ public sealed class ChatGptConfigTransactionServiceTests
             Assert.Contains("model_auto_compact_token_limit = 12288", localText, StringComparison.Ordinal);
             Assert.DoesNotContain("model_auto_compact_token_limit_scope", localText, StringComparison.Ordinal);
             Assert.DoesNotContain("model_reasoning_summary", localText, StringComparison.Ordinal);
+            Assert.Contains("show_raw_agent_reasoning = false", localText, StringComparison.Ordinal);
             Assert.DoesNotContain("model_supports_reasoning_summaries", localText, StringComparison.Ordinal);
             Assert.DoesNotContain("model_verbosity", localText, StringComparison.Ordinal);
             Assert.DoesNotContain("service_tier", localText, StringComparison.Ordinal);
@@ -365,6 +400,7 @@ public sealed class ChatGptConfigTransactionServiceTests
             Assert.Contains("model = \"gpt-5.6-sol\"", restoredText, StringComparison.Ordinal);
             Assert.Contains("model_reasoning_effort = \"xhigh\"", restoredText, StringComparison.Ordinal);
             Assert.Contains("model_reasoning_summary = \"detailed\"", restoredText, StringComparison.Ordinal);
+            Assert.Contains("show_raw_agent_reasoning = true", restoredText, StringComparison.Ordinal);
             Assert.Contains("model_supports_reasoning_summaries = true", restoredText, StringComparison.Ordinal);
             Assert.Contains("model_verbosity = \"high\"", restoredText, StringComparison.Ordinal);
             Assert.Contains("service_tier = \"default\"", restoredText, StringComparison.Ordinal);

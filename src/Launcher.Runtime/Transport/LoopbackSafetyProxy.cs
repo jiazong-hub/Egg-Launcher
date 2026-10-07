@@ -26,6 +26,9 @@ namespace Launcher.Runtime.Transport;
 public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
 {
     private int _thinkingOverride = -1;
+    private int _showThinkingProcess;
+
+    public void SetShowThinkingProcess(bool enabled) => Volatile.Write(ref _showThinkingProcess, enabled ? 1 : 0);
 
     public void SetThinkingEnabled(bool? enabled) => Volatile.Write(ref _thinkingOverride, enabled.HasValue ? (enabled.Value ? 1 : 0) : -1);
     // Base64 image input is larger than the source image. Keep the boundary bounded,
@@ -544,6 +547,9 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 "text/event-stream",
                 StringComparison.OrdinalIgnoreCase);
             sseTracker = responseIsEventStream ? new SseEventTracker() : null;
+            using var thinkingDisplay = responseIsEventStream && Volatile.Read(ref _showThinkingProcess) == 1
+                ? new ThinkingDisplayBridge() : null;
+            if (thinkingDisplay is not null) context.Response.ContentLength = null;
             await using var responseStream = await upstreamResponse.Content
                 .ReadAsStreamAsync(context.RequestAborted).ConfigureAwait(false);
             var responseBuffer = new byte[81920];
@@ -560,10 +566,18 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
 
                 sseTracker?.Observe(responseBuffer.AsSpan(0, bytesRead), stopwatch.ElapsedMilliseconds);
                 timeToFirstBodyByteMs ??= stopwatch.ElapsedMilliseconds;
-                await context.Response.Body.WriteAsync(
-                    responseBuffer.AsMemory(0, bytesRead),
-                    context.RequestAborted).ConfigureAwait(false);
-                responseBytesSent += bytesRead;
+                var forwarded = thinkingDisplay?.Observe(responseBuffer.AsSpan(0, bytesRead));
+                var responseBytes = forwarded is null ? responseBuffer.AsMemory(0, bytesRead) : forwarded.AsMemory();
+                await context.Response.Body.WriteAsync(responseBytes, context.RequestAborted).ConfigureAwait(false);
+                if (responseIsEventStream) await context.Response.Body.FlushAsync(context.RequestAborted).ConfigureAwait(false);
+                responseBytesSent += responseBytes.Length;
+            }
+
+            if (thinkingDisplay is not null)
+            {
+                var tail = thinkingDisplay.Complete();
+                await context.Response.Body.WriteAsync(tail, context.RequestAborted).ConfigureAwait(false);
+                responseBytesSent += tail.Length;
             }
 
             sseTracker?.Complete(stopwatch.ElapsedMilliseconds);
@@ -706,6 +720,9 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
             }
 
             ValidateImageReferences(body, source.ContentType);
+            if (source.Path.Value is "/v1/responses" or "/responses" or "/v1/responses/compact" or "/responses/compact"
+                && source.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)
+                body = ThinkingDisplayBridge.RemoveDisplayCopies(body);
             var thinking = Volatile.Read(ref _thinkingOverride);
             if (thinking >= 0 && source.Path.Value is "/v1/responses" or "/responses"
                 && source.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)

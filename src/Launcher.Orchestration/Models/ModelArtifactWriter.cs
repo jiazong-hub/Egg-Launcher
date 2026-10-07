@@ -17,7 +17,7 @@ public sealed class ModelArtifactWriter(
         CancellationToken cancellationToken = default,
         Func<ModelProfile, CancellationToken, Task>? synchronizeActiveCodexConfiguration = null)
     {
-        if (profile.ThinkingEnabled is not null || profile.ExposeReasoningEffortInChatGpt)
+        if (profile.ThinkingEnabled is not null || profile.ExposeReasoningEffortInChatGpt || profile.ShowThinkingProcess)
             profile = Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, runtimeRoot).ApplyTo(profile);
         return transaction.ExecuteAsync(
             runtimeRoot,

@@ -23,10 +23,7 @@ public static class LocalModelConfigurationWriter
                     && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
                         ? profile.SupportedReasoningLevels.Where(CodexReasoningLevels.IsRecognized).ToArray()
                         : Array.Empty<string>(),
-                DefaultReasoningLevel = (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) != false && profile.ReasoningResponsesVerified && profile.ReasoningClientCompatible == true && profile.ExposeReasoningEffortInChatGpt
-                    && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
-                        ? (profile.DefaultReasoningLevel is { } level && CodexReasoningLevels.IsRecognized(level) ? level : null)
-                        : null,
+                DefaultReasoningLevel = ReasoningDefaultSelection.ForCodex(profile),
             },
             cancellationToken).ConfigureAwait(false);
         await WriteTextAtomicallyAsync(

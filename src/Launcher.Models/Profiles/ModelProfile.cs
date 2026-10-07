@@ -160,7 +160,13 @@ public sealed record ModelProfile
 
     public string? DefaultReasoningLevel { get; init; }
 
+    /// <summary>User-selected default for new Codex conversations; null inherits the verified native default.</summary>
+    public string? PreferredReasoningLevel { get; init; }
+
     public bool? ThinkingEnabled { get; init; }
+
+    /// <summary>Display raw thinking in Codex without changing native inference.</summary>
+    public bool ShowThinkingProcess { get; init; }
 
     public bool? SupportsThinkingSwitch { get; init; }
 

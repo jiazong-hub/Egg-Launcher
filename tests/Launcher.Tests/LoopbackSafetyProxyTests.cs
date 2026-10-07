@@ -15,6 +15,48 @@ namespace Launcher.Tests;
 public sealed class LoopbackSafetyProxyTests
 {
     [Fact]
+    public async Task ThinkingDisplayToggleChangesOnlyResponsePresentationAndRemovesHistoryDuplicate()
+    {
+        var port = ReserveAvailableLoopbackPort();
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, port));
+        await using var upstream = builder.Build();
+        string? forwarded = null;
+        const string stream = "event: response.reasoning_text.delta\ndata: {\"type\":\"response.reasoning_text.delta\",\"item_id\":\"rs_1\",\"delta\":\"thinking\"}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\"}\n\n";
+        upstream.MapPost("/v1/responses", async context =>
+        {
+            using var reader = new StreamReader(context.Request.Body);
+            forwarded = await reader.ReadToEndAsync();
+            context.Response.ContentType = "text/event-stream";
+            context.Response.ContentLength = Encoding.UTF8.GetByteCount(stream);
+            foreach (var character in stream) await context.Response.WriteAsync(character.ToString());
+        });
+        await upstream.StartAsync();
+        try
+        {
+            await using var proxy = new LoopbackSafetyProxy();
+            await proxy.StartAsync(new Uri("http://127.0.0.1:0/"), new Uri($"http://127.0.0.1:{port}/"));
+            using var http = new HttpClient();
+            const string original = """{"input":[{"type":"reasoning","summary":[{"type":"summary_text","text":"thinking"}],"content":[{"type":"reasoning_text","text":"thinking"}]}],"reasoning":{"effort":"xhigh"}}""";
+            foreach (var enabled in new[] { true, false })
+            {
+                proxy.SetShowThinkingProcess(enabled);
+                using var response = await http.PostAsync(new Uri(proxy.PublicBaseUri!, "v1/responses"), new StringContent(original, Encoding.UTF8, "application/json"));
+                var result = await response.Content.ReadAsStringAsync();
+                Assert.Contains("response.reasoning_text.delta", result);
+                Assert.Equal(enabled, result.Contains("response.reasoning_summary_text.delta", StringComparison.Ordinal));
+                if (!enabled) Assert.Equal(stream, result);
+                using var document = JsonDocument.Parse(forwarded!);
+                Assert.Equal("xhigh", document.RootElement.GetProperty("reasoning").GetProperty("effort").GetString());
+                Assert.Empty(document.RootElement.GetProperty("input")[0].GetProperty("summary").EnumerateArray());
+                Assert.False(document.RootElement.TryGetProperty("chat_template_kwargs", out _));
+            }
+        }
+        finally { await upstream.StopAsync(); }
+    }
+
+    [Fact]
     public async Task ExplicitThinkingPolicyPreservesEffortAndResponseStreamAndCanReturnToInheritance()
     {
         var port = ReserveAvailableLoopbackPort();

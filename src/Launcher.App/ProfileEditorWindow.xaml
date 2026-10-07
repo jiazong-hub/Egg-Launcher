@@ -528,6 +528,7 @@
                             HorizontalAlignment="Stretch" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
                             MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
+                            <TextBlock Text="{DynamicResource ThinkingDetectionSection}" FontSize="16" FontWeight="Bold" Margin="0,0,0,14" />
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                                 <Button x:Name="DetectReasoningButton" Content="{DynamicResource DetectThinkingCapability}" Click="DetectReasoningButton_Click" Padding="12,8" />
                                 <Button x:Name="CancelReasoningButton" Content="{DynamicResource Cancel}" Click="CancelReasoningButton_Click" Margin="8,0,0,0" Padding="12,8" Visibility="Collapsed" />
@@ -535,23 +536,32 @@
                             <TextBlock x:Name="ReasoningTemplateTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"
                                        Text="{Binding Text, ElementName=TemplateStatusText}" />
                             <TextBlock x:Name="ReasoningCapabilityStatusTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,18" />
-                            <CheckBox x:Name="ThinkingEnabledCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
-                                      Content="{DynamicResource EnableThinking}" Checked="ThinkingEnabled_Changed" Unchecked="ThinkingEnabled_Changed" />
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
-                                <TextBlock x:Name="ThinkingStateTextBlock" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                                <Button x:Name="InheritThinkingButton" Content="{DynamicResource InheritThinking}" Click="InheritThinking_Click" Margin="12,0,0,0" Padding="8,4" />
-                            </StackPanel>
                             <TextBlock x:Name="ReasoningLevelsTextBlock" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8" />
-                            <TextBlock x:Name="ReasoningDefaultTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                            <Expander Header="{DynamicResource ThinkingDetectionDetails}" Margin="0,18,0,0">
+                                <TextBlock x:Name="ReasoningDetailsTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </Expander>
+                            <Border BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,20" />
+                            <TextBlock Text="{DynamicResource ThinkingEffortSection}" FontSize="16" FontWeight="Bold" Margin="0,0,0,14" />
                             <CheckBox x:Name="ReasoningEffortCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
                                       Content="{DynamicResource ExposeReasoningEffort}" ToolTip="{DynamicResource ExposeReasoningEffortTip}"
                                       Checked="ReasoningEffort_Changed" Unchecked="ReasoningEffort_Changed" />
                             <CheckBox x:Name="ReverseReasoningOrderCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}" Margin="0,14,0,0"
                                       Content="{DynamicResource ReverseReasoningOrder}" Checked="ReverseReasoningOrder_Changed" Unchecked="ReverseReasoningOrder_Changed" />
                             <TextBlock Text="{DynamicResource ReverseReasoningOrderTip}" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                            <Expander Header="{DynamicResource ThinkingDetectionDetails}" Margin="0,18,0,0">
-                                <TextBlock x:Name="ReasoningDetailsTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
-                            </Expander>
+                            <TextBlock Text="{DynamicResource PreferredReasoningLevel}" FontWeight="SemiBold" Margin="0,16,0,6" />
+                            <ComboBox x:Name="PreferredReasoningLevelComboBox" IsEditable="False" IsTextSearchEnabled="False"
+                                      HorizontalAlignment="Stretch" SelectionChanged="PreferredReasoningLevel_Changed" />
+                            <Border BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,20" />
+                            <TextBlock Text="{DynamicResource EnableThinking}" FontSize="16" FontWeight="Bold" Margin="0,0,0,14" />
+                            <CheckBox x:Name="ThinkingEnabledCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
+                                      Content="{DynamicResource EnableThinking}" Checked="ThinkingEnabled_Changed" Unchecked="ThinkingEnabled_Changed" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
+                                <TextBlock x:Name="ThinkingStateTextBlock" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Button x:Name="InheritThinkingButton" Content="{DynamicResource InheritThinking}" Click="InheritThinking_Click" Margin="12,0,0,0" Padding="8,4" />
+                            </StackPanel>
+                            <CheckBox x:Name="ShowThinkingProcessCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
+                                      Content="{DynamicResource ShowThinkingProcess}" Checked="ShowThinkingProcess_Changed" Unchecked="ShowThinkingProcess_Changed" />
+                            <TextBlock Text="{DynamicResource ShowThinkingProcessTip}" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,18" />
                         </StackPanel>
                     </Border>
                 </ScrollViewer>

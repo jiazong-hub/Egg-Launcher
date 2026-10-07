@@ -23,6 +23,8 @@ public sealed record ChatGptLocalModeRequest
 
     public string? DefaultReasoningEffort { get; init; }
 
+    public bool ShowThinkingProcess { get; init; }
+
     public ModelSandboxSettings? SandboxSettings { get; init; }
 
     public LauncherSettings? OriginalLauncherSettings { get; init; }

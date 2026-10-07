@@ -23,6 +23,8 @@ public static class ContextShiftCapabilityCache
             ToolOutputTokenLimit = null,
             CodexStreamIdleTimeoutMinutes = null,
             ThinkingEnabled = null,
+            ShowThinkingProcess = false,
+            PreferredReasoningLevel = null,
             ExposeReasoningEffortInChatGpt = false,
         });
         parameters = parameters with
