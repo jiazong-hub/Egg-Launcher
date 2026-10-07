@@ -26,3 +26,16 @@ SSE 等待时间调节、实际模板思考能力验证与思考设置、Desktop
 签名候选包门禁通过：锁定依赖恢复、Release 零警告/零错误、格式检查、372/372 自动测试（0 跳过）、在线依赖漏洞审计（0 已知漏洞）、App/Agent 自包含发布、Agent 自检、Runtime 许可文件和作者证书签名检查通过。未跳过在线审计。日志：`artifacts/release-installer-0.9.7-candidate.log`。
 
 源码提交后将重新构建正式包，使 ProductVersion 对应标签提交；最终发布结果通过独立文档提交追加，不移动发布标签。
+
+## 最终发布结果
+
+- 正式源码提交：`396cef16531fd188f8876559406533ec0063affe`；附注标签 `v0.9.7` 固定指向此提交，已同步 GitHub。
+- 从干净工作树重建正式签名包；完整发布门禁再次通过：372/372 自动测试（0 跳过）、Release 零警告/零错误、格式检查、在线依赖审计（0 已知漏洞）、App/Agent 自包含发布、Agent 自检、Runtime 许可和签名检查通过。
+- 包内 ProductVersion：`0.9.7+396cef16531fd188f8876559406533ec0063affe`；程序集和文件版本 0.9.7.0。
+- 安装包、应用、Agent 及卸载程序沿用作者自签名证书，指纹 `44A03B7EA758C184DB1F15E5ADC6DE7EBDC8153C`。签名完整性已检查；此证书不属于 Windows 公共信任，不安装信任根或导出私钥。
+- [v0.9.7 Release](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.7) 已公开，draft=false、prerelease=false，GitHub latest 为 v0.9.7。正式 EXE 和 SHA-256 文件已上传，旧版本保留。
+- 安装包大小：67,636,632 bytes；SHA-256：`934ebbef0e4fdfd97eba2fcc9b7634d6595b1e6d3b3c7bbeb38040c198784e48`。GitHub 资产 digest 与本地正式包完全一致，校验文件的资产 digest 也已核对。
+- Git HTTPS 传输连接失败后，使用 GitHub Git 数据 API 同步；逐项核验 Git 树、提交及附注标签对象 SHA 与本地完全一致，无强推或标签移动。
+- README 下载入口与 GitHub 正式资产一致。正式日志：`artifacts/release-installer-0.9.7-final.log`；资产清单：`artifacts/release-0.9.7-manifest.json`。
+- 当前网络下，GitHub 网页下载入口连接不稳定；改用无认证公开 API 下载后，90 秒仅接收 442,368 / 67,636,632 bytes，超时。未完成公开整包回下载和标签源码 ZIP 回下载核验，不记为通过；本地包、签名、远端资产摘要和 Git 对象一致性检查已完成。
+- 本段是发布后的独立文档记录，不重打包、不移动 v0.9.7 标签。
