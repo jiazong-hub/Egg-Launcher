@@ -40,6 +40,7 @@ public sealed class ReasoningStartupGuardTests
                 ModelType = ModelType.Dense,
                 ChatTemplateRelativePath = "active.jinja",
                 ThinkingEnabled = true,
+                ShowThinkingProcess = true,
                 SupportsThinkingSwitch = true,
                 DefaultThinkingEnabled = true,
                 ExposeReasoningEffortInChatGpt = true,
@@ -75,6 +76,7 @@ public sealed class ReasoningStartupGuardTests
             {
                 var reset = await ReasoningStartupGuard.EnsureAsync(profile, settings, store, paths, stopped, default);
                 Assert.Null(reset.ThinkingEnabled);
+                Assert.True(reset.ShowThinkingProcess);
                 Assert.False(reset.ExposeReasoningEffortInChatGpt);
                 Assert.Null((await new JsonModelProfileStore().LoadAsync(runtime)).Profiles.Single().ThinkingEnabled);
                 Assert.DoesNotContain("enable_thinking", await File.ReadAllTextAsync(paths.RouterPresetFile));

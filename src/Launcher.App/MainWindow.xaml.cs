@@ -1612,6 +1612,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        profile = Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, _settings.LlamaRoot).ApplyTo(profile);
         var extra = profile.ExtraArguments.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         extra.Remove("tensor-split");
         extra.Remove("override-tensor");

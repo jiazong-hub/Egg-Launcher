@@ -201,12 +201,15 @@ public partial class ProfileEditorWindow : Window
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
-        _originalProfile = profile;
         _contextShiftProbe = contextShiftProbe;
         _templateProbe = templateProbe;
         _reasoningProbe = reasoningProbe;
         _reasoningProfile = profile;
         _runtimeRoot = Path.GetFullPath(runtimeRoot);
+        // Migrate a still-valid original proof before edits or Restore Defaults change resource parameters.
+        profile = EnsureCurrentReasoningValidation(profile);
+        _originalProfile = profile;
+        _reasoningProfile = profile;
         _modelContextLimit = TryReadModelContextLimit(profile, _runtimeRoot);
         _hasEmbeddedMtpCandidate = TryReadModelMetadata(profile, _runtimeRoot)?.HasEmbeddedMtp == true;
         _contextChoices = BuildContextChoices(_modelContextLimit);
@@ -583,6 +586,7 @@ public partial class ProfileEditorWindow : Window
             ReasoningClientExecutablePath = _reasoningProfile.ReasoningClientExecutablePath,
             ReasoningValidationDetails = _reasoningProfile.ReasoningValidationDetails,
             ReasoningCapabilitySignature = _reasoningProfile.ReasoningCapabilitySignature,
+            ReasoningValidationBasis = _reasoningProfile.ReasoningValidationBasis,
             ReasoningCapabilityCheckedAtUtc = _reasoningProfile.ReasoningCapabilityCheckedAtUtc,
             ContextShiftEnabled = contextShiftEnabled,
             MtpEnabled = mtp.Enabled,

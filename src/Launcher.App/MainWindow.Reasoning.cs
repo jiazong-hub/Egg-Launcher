@@ -56,7 +56,11 @@ public partial class MainWindow
             ReasoningCapabilitySignature = signature,
             ReasoningCapabilityCheckedAtUtc = DateTimeOffset.UtcNow,
         };
-        return result with { ReasoningCapabilitySignature = ComputeReasoningCapabilitySignature(result, root) };
+        return result with
+        {
+            ReasoningCapabilitySignature = ComputeReasoningCapabilitySignature(result, root),
+            ReasoningValidationBasis = Launcher.Scripts.Templates.ReasoningValidationFingerprint.CaptureBasis(result, root),
+        };
     }
 
     private static async Task<LlamaReasoningCapability> DetectReasoningCapabilityWithNativeRouterAsync(

@@ -514,9 +514,12 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         var proxyStartupStopwatch = Stopwatch.StartNew();
         var profiles = await new JsonModelProfileStore().LoadAsync(settings.LlamaRoot!, cancellationToken).ConfigureAwait(false);
         var activeProfile = profiles.Profiles.FirstOrDefault(profile => profile.Id == settings.SelectedModelId);
-        if (activeProfile is not null && (activeProfile.ThinkingEnabled is not null || activeProfile.ExposeReasoningEffortInChatGpt || activeProfile.ShowThinkingProcess)
-            && Launcher.Scripts.Templates.ReasoningValidationState.Check(activeProfile, settings.LlamaRoot!).State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
-            throw new InvalidOperationException("思考验证已过期，请关闭 Codex 后重新保存或检测设置。");
+        if (activeProfile is not null && Launcher.Scripts.Templates.ReasoningValidationState.RequiresCurrentProof(activeProfile))
+        {
+            var check = Launcher.Scripts.Templates.ReasoningValidationState.Check(activeProfile, settings.LlamaRoot!);
+            if (check.State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
+                throw new InvalidOperationException(check.Reason + " 请关闭 Codex 后重新保存或检测设置。");
+        }
         _safetyProxy.SetThinkingEnabled(activeProfile?.SupportsThinkingSwitch == true ? activeProfile.ThinkingEnabled : null);
         _safetyProxy.SetShowThinkingProcess(activeProfile?.ShowThinkingProcess == true && activeProfile.SupportsThinkingSwitch == true
             && (activeProfile.ThinkingEnabled ?? activeProfile.DefaultThinkingEnabled) == true);

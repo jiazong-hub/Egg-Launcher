@@ -194,6 +194,10 @@ public sealed record ModelProfile
 
     public DateTimeOffset? ReasoningCapabilityCheckedAtUtc { get; init; }
 
+    /// <summary>Component hashes used only to explain proof changes, not to infer model capability.</summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyDictionary<string, string>? ReasoningValidationBasis { get; init; }
+
     /// <summary>Optional Codex sandbox overrides for this model, independent of llama.cpp settings.</summary>
     public ModelSandboxSettings? SandboxSettings { get; init; }
 

@@ -269,9 +269,12 @@ public sealed class ModeSwitchCoordinator(
 
     private static void ValidateRuntimeAndProfile(ModelProfile profile, string runtimeRoot)
     {
-        if ((profile.ThinkingEnabled is not null || profile.ExposeReasoningEffortInChatGpt || profile.ShowThinkingProcess)
-            && Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, runtimeRoot).State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
-            throw new InvalidDataException("思考验证已过期，请重新检测或关闭相关设置后保存。");
+        if (Launcher.Scripts.Templates.ReasoningValidationState.RequiresCurrentProof(profile))
+        {
+            var check = Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, runtimeRoot);
+            if (check.State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
+                throw new InvalidDataException(check.Reason);
+        }
         var profileErrors = ModelProfileValidator.Validate(profile, runtimeRoot);
         if (profileErrors.Count > 0)
         {
