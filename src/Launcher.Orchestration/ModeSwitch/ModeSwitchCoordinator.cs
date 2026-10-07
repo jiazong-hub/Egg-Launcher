@@ -70,6 +70,11 @@ public sealed class ModeSwitchCoordinator(
                     ContextWindow = request.Profile.ContextSize,
                     AutoCompactTokenLimit = request.Profile.AutoCompactTokenLimit,
                     ToolOutputTokenLimit = request.Profile.ToolOutputTokenLimit,
+                    CodexStreamIdleTimeoutMinutes = request.Profile.CodexStreamIdleTimeoutMinutes,
+                    DefaultReasoningEffort = (request.Profile.ThinkingEnabled ?? request.Profile.DefaultThinkingEnabled) != false
+                        && request.Profile.ExposeReasoningEffortInChatGpt && request.Profile.ReasoningResponsesVerified && request.Profile.ReasoningClientCompatible == true
+                        && request.Profile.DefaultReasoningLevel is { } effort
+                        && Launcher.ChatGPT.Catalog.CodexReasoningLevels.IsRecognized(effort) ? effort : null,
                     SandboxSettings = request.Profile.SandboxSettings,
                     OriginalLauncherSettings = settings,
                     TargetLauncherSettings = targetSettings,
@@ -264,6 +269,9 @@ public sealed class ModeSwitchCoordinator(
 
     private static void ValidateRuntimeAndProfile(ModelProfile profile, string runtimeRoot)
     {
+        if ((profile.ThinkingEnabled is not null || profile.ExposeReasoningEffortInChatGpt)
+            && Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, runtimeRoot).State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
+            throw new InvalidDataException("思考验证已过期，请重新检测或关闭相关设置后保存。");
         var profileErrors = ModelProfileValidator.Validate(profile, runtimeRoot);
         if (profileErrors.Count > 0)
         {

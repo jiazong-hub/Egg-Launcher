@@ -33,7 +33,7 @@ public sealed class ModeSwitchCoordinatorTests
             {
                 CodexHome = codexHome,
                 RuntimeRoot = runtimeRoot,
-                Profile = CreateProfile(),
+                Profile = CreateProfile() with { CodexStreamIdleTimeoutMinutes = 30 },
                 RouterPort = 18080,
             });
             var current = await settingsStore.LoadAsync();
@@ -51,6 +51,7 @@ public sealed class ModeSwitchCoordinatorTests
             Assert.Contains("base_url = \"http://127.0.0.1:19090/v1/\"", localConfig, StringComparison.Ordinal);
             Assert.Contains("model = \"local-coder\"", localConfig, StringComparison.Ordinal);
             Assert.Contains("custom_setting = true", localConfig, StringComparison.Ordinal);
+            Assert.Contains("stream_idle_timeout_ms = 1800000", localConfig, StringComparison.Ordinal);
 
             await modeSwitch.SwitchToOpenAIAsync();
             var restoredConfig = await File.ReadAllTextAsync(configPath);
@@ -59,6 +60,7 @@ public sealed class ModeSwitchCoordinatorTests
             Assert.Contains("base_url = \"http://127.0.0.1:0/v1/\"", restoredConfig, StringComparison.Ordinal);
             Assert.DoesNotContain("model_provider =", restoredConfig, StringComparison.Ordinal);
             Assert.DoesNotContain("127.0.0.1:19090", restoredConfig, StringComparison.Ordinal);
+            Assert.DoesNotContain("stream_idle_timeout_ms", restoredConfig, StringComparison.Ordinal);
         }
         finally
         {

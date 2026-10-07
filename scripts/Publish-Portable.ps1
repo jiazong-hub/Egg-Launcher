@@ -452,7 +452,7 @@ try {
         -LiteralPath (Join-Path $repositoryRoot 'docs\release-notes-0.9.6.md') `
         -Destination $packageDocsPath
     Copy-Item `
-        -LiteralPath (Join-Path $repositoryRoot 'docs\release-checks-0.9.6.md') `
+        -LiteralPath (Join-Path $repositoryRoot 'docs\release-checks-0.9.7.md') `
         -Destination $packageDocsPath
 
     $sourceFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File |

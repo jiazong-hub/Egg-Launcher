@@ -1134,9 +1134,6 @@ public partial class MainWindow : Window
         ChangeModelTypeButton.IsEnabled = !_busy && selectedProfile is not null && CanEditModelParameters(selectedProfile);
         AutoFitModelButton.IsEnabled = !_busy && hasSelection && CanUseFitTool();
         ModelDetailsButton.IsEnabled = !_busy && hasSelection;
-        DetectReasoningCapabilityButton.IsEnabled = !_busy
-            && selectedProfile is not null
-            && CanEditModelParameters(selectedProfile);
         LoadExternalMtpButton.IsEnabled = !_busy && selectedProfile is not null && CanEditModelParameters(selectedProfile);
         RemoveExternalMtpButton.IsEnabled = !_busy
             && selectedProfile is { MtpSource: MtpSourceKind.External }
@@ -1321,7 +1318,6 @@ public partial class MainWindow : Window
         ChangeModelTypeButton.IsEnabled = false;
         AutoFitModelButton.IsEnabled = false;
         ModelDetailsButton.IsEnabled = false;
-        DetectReasoningCapabilityButton.IsEnabled = false;
         LoadExternalMtpButton.IsEnabled = false;
         RemoveExternalMtpButton.IsEnabled = false;
         LoadExternalVisionButton.IsEnabled = false;
@@ -1683,7 +1679,20 @@ public partial class MainWindow : Window
             _paths.RouterPresetFile,
             _paths.LocalModelCatalogFile,
             updateActivePreset,
-            cancellationToken);
+            cancellationToken,
+            synchronizeActiveCodexConfiguration: async (savedProfile, token) =>
+            {
+                var coordinator = new ModeSwitchCoordinator(
+                    _settingsStore, _clientDetector,
+                    new ChatGptConfigTransactionService(_clientDetector), _paths);
+                await coordinator.SwitchToLocalAsync(new LocalModeSwitchRequest
+                {
+                    CodexHome = _codexHome,
+                    RuntimeRoot = runtimeRoot,
+                    Profile = savedProfile,
+                    RouterPort = _settings.RouterPort,
+                }, token);
+            });
     }
 
     private bool CanEditModelParameters(ModelProfile? profile = null, bool forceClientRefresh = false)
@@ -1707,7 +1716,6 @@ public partial class MainWindow : Window
         ToggleModelVisibilityButton.IsEnabled = canMutate;
         DeleteLocalModelButton.IsEnabled = canRemove;
         ChangeModelTypeButton.IsEnabled = canMutate;
-        DetectReasoningCapabilityButton.IsEnabled = canMutate;
         LoadExternalMtpButton.IsEnabled = canMutate;
         RemoveExternalMtpButton.IsEnabled = canMutate
             && profile is { MtpSource: MtpSourceKind.External }
@@ -1817,7 +1825,7 @@ public partial class MainWindow : Window
                 activeProfile,
                 runtimeRoot,
                 _lifetime.Token);
-            if (activeProfile.ExposeReasoningEffortInChatGpt)
+            if (activeProfile.ExposeReasoningEffortInChatGpt || activeProfile.ThinkingEnabled is not null)
             {
                 // This is only a local signature guard for an enabled feature. Native capability
                 // detection belongs to Local Model Management and must never block startup.
@@ -2879,7 +2887,6 @@ public partial class MainWindow : Window
         ChangeModelTypeButton.IsEnabled = false;
         AutoFitModelButton.IsEnabled = false;
         ModelDetailsButton.IsEnabled = false;
-        DetectReasoningCapabilityButton.IsEnabled = false;
         LoadExternalMtpButton.IsEnabled = false;
         RemoveExternalMtpButton.IsEnabled = false;
         LoadExternalVisionButton.IsEnabled = false;
@@ -2907,9 +2914,6 @@ public partial class MainWindow : Window
             && CanEditModelParameters(typeSelected.Profile);
         AutoFitModelButton.IsEnabled = !busy && ManagedModelsList.SelectedIndex >= 0 && CanUseFitTool();
         ModelDetailsButton.IsEnabled = !busy && ManagedModelsList.SelectedIndex >= 0;
-        DetectReasoningCapabilityButton.IsEnabled = !busy
-            && ManagedModelsList.SelectedItem is ModelListItem { Profile: not null } reasoningSelected
-            && CanEditModelParameters(reasoningSelected.Profile);
         LoadExternalMtpButton.IsEnabled = !busy
             && ManagedModelsList.SelectedItem is ModelListItem { Profile: not null } mtpSelected
             && CanEditModelParameters(mtpSelected.Profile);
@@ -3185,24 +3189,12 @@ public partial class MainWindow : Window
     private async Task<ModelProfile> InvalidateStaleReasoningCapabilityAsync(
         ModelProfile profile,
         string runtimeRoot,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool persist = true)
     {
-        var signature = ComputeReasoningCapabilitySignature(profile, runtimeRoot);
-        if (string.Equals(profile.ReasoningCapabilitySignature, signature, StringComparison.Ordinal))
-        {
-            return profile;
-        }
-
-        var reset = profile with
-        {
-            ReasoningCapabilityStatus = ReasoningCapabilityStatus.Unknown,
-            SupportedReasoningLevels = Array.Empty<string>(),
-            DefaultReasoningLevel = null,
-            ExposeReasoningEffortInChatGpt = false,
-            ReasoningCapabilitySignature = signature,
-            ReasoningCapabilityCheckedAtUtc = null,
-        };
-        await _profileStore.SaveAsync(runtimeRoot, reset, cancellationToken);
+        var check = Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, runtimeRoot);
+        var reset = check.ApplyTo(profile);
+        if (ReferenceEquals(reset, profile)) return profile;
+        if (persist) await _profileStore.SaveAsync(runtimeRoot, reset, cancellationToken);
         return reset;
     }
 
@@ -3377,21 +3369,7 @@ public partial class MainWindow : Window
 
     private static string ComputeReasoningCapabilitySignature(ModelProfile profile, string runtimeRoot)
     {
-        static string FileSignature(string path)
-        {
-            var info = new FileInfo(path);
-            return info.Exists
-                ? $"{Path.GetFullPath(path)}|{info.Length}|{info.LastWriteTimeUtc.Ticks}"
-                : $"{Path.GetFullPath(path)}|missing";
-        }
-
-        var modelPath = Path.Combine(runtimeRoot, profile.ModelRelativePath);
-        var templateSignature = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
-            ? "embedded-template"
-            : FileSignature(Path.Combine(runtimeRoot, profile.ChatTemplateRelativePath));
-        var runtimeSignature = FileSignature(Path.Combine(runtimeRoot, "llama-server.exe"));
-        var material = $"{FileSignature(modelPath)}|{profile.Jinja}|{templateSignature}|{runtimeSignature}";
-        return Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(material)));
+        return Launcher.Scripts.Templates.ReasoningValidationFingerprint.Compute(profile, runtimeRoot);
     }
 
     private async Task<Uri?> TryGetTrustedPublicProxyBaseUriAsync(

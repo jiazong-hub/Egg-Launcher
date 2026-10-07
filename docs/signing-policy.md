@@ -1,6 +1,6 @@
 # Code signing policy
 
-Egg Launcher public beta releases, including the 0.9.6 release, use the project-controlled,
+Egg Launcher public beta releases, including the 0.9.7 release, use the project-controlled,
 self-signed Authenticode code-signing certificate. The signature establishes
 continuity between releases made by the holder of the same private key and
 detects changes made after signing. It is not a third-party identity validation
@@ -34,7 +34,7 @@ and writes a SHA-256 file next to the Setup EXE. An unsigned installer is for
 internal acceptance only. A self-signed signature does not establish public
 Windows trust or guarantee that SmartScreen will be quiet.
 
-The same installer policy applies to 0.9.4, 0.9.5 and 0.9.6. A candidate build is not a public
+The same installer policy applies to 0.9.4, 0.9.5, 0.9.6 and 0.9.7. A candidate build is not a public
 release until release gates and signature verification have passed. Checks
 performed on an unsigned candidate do not establish that the final installer,
 uninstaller or binaries have been signed.

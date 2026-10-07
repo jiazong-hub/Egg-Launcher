@@ -570,9 +570,6 @@
                                                 <Button x:Name="ModelDetailsButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
                                                         Content="{DynamicResource ModelDetails}" ToolTip="{DynamicResource ModelDetailsToolTip}"
                                                         Click="ModelDetailsButton_Click" />
-                                                <Button x:Name="DetectReasoningCapabilityButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource DetectReasoningCapability}" ToolTip="{DynamicResource DetectReasoningCapabilityToolTip}"
-                                                        Click="DetectReasoningCapabilityButton_Click" />
                                                 <Button x:Name="LoadExternalMtpButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
                                                         Content="{DynamicResource LoadExternalMtp}" ToolTip="{DynamicResource LoadExternalMtpToolTip}"
                                                         Click="LoadExternalMtpButton_Click" />

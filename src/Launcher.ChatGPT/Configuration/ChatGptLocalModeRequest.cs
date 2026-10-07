@@ -19,6 +19,10 @@ public sealed record ChatGptLocalModeRequest
 
     public int? ToolOutputTokenLimit { get; init; }
 
+    public int? CodexStreamIdleTimeoutMinutes { get; init; }
+
+    public string? DefaultReasoningEffort { get; init; }
+
     public ModelSandboxSettings? SandboxSettings { get; init; }
 
     public LauncherSettings? OriginalLauncherSettings { get; init; }

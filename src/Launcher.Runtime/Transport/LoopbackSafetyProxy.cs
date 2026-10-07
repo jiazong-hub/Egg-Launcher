@@ -21,10 +21,13 @@ namespace Launcher.Runtime.Transport;
 
 /// <summary>
 /// Exposes a deliberately small loopback-only surface for ChatGPT Desktop.
-/// It strips account credentials and forwards request semantics unchanged to llama.cpp.
+/// It strips account credentials and preserves conversation content; verified explicit thinking overrides use native request parameters.
 /// </summary>
 public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
 {
+    private int _thinkingOverride = -1;
+
+    public void SetThinkingEnabled(bool? enabled) => Volatile.Write(ref _thinkingOverride, enabled.HasValue ? (enabled.Value ? 1 : 0) : -1);
     // Base64 image input is larger than the source image. Keep the boundary bounded,
     // but leave enough room for a normal desktop screenshot plus prompt/tool metadata.
     private const int MaximumRequestBodyBytes = 32 * 1024 * 1024;
@@ -423,6 +426,8 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 inputItemTypes = copySummary.Semantics.InputItemTypes,
                 toolTypes = copySummary.Semantics.ToolTypes,
                 hasCompactionTrigger = copySummary.Semantics.HasCompactionTrigger,
+                forwardedReasoningEffort = copySummary.Semantics.ReasoningEffort,
+                thinkingOverride = Volatile.Read(ref _thinkingOverride) is var thinking && thinking >= 0 ? (bool?)(thinking == 1) : null,
             }, importantInConcise: false).ConfigureAwait(false);
             var isCompactionRequest = IsCompactionRequest(context.Request, codexMetadata, copySummary.Semantics);
             if (isCompactionRequest)
@@ -677,7 +682,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
         }
     }
 
-    private static async Task<RequestCopySummary> CopyRequestAsync(
+    private async Task<RequestCopySummary> CopyRequestAsync(
         HttpRequest source,
         HttpRequestMessage destination,
         Action<string> setStage,
@@ -700,8 +705,12 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 decoded = true;
             }
 
-            destination.Content = new ByteArrayContent(body);
             ValidateImageReferences(body, source.ContentType);
+            var thinking = Volatile.Read(ref _thinkingOverride);
+            if (thinking >= 0 && source.Path.Value is "/v1/responses" or "/responses"
+                && source.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true)
+                body = ThinkingRequestPolicy.Apply(body, thinking == 1);
+            destination.Content = new ByteArrayContent(body);
             setStage("copy_request_headers");
             CopyAllowedRequestHeaders(source, destination, decoded);
             return new RequestCopySummary(
@@ -737,10 +746,17 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
                 "input",
                 KnownResponseItemTypes);
             var toolTypes = ReadTypeNames(document.RootElement, "tools", KnownToolTypes);
+            string? effort = null;
+            if (document.RootElement.TryGetProperty("reasoning", out var reasoning) && reasoning.ValueKind == JsonValueKind.Object
+                && reasoning.TryGetProperty("effort", out var effortNode) && effortNode.ValueKind == JsonValueKind.String)
+            {
+                var raw = effortNode.GetString();
+                effort = raw is "none" or "minimal" or "low" or "medium" or "high" or "xhigh" or "max" or "ultra" or "persistent" ? raw : "unrecognized";
+            }
             return new RequestSemanticSummary(
                 inputItemTypes,
                 toolTypes,
-                inputItemTypes.Contains("compaction_trigger", StringComparer.Ordinal));
+                inputItemTypes.Contains("compaction_trigger", StringComparer.Ordinal), effort);
         }
         catch (JsonException)
         {
@@ -1440,7 +1456,7 @@ public sealed class LoopbackSafetyProxy : ILoopbackSafetyProxy
     private sealed record RequestSemanticSummary(
         IReadOnlyList<string> InputItemTypes,
         IReadOnlyList<string> ToolTypes,
-        bool HasCompactionTrigger)
+        bool HasCompactionTrigger, string? ReasoningEffort = null)
     {
         public static RequestSemanticSummary Empty { get; } = new([], [], false);
     }

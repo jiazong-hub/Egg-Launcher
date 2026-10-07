@@ -22,16 +22,15 @@ public static partial class ModelProfileValidator
         ],
         StringComparer.OrdinalIgnoreCase);
 
-    private static readonly IReadOnlySet<string> SupportedReasoningLevels = new HashSet<string>(
-        ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra", "persistent"],
-        StringComparer.Ordinal);
-
     public static IReadOnlyList<string> Validate(ModelProfile profile, string runtimeRoot, bool validateConversationLimits = true)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
 
         var errors = new List<string>();
+
+        if (!CodexStreamIdleTimeout.IsValid(profile.CodexStreamIdleTimeoutMinutes))
+            errors.Add("Codex SSE 空闲等待时间必须为 5 分钟的正整数倍，或沿用 Codex 默认值。");
 
         if (profile.SchemaVersion != ModelProfile.CurrentSchemaVersion)
         {
@@ -270,6 +269,12 @@ public static partial class ModelProfileValidator
 
     private static void ValidateReasoningCapability(ModelProfile profile, ICollection<string> errors)
     {
+        if (profile.ThinkingEnabled is not null && profile.SupportsThinkingSwitch != true)
+            errors.Add("思考开关必须通过当前模板及 Responses 路径验证后才能设置。");
+        if (profile.ThinkingEnabled is not null && profile.ExtraArguments.Keys.Any(key => key is "reasoning" or "reasoning-effort" or "reasoning-budget" or "chat-template-kwargs"))
+            errors.Add("思考开关不能与高级参数中的思考覆盖同时使用。");
+        if (profile.ReasoningValidationDetails?.Length > 8192)
+            errors.Add("思考检测详情过长。");
         var levels = profile.SupportedReasoningLevels;
         if (levels is null)
         {
@@ -277,8 +282,8 @@ public static partial class ModelProfileValidator
             return;
         }
 
-        if (levels.Count > SupportedReasoningLevels.Count
-            || levels.Any(level => string.IsNullOrWhiteSpace(level) || !SupportedReasoningLevels.Contains(level))
+        if (levels.Count > 32
+            || levels.Any(level => !Launcher.Core.Configuration.ReasoningLevelValue.IsValid(level))
             || levels.Distinct(StringComparer.Ordinal).Count() != levels.Count)
         {
             errors.Add("思考强度档位列表包含未知、重复或格式无效的值。");
@@ -303,7 +308,7 @@ public static partial class ModelProfileValidator
         }
 
         if (profile.ExposeReasoningEffortInChatGpt
-            && profile.ReasoningCapabilityStatus != ReasoningCapabilityStatus.Verified)
+            && (profile.ReasoningCapabilityStatus != ReasoningCapabilityStatus.Verified || !profile.ReasoningResponsesVerified))
         {
             errors.Add("只有档位已经明确验证时，才能向 ChatGPT 开放思考强度调节。");
         }

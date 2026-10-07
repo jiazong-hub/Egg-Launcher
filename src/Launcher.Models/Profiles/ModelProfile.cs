@@ -2,7 +2,7 @@ namespace Launcher.Models.Profiles;
 
 public sealed record ModelProfile
 {
-    public const int CurrentSchemaVersion = 11;
+    public const int CurrentSchemaVersion = 13;
 
     public const int DefaultCompactionSafetyReserve = 8_192;
 
@@ -59,6 +59,9 @@ public sealed record ModelProfile
 
     /// <summary>Optional Codex limit for one tool result stored in conversation history.</summary>
     public int? ToolOutputTokenLimit { get; init; }
+
+    /// <summary>Per-model Codex SSE idle timeout; null retains the Codex default.</summary>
+    public int? CodexStreamIdleTimeoutMinutes { get; init; }
 
     public string GpuLayers { get; init; } = "auto";
 
@@ -149,16 +152,36 @@ public sealed record ModelProfile
 
     public DateTimeOffset? VisionValidatedAtUtc { get; init; }
 
-    /// <summary>Capability state captured explicitly from Local Model Management through native llama.cpp /props.</summary>
+    /// <summary>Capability state verified using the active template and native runtime.</summary>
     public ReasoningCapabilityStatus ReasoningCapabilityStatus { get; init; } = ReasoningCapabilityStatus.Unknown;
 
-    /// <summary>Exact native levels, populated only when llama.cpp reports a complete recognized list.</summary>
+    /// <summary>Independent native levels verified from explicit declarations and native rendering.</summary>
     public IReadOnlyList<string> SupportedReasoningLevels { get; init; } = Array.Empty<string>();
 
     public string? DefaultReasoningLevel { get; init; }
 
+    public bool? ThinkingEnabled { get; init; }
+
+    public bool? SupportsThinkingSwitch { get; init; }
+
+    public bool? DefaultThinkingEnabled { get; init; }
+
+    public bool ReasoningResponsesVerified { get; init; }
+
+    public bool? ReasoningClientCompatible { get; init; }
+
+    public string? ReasoningClientExecutablePath { get; init; }
+
+    public IReadOnlyDictionary<string, string> ReasoningLevelAliases { get; init; } = new Dictionary<string, string>();
+
+    public string? ReasoningValidationDetails { get; init; }
+
+
     /// <summary>Whether verified levels should be exposed to ChatGPT for this model.</summary>
     public bool ExposeReasoningEffortInChatGpt { get; init; }
+
+    /// <summary>Reverse only the order advertised to Codex; native values and defaults stay unchanged.</summary>
+    public bool ReverseReasoningLevelDisplayOrder { get; init; }
 
     /// <summary>Signature of the model, optional template, and runtime used for the explicit capability probe.</summary>
     public string? ReasoningCapabilitySignature { get; init; }

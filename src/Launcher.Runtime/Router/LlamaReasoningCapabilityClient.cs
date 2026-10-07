@@ -9,11 +9,6 @@ namespace Launcher.Runtime.Router;
 /// </summary>
 public sealed class LlamaReasoningCapabilityClient(HttpClient httpClient)
 {
-    private static readonly HashSet<string> ChatGptReasoningLevels =
-        new(
-            ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra", "persistent"],
-            StringComparer.Ordinal);
-
     public async Task<LlamaReasoningCapability> ProbeAsync(
         Uri baseUri,
         string modelId,
@@ -67,18 +62,15 @@ public sealed class LlamaReasoningCapabilityClient(HttpClient httpClient)
             ?? ReadStringArray(root, "reasoning_effort_levels");
         if (rawLevels is { Count: > 0 })
         {
-            var normalized = rawLevels
-                .Select(level => level.Trim().ToLowerInvariant())
-                .ToArray();
-            if (normalized.Length <= ChatGptReasoningLevels.Count
-                && normalized.All(ChatGptReasoningLevels.Contains)
+            var normalized = rawLevels.ToArray();
+            if (normalized.Length <= 32
+                && normalized.All(Launcher.Core.Configuration.ReasoningLevelValue.IsValid)
                 && normalized.Distinct(StringComparer.Ordinal).Count() == normalized.Length)
             {
                 var defaultLevel = ReadOptionalString(caps, "default_reasoning_level")
                     ?? ReadOptionalString(caps, "default_reasoning_effort")
                     ?? ReadOptionalString(root, "default_reasoning_level")
                     ?? ReadOptionalString(root, "default_reasoning_effort");
-                defaultLevel = defaultLevel?.Trim().ToLowerInvariant();
                 if (defaultLevel is not null && !normalized.Contains(defaultLevel, StringComparer.Ordinal))
                 {
                     defaultLevel = null;
@@ -138,7 +130,7 @@ public sealed class LlamaReasoningCapabilityClient(HttpClient httpClient)
             }
 
             levels.Add(item.GetString()!);
-            if (levels.Count > 16)
+            if (levels.Count > 32)
             {
                 return Array.Empty<string>();
             }

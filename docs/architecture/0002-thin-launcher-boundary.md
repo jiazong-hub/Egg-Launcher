@@ -29,13 +29,13 @@ Desktop-facing 回环层只做以下工作：
 - 拒绝浏览器 Origin 和管理路由；
 - 使用请求头白名单剥离 Authorization、Cookie 和账户元数据；
 - 在 llama.cpp 无法读取 Desktop 压缩传输时解码 gzip、Brotli、deflate 或 Zstandard；
-- 请求正文和 llama.cpp 响应保持语义透明。
+- 对话、工具和 llama.cpp 响应保持语义透明。仅在用户显式设置且原生验证通过的思考开关下设置 enable_thinking；开启时清除冲突的 none 努力值，正向档位保持原值。不改写思考输出或 SSE。
 
 Local 模式把回环地址声明为一个使用现有 OpenAI 登录状态、但身份不是 OpenAI 的自定义 Provider。这样 Desktop 继续使用同一账户外壳、项目和本地历史，安全代理仍会在进入 llama.cpp 前剥离认证；与此同时 Codex 会使用其原生本地 compaction：Codex 监控 token、通过普通 Responses 请求让当前本地模型生成摘要，并由 Codex 自己重建“摘要 + 保留历史”。Launcher 只把每模型的 `Context - 压缩安全余量` 写成 Codex 自动压缩线，并记录不含正文的压缩诊断；它不限制单次输出、不生成摘要、不解析摘要，也不创建 compaction item。
 
 Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtime 的 llama-server 任一运行时禁止编辑参数；服务完全停止后允许编辑。其他可用模型仍可编辑，其保存不会覆盖当前 Local 配置。自动适配另有运行条件：必须处于 OpenAI 模式，且当前 Runtime 没有运行中的 llama-server。
 
-参数保存与模式配置使用两个独立入口。`SaveProfileArtifactsAsync` 调用 `ModelArtifactWriter`，由模型文件事务提交或回滚 Profile、备份与 BAT；保存当前配置的 Local 模型时，也将 Catalog 和 Router preset 纳入同一文件事务。保存入口不调用 Codex 配置事务，不启动或重载服务。`ActivateLocalAsync` 在冷启动或切换模型时重新读取已保存 Profile，再调用 `ModeSwitchCoordinator`，通过已有模式配置事务应用 Codex 的 Context、压缩线、工具输出预算和沙箱设置，并更新 Catalog 与 Router preset。客户端已运行且仍使用同一 Local 模型时，满足复用条件的启动操作可复用现有服务，不重新应用参数。
+参数保存与模式配置使用两个独立入口。`SaveProfileArtifactsAsync` 调用 `ModelArtifactWriter`，由模型文件事务提交或回滚 Profile、备份与 BAT；保存当前配置的 Local 模型时，也将 Catalog 和 Router preset 纳入同一文件事务。保存当前 Local 模型时，在模型文件事务内调用 `ModeSwitchCoordinator` 的 Local 更新路径，立即提交 Codex 受管理配置和恢复记录；模式更新失败时由配置事务回滚，再由外层模型事务恢复文件。保存不启动或重载服务。非当前模型只更新自身文件。`ActivateLocalAsync` 在冷启动或切换模型时重新读取已保存 Profile，再调用 `ModeSwitchCoordinator`，通过已有模式配置事务应用 Codex 的 Context、压缩线、工具输出预算、SSE 等待时间和沙箱设置，并更新 Catalog 与 Router preset。客户端已运行且仍使用同一 Local 模型时，满足复用条件的启动操作可复用现有服务，不重新应用参数。
 
 ## 明确不做
 
@@ -55,7 +55,10 @@ Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtim
 ## v0.9.1 模型能力边界
 
 - Dense/MoE 类型是 Profile 的显式事实。首次添加可以读取 GGUF 元数据辅助识别，但未知结果不猜测；用户更改类型时重建参数配置，不把跨架构参数直接迁移。
-- MTP、视觉和思考档位都由 llama.cpp / GGUF 元数据或隔离验证证明。模型管理负责检测和关联，参数页只允许启用已经确认的能力。
+- MTP、视觉和思考能力由实际元数据或原生隔离验证证明。MTP、视觉检测与关联位于模型管理；思考检测位于参数页“思考设置”，使用实际模板和 Responses 链路，分别确认开关、独立档位、默认值和别名。未知能力如实保留，不默认填中档，不映射。
+- 思考 Responses 验证比较隔离原生进程记录的完整实际提示词，不以输入 token 数量充当传递证据。与可信 Desktop 安装匹配的缓存 CLI 协议 schema 单独确认原始档位兼容性，不依赖独立 CLI 安装。共享指纹检查覆盖编辑、保存、模式切换和 Agent 重启；过期验证的配置清理由现有事务同步，客户端运行时阻止沿用过期设置。
 - 外置 MTP 与 mmproj 是主模型的可撤销关联，不是独立聊天模型；下载辅助文件不会自动把它绑定到任何 Profile。
 - 未设置的参数不写入 preset 或命令行，让当前 llama.cpp 保持自己的默认行为。Launcher 不以 UI 默认值伪装 Runtime 推荐。
 - 从模型列表移除只删除 Profile 和 Launcher 拥有的生成物。删除用户模型数据属于用户或 llama 原生受保护缓存管理流程，不由普通列表操作承担。
+
+- 档位反转只在 Catalog 构建时调整完整条目的排列，不修改原始验证列表、默认档位或请求值。UI 与档位调节开关联动，禁用时保留偏好；显示偏好不纳入能力验证指纹。

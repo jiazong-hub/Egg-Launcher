@@ -18,7 +18,9 @@ public static partial class LocalModelCatalogBuilder
         Validate(options);
 
         var reasoningLevels = new JsonArray();
-        foreach (var level in options.SupportedReasoningLevels)
+        var displayLevels = options.ReverseReasoningLevelDisplayOrder
+            ? options.SupportedReasoningLevels.Reverse() : options.SupportedReasoningLevels;
+        foreach (var level in displayLevels)
         {
             reasoningLevels.Add(new JsonObject
             {
@@ -124,12 +126,9 @@ public static partial class LocalModelCatalogBuilder
             throw new ArgumentOutOfRangeException(nameof(options), "Catalog Context Window 不能小于 1024。");
         }
 
-        var allowedLevels = new HashSet<string>(
-            ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra", "persistent"],
-            StringComparer.Ordinal);
         if (options.SupportedReasoningLevels is null
-            || options.SupportedReasoningLevels.Count > allowedLevels.Count
-            || options.SupportedReasoningLevels.Any(level => !allowedLevels.Contains(level))
+            || options.SupportedReasoningLevels.Count > 32
+            || options.SupportedReasoningLevels.Any(level => !CodexReasoningLevels.IsRecognized(level))
             || options.SupportedReasoningLevels.Distinct(StringComparer.Ordinal).Count()
                 != options.SupportedReasoningLevels.Count)
         {
@@ -154,7 +153,7 @@ public static partial class LocalModelCatalogBuilder
         "max" => "Maximum reasoning effort",
         "ultra" => "Ultra reasoning effort",
         "persistent" => "Persistent reasoning effort",
-        _ => throw new ArgumentOutOfRangeException(nameof(level)),
+        _ => level,
     };
 
     [GeneratedRegex("^[A-Za-z0-9][A-Za-z0-9._:/-]*$", RegexOptions.CultureInvariant)]

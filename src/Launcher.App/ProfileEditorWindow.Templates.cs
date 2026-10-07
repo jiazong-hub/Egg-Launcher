@@ -18,6 +18,15 @@ public partial class ProfileEditorWindow
     private void UpdateTemplateStatus()
     {
         if (TemplateStatusText is null || ChatTemplatePathTextBox is null || JinjaCheckBox is null) return;
+        if (!_populatingProfile && _reasoningProfile is not null)
+        {
+            _reasoningProfile = EnsureCurrentReasoningValidation(_reasoningProfile with
+            {
+                Jinja = JinjaCheckBox.IsChecked == true,
+                ChatTemplateRelativePath = NullWhenWhiteSpace(ChatTemplatePathTextBox.Text),
+            });
+            RefreshReasoningUi();
+        }
         var profile = _originalProfile with
         {
             Jinja = JinjaCheckBox.IsChecked == true,

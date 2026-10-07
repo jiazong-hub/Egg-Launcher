@@ -15,6 +15,44 @@ namespace Launcher.Tests;
 public sealed class LoopbackSafetyProxyTests
 {
     [Fact]
+    public async Task ExplicitThinkingPolicyPreservesEffortAndResponseStreamAndCanReturnToInheritance()
+    {
+        var port = ReserveAvailableLoopbackPort();
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.ConfigureKestrel(options => options.Listen(IPAddress.Loopback, port));
+        await using var upstream = builder.Build();
+        string? forwarded = null;
+        const string stream = "event: response.completed\ndata: {\"type\":\"response.completed\"}\n\n";
+        upstream.MapPost("/v1/responses", async context =>
+        {
+            using var reader = new StreamReader(context.Request.Body);
+            forwarded = await reader.ReadToEndAsync();
+            context.Response.ContentType = "text/event-stream";
+            await context.Response.WriteAsync(stream);
+        });
+        await upstream.StartAsync();
+        try
+        {
+            await using var proxy = new LoopbackSafetyProxy();
+            await proxy.StartAsync(new Uri("http://127.0.0.1:0/"), new Uri($"http://127.0.0.1:{port}/"));
+            using var http = new HttpClient();
+            const string original = """{"model":"model", "input":"original", "reasoning":{"effort":"low"}}""";
+            foreach (bool? enabled in new bool?[] { false, true, null })
+            {
+                proxy.SetThinkingEnabled(enabled);
+                using var response = await http.PostAsync(new Uri(proxy.PublicBaseUri!, "v1/responses"), new StringContent(original, Encoding.UTF8, "application/json"));
+                Assert.Equal(stream, await response.Content.ReadAsStringAsync());
+                using var document = JsonDocument.Parse(forwarded!);
+                Assert.Equal("low", document.RootElement.GetProperty("reasoning").GetProperty("effort").GetString());
+                if (enabled.HasValue) Assert.Equal(enabled.Value, document.RootElement.GetProperty("chat_template_kwargs").GetProperty("enable_thinking").GetBoolean());
+                else Assert.Equal(original, forwarded);
+            }
+        }
+        finally { await upstream.StopAsync(); }
+    }
+
+    [Fact]
     public async Task SafetyProxy_WhenPortZeroRequested_BindsAndReportsAnOwnedLoopbackPort()
     {
         var upstreamPort = ReserveAvailableLoopbackPort();

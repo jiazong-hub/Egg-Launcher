@@ -10,6 +10,39 @@ namespace Launcher.Tests;
 public sealed class ChatGptConfigTransactionServiceTests
 {
     [Fact]
+    public async Task VerifiedDefaultIsWrittenExactlyAndOnlinePlanOverrideIsRestored()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var config = Path.Combine(root, "config.toml");
+            var catalog = Path.Combine(root, "catalog.json");
+            await File.WriteAllTextAsync(config, "model = \"online\"\nmodel_reasoning_effort = \"medium\"\nplan_mode_reasoning_effort = \"high\"\n");
+            await WriteCatalogAsync(catalog, "local-coder");
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var service = new ChatGptConfigTransactionService(new FakeClientDetector(false));
+            await service.ApplyLocalAsync(new ChatGptLocalModeRequest
+            {
+                ConfigPath = config,
+                ModelSlug = "local-coder",
+                ModelCatalogPath = catalog,
+                OpenAIBaseUrl = new Uri("http://127.0.0.1:8080/v1"),
+                ContextWindow = 16384,
+                AutoCompactTokenLimit = 12288,
+                DefaultReasoningEffort = "xhigh",
+            }, paths);
+            var local = await File.ReadAllTextAsync(config);
+            Assert.Contains("model_reasoning_effort = \"xhigh\"", local);
+            Assert.DoesNotContain("plan_mode_reasoning_effort", local);
+            await service.RestoreOpenAIAsync(paths.RecoveryFile);
+            var restored = await File.ReadAllTextAsync(config);
+            Assert.Contains("model_reasoning_effort = \"medium\"", restored);
+            Assert.Contains("plan_mode_reasoning_effort = \"high\"", restored);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task ApplyAndRestore_PreservesUnknownConfigAndAuthenticationFile()
     {
         var root = CreateTemporaryDirectory();

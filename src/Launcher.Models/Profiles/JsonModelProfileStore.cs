@@ -82,6 +82,21 @@ public sealed class JsonModelProfileStore
                     profile = profile with
                     {
                         SchemaVersion = ModelProfile.CurrentSchemaVersion,
+                        ReasoningCapabilityStatus = ReasoningCapabilityStatus.Unknown,
+                        SupportedReasoningLevels = [],
+                        DefaultReasoningLevel = null,
+                        ExposeReasoningEffortInChatGpt = false,
+                        ReasoningResponsesVerified = false,
+                        ReasoningClientCompatible = null,
+                        ReasoningClientExecutablePath = null,
+                        SupportsThinkingSwitch = null,
+                        DefaultThinkingEnabled = null,
+                        ThinkingEnabled = null,
+                        ReasoningLevelAliases = new Dictionary<string, string>(),
+                        ReasoningCapabilitySignature = null,
+                        ReasoningCapabilityCheckedAtUtc = null,
+                        ReasoningValidationDetails = "旧版思考验证需要按当前模板重新检测。",
+
                         SourceKind = previousSchemaVersion == 1
                             ? ModelSourceKind.LocalFile
                             : profile.SourceKind,

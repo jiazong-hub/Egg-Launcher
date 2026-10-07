@@ -8,6 +8,11 @@ internal static class ModelFeatureArguments
     public static IReadOnlyList<KeyValuePair<string, string?>> Generate(ModelProfile profile, Func<string, string> resolvePath)
     {
         var arguments = new List<KeyValuePair<string, string?>>();
+        if (profile.ThinkingEnabled is bool thinking)
+        {
+            Append(arguments, "reasoning", thinking ? "on" : "off");
+            if (!thinking) Append(arguments, "reasoning-budget", "0");
+        }
         AppendMtp(arguments, profile, resolvePath);
         AppendVision(arguments, profile, resolvePath);
         return arguments;

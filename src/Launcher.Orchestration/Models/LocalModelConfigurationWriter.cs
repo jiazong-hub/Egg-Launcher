@@ -16,15 +16,16 @@ public static class LocalModelConfigurationWriter
                 Slug = profile.Alias,
                 DisplayName = profile.DisplayName,
                 ContextWindow = profile.ContextSize,
+                ReverseReasoningLevelDisplayOrder = profile.ReverseReasoningLevelDisplayOrder,
                 SupportsImageInput = profile.VisionEnabled
                                      && profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified,
-                SupportedReasoningLevels = profile.ExposeReasoningEffortInChatGpt
+                SupportedReasoningLevels = (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) != false && profile.ReasoningResponsesVerified && profile.ReasoningClientCompatible == true && profile.ExposeReasoningEffortInChatGpt
                     && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
-                        ? profile.SupportedReasoningLevels
+                        ? profile.SupportedReasoningLevels.Where(CodexReasoningLevels.IsRecognized).ToArray()
                         : Array.Empty<string>(),
-                DefaultReasoningLevel = profile.ExposeReasoningEffortInChatGpt
+                DefaultReasoningLevel = (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) != false && profile.ReasoningResponsesVerified && profile.ReasoningClientCompatible == true && profile.ExposeReasoningEffortInChatGpt
                     && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
-                        ? profile.DefaultReasoningLevel
+                        ? (profile.DefaultReasoningLevel is { } level && CodexReasoningLevels.IsRecognized(level) ? level : null)
                         : null,
             },
             cancellationToken).ConfigureAwait(false);

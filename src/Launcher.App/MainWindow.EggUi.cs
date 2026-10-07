@@ -1236,6 +1236,17 @@ public partial class MainWindow
 
     private async Task EditProfileAsync(ModelProfile profile)
     {
+        try { await EditProfileCoreAsync(profile); }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            StatusText.Text = AppLanguageManager.Choose("打开模型参数失败：", "Cannot open model settings: ") + exception.Message;
+            MessageBox.Show(this, StatusText.Text, AppLanguageManager.Choose("模型参数", "Model settings"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async Task EditProfileCoreAsync(ModelProfile profile)
+    {
         if (_busy || string.IsNullOrWhiteSpace(_settings.LlamaRoot))
         {
             return;
@@ -1259,10 +1270,6 @@ public partial class MainWindow
             return;
         }
 
-        profile = await InvalidateStaleReasoningCapabilityAsync(
-            profile,
-            _settings.LlamaRoot,
-            _lifetime.Token);
         profile = await InvalidateStaleMtpValidationAsync(
             profile,
             _settings.LlamaRoot,
@@ -1271,10 +1278,11 @@ public partial class MainWindow
             profile,
             _settings.LlamaRoot,
             _lifetime.Token);
+        profile = await InvalidateStaleReasoningCapabilityAsync(profile, _settings.LlamaRoot, _lifetime.Token, persist: false);
         var capabilities = await Launcher.Runtime.Detection.LlamaRuntimeOptionDetector.DetectAsync(
             _settings.LlamaRoot,
             _lifetime.Token);
-        var editor = new ProfileEditorWindow(profile, _settings.LlamaRoot, capabilities, DetectContextShiftAsync, CheckEditorChatTemplateAsync) { Owner = this };
+        var editor = new ProfileEditorWindow(profile, _settings.LlamaRoot, capabilities, DetectContextShiftAsync, CheckEditorChatTemplateAsync, DetectEditorReasoningAsync) { Owner = this };
         if (editor.ShowDialog() != true)
         {
             StatusText.Text = AppLanguageManager.Choose("已取消编辑，模型参数未改变。", "Editing canceled; model parameters were not changed.");
@@ -1301,7 +1309,7 @@ public partial class MainWindow
             await ReloadProfilesAsync(_settings.LlamaRoot, _lifetime.Token);
             var saveMessage = editor.SavedAsModelDefault
                 ? AppLanguageManager.Choose($"已保存 {editor.UpdatedProfile.DisplayName}，并设为该模型的专用默认参数。", $"Saved {editor.UpdatedProfile.DisplayName} and set dedicated defaults for this model.")
-                : AppLanguageManager.Choose($"已保存 {editor.UpdatedProfile.DisplayName}；参数将在下次启动该模型时载入。", $"Saved {editor.UpdatedProfile.DisplayName}. Parameters will load the next time the model starts.");
+                : AppLanguageManager.Choose($"已保存并同步 {editor.UpdatedProfile.DisplayName} 的相关配置；下次启动该模型时载入。", $"Saved and synchronized the related configuration for {editor.UpdatedProfile.DisplayName}; it will load the next time the model starts.");
             var contextReloadReminder = editor.UpdatedProfile.ContextSize != profile.ContextSize
                 ? AppLanguageManager.Choose(
                     $" 已配置 {FormatContextTokens(editor.UpdatedProfile.ContextSize)}，重新加载后生效。",
@@ -1310,8 +1318,8 @@ public partial class MainWindow
             var reasoningRestartReminder = editor.UpdatedProfile.ExposeReasoningEffortInChatGpt
                 != profile.ExposeReasoningEffortInChatGpt
                     ? AppLanguageManager.Choose(
-                        " ChatGPT 思考强度选项将在下次启动本地模型时更新。",
-                        " ChatGPT reasoning-effort options will update the next time the local model starts.")
+                        " 思考配置已同步，重新启动本地会话后由 Codex 读取。",
+                        " Thinking configuration is synchronized; Codex reads it when the local session restarts.")
                     : string.Empty;
             StatusText.Text = saveMessage + contextReloadReminder + reasoningRestartReminder;
         }

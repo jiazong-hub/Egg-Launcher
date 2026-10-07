@@ -14,7 +14,7 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
     <Window.Resources>
-        <!-- Local to the profile editor: identical input geometry across all six tabs. -->
+        <!-- Local to the profile editor: identical input geometry across all tabs. -->
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource InputSurfaceBrush}" />
             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
@@ -225,7 +225,7 @@
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
             <Setter Property="Background" Value="Transparent" />
-            <Setter Property="MinWidth" Value="96" />
+            <Setter Property="MinWidth" Value="80" />
             <Setter Property="Height" Value="40" />
             <Setter Property="Padding" Value="10,8" />
             <Setter Property="Margin" Value="0,0,4,0" />
@@ -364,9 +364,27 @@
                                            Margin="0,0,0,14" VerticalAlignment="Center"
                                            Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                             </Grid>
-                            <TextBlock x:Name="ConversationValidationTextBlock" Margin="0,0,0,12" TextWrapping="Wrap" Foreground="{DynamicResource ProfileWarningBrush}" Visibility="Collapsed" />
+                            <TextBlock x:Name="ConversationValidationTextBlock" TextWrapping="Wrap" Foreground="{DynamicResource ProfileWarningBrush}" Visibility="Collapsed">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                                        <Setter Property="Margin" Value="0,0,0,12" />
+                                        <Style.Triggers>
+                                            <Trigger Property="Text" Value="">
+                                                <Setter Property="Height" Value="0" />
+                                                <Setter Property="Margin" Value="0" />
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                             <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}"
                                        TextWrapping="Wrap" Text="{DynamicResource CompactionExplanation}" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource CodexStreamIdleTimeout}" />
+                            <ComboBox x:Name="CodexStreamIdleTimeoutComboBox" IsEditable="True" IsTextSearchEnabled="False"
+                                      DisplayMemberPath="Label" SelectedValuePath="Value" Margin="0,5,0,8"
+                                      ToolTip="{DynamicResource CodexStreamIdleTimeoutTip}" />
+                            <TextBlock Margin="0,0,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
+                                       Text="{DynamicResource CodexStreamIdleTimeoutTip}" />
                             <CheckBox FontSize="12" x:Name="ContextShiftCheckBox"
                                       Style="{StaticResource StartupToggleStyle}"
                                       FontWeight="SemiBold"
@@ -496,18 +514,44 @@
                         </StackPanel>
                     </Grid>
 
-                    <Border Margin="0,18,0,0" Padding="0,16,0,0"
-                            BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0">
-                        <StackPanel>
-                            <CheckBox FontSize="12" x:Name="ReasoningEffortCheckBox"
-                                      Style="{StaticResource StartupToggleStyle}"
-                                      FontWeight="SemiBold"
-                                      Content="{DynamicResource ExposeReasoningEffort}"
-                                      ToolTip="{DynamicResource ExposeReasoningEffortTip}" />
-                            <TextBlock x:Name="ReasoningCapabilityStatusTextBlock" Margin="0,8,64,0"
-                                       Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource ThinkingSettings}">
+                <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
+                    <Border Padding="18" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                <Button x:Name="DetectReasoningButton" Content="{DynamicResource DetectThinkingCapability}" Click="DetectReasoningButton_Click" Padding="12,8" />
+                                <Button x:Name="CancelReasoningButton" Content="{DynamicResource Cancel}" Click="CancelReasoningButton_Click" Margin="8,0,0,0" Padding="12,8" Visibility="Collapsed" />
+                            </StackPanel>
+                            <TextBlock x:Name="ReasoningTemplateTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12"
+                                       Text="{Binding Text, ElementName=TemplateStatusText}" />
+                            <TextBlock x:Name="ReasoningCapabilityStatusTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,18" />
+                            <CheckBox x:Name="ThinkingEnabledCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
+                                      Content="{DynamicResource EnableThinking}" Checked="ThinkingEnabled_Changed" Unchecked="ThinkingEnabled_Changed" />
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
+                                <TextBlock x:Name="ThinkingStateTextBlock" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                <Button x:Name="InheritThinkingButton" Content="{DynamicResource InheritThinking}" Click="InheritThinking_Click" Margin="12,0,0,0" Padding="8,4" />
+                            </StackPanel>
+                            <TextBlock x:Name="ReasoningLevelsTextBlock" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,8" />
+                            <TextBlock x:Name="ReasoningDefaultTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,0,0,12" />
+                            <CheckBox x:Name="ReasoningEffortCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
+                                      Content="{DynamicResource ExposeReasoningEffort}" ToolTip="{DynamicResource ExposeReasoningEffortTip}"
+                                      Checked="ReasoningEffort_Changed" Unchecked="ReasoningEffort_Changed" />
+                            <CheckBox x:Name="ReverseReasoningOrderCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}" Margin="0,14,0,0"
+                                      Content="{DynamicResource ReverseReasoningOrder}" Checked="ReverseReasoningOrder_Changed" Unchecked="ReverseReasoningOrder_Changed" />
+                            <TextBlock Text="{DynamicResource ReverseReasoningOrderTip}" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            <Expander Header="{DynamicResource ThinkingDetectionDetails}" Margin="0,18,0,0">
+                                <TextBlock x:Name="ReasoningDetailsTextBlock" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </Expander>
                         </StackPanel>
                     </Border>
                 </ScrollViewer>

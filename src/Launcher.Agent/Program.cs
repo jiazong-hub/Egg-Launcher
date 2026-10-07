@@ -685,13 +685,7 @@ static async Task RunAsync(string[] args)
 
                 if (runCodex)
                 {
-                    var codexExecutable = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                        "Programs",
-                        "OpenAI",
-                        "Codex",
-                        "bin",
-                        "codex.exe");
+                    var codexExecutable = await CodexDesktopCliResolver.ResolveAsync(shutdown.Token);
                     var codexWorkspace = Path.Combine(smokeRoot, "codex-workspace");
                     Directory.CreateDirectory(codexWorkspace);
                     await File.WriteAllTextAsync(

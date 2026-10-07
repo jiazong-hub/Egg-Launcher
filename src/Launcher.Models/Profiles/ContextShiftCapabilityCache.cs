@@ -20,7 +20,10 @@ public static class ContextShiftCapabilityCache
         {
             ContextShiftEnabled = false,
             CompactionSafetyReserve = 1024,
-            ToolOutputTokenLimit = null
+            ToolOutputTokenLimit = null,
+            CodexStreamIdleTimeoutMinutes = null,
+            ThinkingEnabled = null,
+            ExposeReasoningEffortInChatGpt = false,
         });
         parameters = parameters with
         {

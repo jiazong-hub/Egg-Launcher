@@ -104,6 +104,11 @@
     <sys:String x:Key="LocalDataDirectory">Local Data Directory</sys:String>
     <sys:String x:Key="LocalDataBody">Model and Runtime data remain in the llama.cpp directory selected by the user. Removing the application files does not automatically remove that data.</sys:String>
     <sys:String x:Key="ChangelogTab">Changelog</sys:String>
+    <sys:String x:Key="ReleaseNote097Title">0.9.7 · 2026-10-07</sys:String>
+    <sys:String x:Key="ReleaseNote097Item1">• Add per-model Codex SSE idle timeout adjustment.</sys:String>
+    <sys:String x:Key="ReleaseNote097Item2">• Improve reasoning effort validation and add the Thinking Settings tab.</sys:String>
+    <sys:String x:Key="ReleaseNote097Item3">• Fix CLI resolution for Desktop compatibility checks.</sys:String>
+    <sys:String x:Key="ReleaseNote097Item4">• Improve detection error handling.</sys:String>
     <sys:String x:Key="ReleaseNote096Title">0.9.6 · 2026-10-06</sys:String>
     <sys:String x:Key="ReleaseNote096Item1">• Synchronized saved JSON/BAT and the active Local Router/catalog; cold launches apply the latest parameters and Codex settings.</sys:String>
     <sys:String x:Key="ReleaseNote096Item2">• Added MTP/vision arguments to BAT scripts, shared generation rules and improved rollback on write failure.</sys:String>
@@ -191,6 +196,9 @@
     <sys:String x:Key="BasicParameters">Basic</sys:String>
     <sys:String x:Key="ContextSelectionTip">Choose according to the model's declared context capacity and available VRAM/RAM. Egg Launcher does not provide hardware-independent recommendations.</sys:String>
     <sys:String x:Key="CustomContextTip">Enter a token count no greater than the model limit and divisible by 256. Values such as 96K are supported.</sys:String>
+    <sys:String x:Key="CodexStreamIdleTimeout">Codex SSE idle timeout (minutes)</sys:String>
+    <sys:String x:Key="CodexStreamIdleTimeoutDefault">Inherit Codex default</sys:String>
+    <sys:String x:Key="CodexStreamIdleTimeoutTip">Applies to local responses and context compaction. Switching to online mode uses the original configuration (the inherited default is usually 5 minutes).</sys:String>
     <sys:String x:Key="CompactionReserve">Compaction Reserve</sys:String>
     <sys:String x:Key="CompactionReserveTip">Minimum free context reserved before the next inference. Compaction threshold = Context - Reserve. This is not the output token limit for one response.</sys:String>
     <sys:String x:Key="GpuLayersTip">Auto lets llama.cpp decide; All attempts to offload every eligible layer to the GPU; 0 uses the CPU.</sys:String>
@@ -221,8 +229,10 @@
     <sys:String x:Key="LoadModeTip">Default lets llama.cpp decide. mmap maps the model file through the OS; mlock attempts to lock the model in memory.</sys:String>
     <sys:String x:Key="AutoMemoryFit">Automatic Memory Fit</sys:String>
     <sys:String x:Key="AutoMemoryFitTip">Default does not override llama.cpp. Some special models explicitly require Fit to be disabled; follow the model documentation.</sys:String>
-    <sys:String x:Key="ExposeReasoningEffort">Allow reasoning effort selection in ChatGPT</sys:String>
-    <sys:String x:Key="ExposeReasoningEffortTip">Available only after llama.cpp explicitly reports a complete set of levels recognized by ChatGPT. Egg Launcher never guesses or emulates reasoning effort.</sys:String>
+    <sys:String x:Key="ExposeReasoningEffort">Allow reasoning-effort selection in Codex</sys:String>
+    <sys:String x:Key="ExposeReasoningEffortTip">Expose only verified native levels; never add or map effort values.</sys:String>
+    <sys:String x:Key="ReverseReasoningOrder">Reverse effort display order</sys:String>
+    <sys:String x:Key="ReverseReasoningOrderTip">Enable if the effort order in Codex is opposite to your expectation. Applies after Save; reverses order only, without changing effort values.</sys:String>
     <sys:String x:Key="MtpParameters">MTP Decoding</sys:String>
     <sys:String x:Key="VisionParameters">Vision</sys:String>
     <sys:String x:Key="EnableVision">Enable Image Input</sys:String>
@@ -367,4 +377,9 @@
     <sys:String x:Key="SandboxCompatibilityHint">Pass the fixed system proxy and provide a compatible HTTPS request/download helper. Save and restart the client to apply. System proxy settings remain unchanged.</sys:String>
     <sys:String x:Key="SandboxCheckNetwork">Check network</sys:String>
     <sys:String x:Key="SandboxNetworkDetails">Details</sys:String>
+    <sys:String x:Key="ThinkingSettings">Thinking Settings</sys:String>
+    <sys:String x:Key="DetectThinkingCapability">Detect Thinking Capabilities</sys:String>
+    <sys:String x:Key="EnableThinking">Enable thinking</sys:String>
+    <sys:String x:Key="InheritThinking">Inherit template default</sys:String>
+    <sys:String x:Key="ThinkingDetectionDetails">Detection details</sys:String>
 </ResourceDictionary>

@@ -104,6 +104,11 @@
     <sys:String x:Key="LocalDataDirectory">本地数据目录</sys:String>
     <sys:String x:Key="LocalDataBody">模型与 Runtime 数据位于用户自行选择的 llama.cpp 目录。删除应用文件不会自动删除这些数据。</sys:String>
     <sys:String x:Key="ChangelogTab">更新日志</sys:String>
+    <sys:String x:Key="ReleaseNote097Title">0.9.7 · 2026-10-07</sys:String>
+    <sys:String x:Key="ReleaseNote097Item1">• 新增 Codex SSE 空闲等待时间调节。</sys:String>
+    <sys:String x:Key="ReleaseNote097Item2">• 改进思考档位验证，新增“思考设置”选项卡。</sys:String>
+    <sys:String x:Key="ReleaseNote097Item3">• 修复客户端兼容性检测的 CLI 定位。</sys:String>
+    <sys:String x:Key="ReleaseNote097Item4">• 完善检测异常处理。</sys:String>
     <sys:String x:Key="ReleaseNote096Title">0.9.6 · 2026-10-06</sys:String>
     <sys:String x:Key="ReleaseNote096Item1">• 同步保存 JSON、BAT 及当前 Local 的 Router/Catalog；首次启动应用最新参数与 Codex 设置。</sys:String>
     <sys:String x:Key="ReleaseNote096Item2">• 补齐 BAT 的 MTP/视觉参数，统一生成规则并完善写入失败回滚。</sys:String>
@@ -191,6 +196,9 @@
     <sys:String x:Key="BasicParameters">基础参数</sys:String>
     <sys:String x:Key="ContextSelectionTip">请按模型声明的上下文能力和本机可用显存/内存选择；Egg Launcher 不提供硬件无关的推荐值。</sys:String>
     <sys:String x:Key="CustomContextTip">输入不超过模型上限、且为 256 整数倍的 token 数；支持 96K 这样的写法。</sys:String>
+    <sys:String x:Key="CodexStreamIdleTimeout">Codex SSE 空闲等待时间（分钟）</sys:String>
+    <sys:String x:Key="CodexStreamIdleTimeoutDefault">沿用 Codex 默认</sys:String>
+    <sys:String x:Key="CodexStreamIdleTimeoutTip">适用于本地回答和上下文压缩，切回在线模式使用原有配置（沿用默认通常为5分钟）。</sys:String>
     <sys:String x:Key="CompactionReserve">压缩安全余量</sys:String>
     <sys:String x:Key="CompactionReserveTip">可输入整数 tokens 或 K（1K=1,024）。至少 1,024，严格小于 Context。Codex 在下一次推理前保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。</sys:String>
     <sys:String x:Key="GpuLayersTip">Auto 交给 llama.cpp 决定；All 尝试把全部可卸载层放入 GPU；0 使用 CPU。</sys:String>
@@ -221,8 +229,10 @@
     <sys:String x:Key="LoadModeTip">默认由 llama.cpp 决定。mmap 允许操作系统映射模型文件；mlock 会尝试把模型锁在内存中。</sys:String>
     <sys:String x:Key="AutoMemoryFit">自动内存适配</sys:String>
     <sys:String x:Key="AutoMemoryFitTip">默认不覆盖 llama.cpp。部分特殊模型明确要求关闭 Fit，请以模型说明为准。</sys:String>
-    <sys:String x:Key="ExposeReasoningEffort">允许在 ChatGPT 中调节思考强度</sys:String>
-    <sys:String x:Key="ExposeReasoningEffortTip">只在 llama.cpp 明确报告完整且受 ChatGPT 识别的档位后可用；不会由启动器猜测或模拟思考强度。</sys:String>
+    <sys:String x:Key="ExposeReasoningEffort">允许在 Codex 中调节思考强度</sys:String>
+    <sys:String x:Key="ExposeReasoningEffortTip">只提供当前模板与 Responses 路径已验证的真实档位；不增加或映射档位。</sys:String>
+    <sys:String x:Key="ReverseReasoningOrder">反转档位显示顺序</sys:String>
+    <sys:String x:Key="ReverseReasoningOrderTip">如果 Codex 中的思考档位顺序与预期相反，可开启此项。保存后生效；仅反转排列，不改变档位值。</sys:String>
     <sys:String x:Key="MtpParameters">MTP 推测解码</sys:String>
     <sys:String x:Key="VisionParameters">视觉模块</sys:String>
     <sys:String x:Key="EnableVision">启用视觉输入</sys:String>
@@ -367,4 +377,9 @@
     <sys:String x:Key="SandboxCompatibilityHint">自动传递固定系统代理，并提供兼容 HTTPS 请求与下载工具。保存后重启客户端生效；不修改系统代理。</sys:String>
     <sys:String x:Key="SandboxCheckNetwork">检查联网</sys:String>
     <sys:String x:Key="SandboxNetworkDetails">详细信息</sys:String>
+    <sys:String x:Key="ThinkingSettings">思考设置</sys:String>
+    <sys:String x:Key="DetectThinkingCapability">检测思考能力</sys:String>
+    <sys:String x:Key="EnableThinking">启用思考</sys:String>
+    <sys:String x:Key="InheritThinking">沿用模板默认</sys:String>
+    <sys:String x:Key="ThinkingDetectionDetails">检测详情</sys:String>
 </ResourceDictionary>

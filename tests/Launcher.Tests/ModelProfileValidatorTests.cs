@@ -133,6 +133,7 @@ public sealed class ModelProfileValidatorTests
         var profile = ValidProfile() with
         {
             ReasoningCapabilityStatus = ReasoningCapabilityStatus.Verified,
+            ReasoningResponsesVerified = true,
             SupportedReasoningLevels = ["low", "medium", "high"],
             DefaultReasoningLevel = "medium",
             ExposeReasoningEffortInChatGpt = true,

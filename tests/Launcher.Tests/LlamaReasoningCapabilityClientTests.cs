@@ -48,7 +48,7 @@ public sealed class LlamaReasoningCapabilityClientTests
     }
 
     [Fact]
-    public async Task ProbeAsync_WhenAnyReportedLevelIsUnknown_DoesNotPublishPartialList()
+    public async Task ProbeAsync_PreservesNativeCustomLevelsWithoutFiltering()
     {
         using var http = CreateHttp(
             """{"chat_template_caps":{"supports_reasoning_effort":true,"supported_reasoning_levels":["low","vendor-ultra"]}}""");
@@ -57,8 +57,8 @@ public sealed class LlamaReasoningCapabilityClientTests
             new Uri("http://127.0.0.1:8080/"),
             "local/coder");
 
-        Assert.Equal(LlamaReasoningCapabilityStatus.SupportedLevelsUnknown, result.Status);
-        Assert.Empty(result.SupportedLevels);
+        Assert.Equal(LlamaReasoningCapabilityStatus.Verified, result.Status);
+        Assert.Equal(["low", "vendor-ultra"], result.SupportedLevels);
     }
 
     private static HttpClient CreateHttp(string json) => new(new StubHandler(request =>

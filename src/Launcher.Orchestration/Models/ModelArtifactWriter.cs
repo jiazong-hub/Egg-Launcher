@@ -14,8 +14,12 @@ public sealed class ModelArtifactWriter(
         string presetPath,
         string catalogPath,
         bool updateActiveConfiguration,
-        CancellationToken cancellationToken = default) =>
-        transaction.ExecuteAsync(
+        CancellationToken cancellationToken = default,
+        Func<ModelProfile, CancellationToken, Task>? synchronizeActiveCodexConfiguration = null)
+    {
+        if (profile.ThinkingEnabled is not null || profile.ExposeReasoningEffortInChatGpt)
+            profile = Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, runtimeRoot).ApplyTo(profile);
+        return transaction.ExecuteAsync(
             runtimeRoot,
             profile.Id,
             presetPath,
@@ -30,9 +34,12 @@ public sealed class ModelArtifactWriter(
                 {
                     await LocalModelConfigurationWriter.WriteAsync(
                         profile, runtimeRoot, presetPath, catalogPath, token).ConfigureAwait(false);
+                    if (synchronizeActiveCodexConfiguration is not null)
+                        await synchronizeActiveCodexConfiguration(profile, token).ConfigureAwait(false);
                 }
                 return true;
             },
             cancellationToken,
             localModelCatalogPath: catalogPath);
+    }
 }

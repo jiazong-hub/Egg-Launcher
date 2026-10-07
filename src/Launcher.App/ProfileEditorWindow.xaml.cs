@@ -196,13 +196,16 @@ public partial class ProfileEditorWindow : Window
         string runtimeRoot,
         IReadOnlySet<string>? runtimeCapabilities = null,
         Func<ModelProfile, CancellationToken, Task<ContextShiftCapabilityResult>>? contextShiftProbe = null,
-        Func<ModelProfile, CancellationToken, Task<ModelProfile>>? templateProbe = null)
+        Func<ModelProfile, CancellationToken, Task<ModelProfile>>? templateProbe = null,
+        Func<ModelProfile, CancellationToken, Task<ModelProfile>>? reasoningProbe = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         _originalProfile = profile;
         _contextShiftProbe = contextShiftProbe;
         _templateProbe = templateProbe;
+        _reasoningProbe = reasoningProbe;
+        _reasoningProfile = profile;
         _runtimeRoot = Path.GetFullPath(runtimeRoot);
         _modelContextLimit = TryReadModelContextLimit(profile, _runtimeRoot);
         _hasEmbeddedMtpCandidate = TryReadModelMetadata(profile, _runtimeRoot)?.HasEmbeddedMtp == true;
@@ -212,7 +215,7 @@ public partial class ProfileEditorWindow : Window
         CompactionSafetyReserveComboBox.AddHandler(WpfTextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateLongConversationSummary()));
         ToolOutputTokenLimitComboBox.AddHandler(WpfTextBox.TextChangedEvent, new TextChangedEventHandler((_, _) => UpdateLongConversationSummary()));
         ToolOutputTokenLimitComboBox.SelectionChanged += (_, _) => UpdateLongConversationSummary();
-        Closed += (_, _) => { _contextShiftCancellation?.Cancel(); _templateCancellation?.Cancel(); };
+        Closed += (_, _) => { _contextShiftCancellation?.Cancel(); _templateCancellation?.Cancel(); _reasoningCancellation?.Cancel(); };
         ProfileEditorTabs.AddHandler(System.Windows.Controls.Primitives.Selector.SelectionChangedEvent,
             new SelectionChangedEventHandler((_, e) => InvalidateShiftForParameterChange(e.OriginalSource)));
         ProfileEditorTabs.AddHandler(WpfTextBox.TextChangedEvent,
@@ -341,8 +344,8 @@ public partial class ProfileEditorWindow : Window
         while (element is not null && (string.IsNullOrWhiteSpace(element.Name) || element.Name.StartsWith("PART_", StringComparison.Ordinal)))
             element = System.Windows.Media.VisualTreeHelper.GetParent(element) as FrameworkElement;
         if (element is null || element.Name is "ContextShiftCheckBox" or "ProfileEditorTabs"
-            or "CompactionSafetyReserveComboBox" or "ToolOutputTokenLimitComboBox"
-            or "DisplayNameTextBox") return;
+            or "CompactionSafetyReserveComboBox" or "ToolOutputTokenLimitComboBox" or "CodexStreamIdleTimeoutComboBox"
+            or "DisplayNameTextBox" or "ThinkingEnabledCheckBox" or "ReasoningEffortCheckBox" or "ReverseReasoningOrderCheckBox") return;
         _shiftCapability = null;
         _changingContextShift = true;
         ContextShiftCheckBox.IsChecked = false;
@@ -467,6 +470,14 @@ public partial class ProfileEditorWindow : Window
             MessageBox.Show(this, limitsError, AppLanguageManager.Choose("长对话参数无效", "Invalid Conversation Limits"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+        if (!TryGetCodexStreamIdleTimeout(out var streamIdleTimeoutMinutes))
+        {
+            MessageBox.Show(this, AppLanguageManager.Choose(
+                "SSE 空闲等待时间请输入 5 分钟的正整数倍，或选择沿用 Codex 默认。",
+                "Enter a positive multiple of 5 minutes, or inherit the Codex default."),
+                AppLanguageManager.Text("CodexStreamIdleTimeout"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
         if (!TryGetSelectedContextSize(out var contextSize, out var contextError))
         {
             MessageBox.Show(
@@ -541,6 +552,7 @@ public partial class ProfileEditorWindow : Window
             ContextSize = contextSize,
             CompactionSafetyReserve = reserve,
             ToolOutputTokenLimit = toolLimit,
+            CodexStreamIdleTimeoutMinutes = streamIdleTimeoutMinutes,
             GpuLayers = gpuLayers,
             Device = NullWhenWhiteSpace(DeviceTextBox.Text),
             MoeExpertPlacement = moePlacement,
@@ -554,8 +566,21 @@ public partial class ProfileEditorWindow : Window
             IdleSleepSeconds = SelectedValue<int>(IdleSleepSecondsComboBox),
             Jinja = JinjaCheckBox.IsChecked == true,
             ChatTemplateRelativePath = NullWhenWhiteSpace(ChatTemplatePathTextBox.Text),
-            ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsEnabled
-                && ReasoningEffortCheckBox.IsChecked == true,
+            ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsChecked == true && _reasoningProfile.ReasoningResponsesVerified,
+            ReverseReasoningLevelDisplayOrder = ReverseReasoningOrderCheckBox.IsChecked == true,
+            ThinkingEnabled = _reasoningProfile.ThinkingEnabled,
+            SupportsThinkingSwitch = _reasoningProfile.SupportsThinkingSwitch,
+            DefaultThinkingEnabled = _reasoningProfile.DefaultThinkingEnabled,
+            ReasoningCapabilityStatus = _reasoningProfile.ReasoningCapabilityStatus,
+            SupportedReasoningLevels = _reasoningProfile.SupportedReasoningLevels,
+            DefaultReasoningLevel = _reasoningProfile.DefaultReasoningLevel,
+            ReasoningLevelAliases = _reasoningProfile.ReasoningLevelAliases,
+            ReasoningResponsesVerified = _reasoningProfile.ReasoningResponsesVerified,
+            ReasoningClientCompatible = _reasoningProfile.ReasoningClientCompatible,
+            ReasoningClientExecutablePath = _reasoningProfile.ReasoningClientExecutablePath,
+            ReasoningValidationDetails = _reasoningProfile.ReasoningValidationDetails,
+            ReasoningCapabilitySignature = _reasoningProfile.ReasoningCapabilitySignature,
+            ReasoningCapabilityCheckedAtUtc = _reasoningProfile.ReasoningCapabilityCheckedAtUtc,
             ContextShiftEnabled = contextShiftEnabled,
             MtpEnabled = mtp.Enabled,
             MtpSource = mtp.Source,
@@ -583,6 +608,7 @@ public partial class ProfileEditorWindow : Window
             SandboxSettings = sandboxSettings,
             ExtraArguments = extraArguments,
         };
+        updated = EnsureCurrentReasoningValidation(updated);
         var errors = ModelProfileValidator.Validate(updated, _runtimeRoot);
         if (errors.Count > 0)
         {
@@ -678,6 +704,18 @@ public partial class ProfileEditorWindow : Window
             profile.ToolOutputTokenLimit ?? 0,
             profile.ToolOutputTokenLimit?.ToString("N0") ?? AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"));
         CompactionSafetyReserveComboBox.Text = FormatContextSize(profile.CompactionSafetyReserve);
+        var timeoutChoices = new List<Choice<int>>
+        {
+            new(AppLanguageManager.Text("CodexStreamIdleTimeoutDefault"), 0),
+        };
+        timeoutChoices.AddRange(Enumerable.Range(1, 24).Select(index =>
+            new Choice<int>((index * 5).ToString(CultureInfo.CurrentCulture), index * 5)));
+        PopulateChoices(CodexStreamIdleTimeoutComboBox, timeoutChoices,
+            profile.CodexStreamIdleTimeoutMinutes ?? 0,
+            profile.CodexStreamIdleTimeoutMinutes?.ToString(CultureInfo.CurrentCulture)
+                ?? AppLanguageManager.Text("CodexStreamIdleTimeoutDefault"));
+        CodexStreamIdleTimeoutComboBox.Text = profile.CodexStreamIdleTimeoutMinutes?.ToString(CultureInfo.CurrentCulture)
+            ?? AppLanguageManager.Text("CodexStreamIdleTimeoutDefault");
         ToolOutputTokenLimitComboBox.Text = profile.ToolOutputTokenLimit is int storedLimit
             ? FormatContextSize(storedLimit) : AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
         _choiceContext = _choiceReserve = null;
@@ -953,43 +991,6 @@ public partial class ProfileEditorWindow : Window
         error = string.Empty;
         return true;
     }
-
-    private void PopulateReasoningCapability(ModelProfile profile)
-    {
-        var verified = profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
-            && profile.SupportedReasoningLevels is { Count: > 0 };
-        ReasoningEffortCheckBox.IsEnabled = verified;
-        ReasoningEffortCheckBox.IsChecked = verified && profile.ExposeReasoningEffortInChatGpt;
-        ReasoningCapabilityStatusTextBlock.Text = profile.ReasoningCapabilityStatus switch
-        {
-            ReasoningCapabilityStatus.Unsupported => AppLanguageManager.Choose(
-                "llama.cpp 已确认：该模型不支持思考强度调节。",
-                "llama.cpp confirmed that this model does not support reasoning effort selection."),
-            ReasoningCapabilityStatus.SupportedLevelsUnknown => AppLanguageManager.Choose(
-                "llama.cpp 已确认模型支持思考强度，但当前无法识别完整档位，因此暂不允许开启。",
-                "llama.cpp confirmed reasoning-effort support, but the complete levels are unavailable, so this option remains disabled."),
-            ReasoningCapabilityStatus.Verified when verified => AppLanguageManager.Choose(
-                $"已确认档位：{string.Join("、", profile.SupportedReasoningLevels.Select(FormatReasoningLevel))}",
-                $"Verified levels: {string.Join(", ", profile.SupportedReasoningLevels.Select(FormatReasoningLevel))}"),
-            _ => AppLanguageManager.Choose(
-                "尚未取得可验证的思考强度档位；请在本地模型管理中执行检测。",
-                "No verifiable reasoning-effort levels are available. Run detection from Local Model Management."),
-        };
-    }
-
-    private static string FormatReasoningLevel(string level) => level switch
-    {
-        "none" => "None",
-        "minimal" => "Minimal",
-        "low" => "Low",
-        "medium" => "Medium",
-        "high" => "High",
-        "xhigh" => "XHigh",
-        "max" => "Max",
-        "ultra" => "Ultra",
-        "persistent" => "Persistent",
-        _ => level,
-    };
 
     private void InitializeAdvancedChoices()
     {
@@ -1675,7 +1676,6 @@ public partial class ProfileEditorWindow : Window
                 warnings.Add(AppLanguageManager.Choose("工具上限接近安全余量，其他新增内容可用空间不足 1K。", "The tool limit is close to the reserve; less than 1K remains for other new content."));
             if (hasContext && hasReserve && (long)reserve * 2 > context)
                 warnings.Add(AppLanguageManager.Choose("安全余量超过上下文的一半，可能增加压缩频率。", "The reserve exceeds half the context and may increase compaction frequency."));
-            warnings.Add(AppLanguageManager.Choose("10% 摘要预留是经验保护；实际压缩输入可能超过触发线，不能保证不溢出。", "The 10% summary allowance is empirical; actual compaction input can exceed the trigger, so overflow is still possible."));
             ConversationValidationTextBlock.Text = string.Join(Environment.NewLine, errors.Concat(warnings));
             ConversationValidationTextBlock.Visibility = Visibility.Visible;
             CompactionSafetyReserveComboBox.ToolTip = ReserveRangeTextBlock.Text;
@@ -2047,6 +2047,17 @@ public partial class ProfileEditorWindow : Window
         var errors = LongConversationLimits.Validate(context, reserve, toolLimit);
         if (errors.Count > 0) { error = string.Join(Environment.NewLine, errors); return false; }
         error = string.Empty;
+        return true;
+    }
+
+    private bool TryGetCodexStreamIdleTimeout(out int? minutes)
+    {
+        minutes = null;
+        var text = CodexStreamIdleTimeoutComboBox.Text.Trim();
+        if (text == AppLanguageManager.Text("CodexStreamIdleTimeoutDefault")) return true;
+        if (!int.TryParse(text, NumberStyles.None, CultureInfo.CurrentCulture, out var value)
+            || !CodexStreamIdleTimeout.IsValid(value)) return false;
+        minutes = value;
         return true;
     }
 

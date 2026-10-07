@@ -1,6 +1,6 @@
 # Third-party notices
 
-This notice applies to Egg Launcher 0.9.6. The release includes no bundled model,
+This notice applies to Egg Launcher 0.9.7. The release includes no bundled model,
 llama.cpp binary, MTP file, vision projector, or Hugging Face repository
 content. Users supply those components separately under their own licenses.
 

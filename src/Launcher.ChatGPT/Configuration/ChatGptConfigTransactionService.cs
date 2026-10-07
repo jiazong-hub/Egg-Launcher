@@ -49,6 +49,7 @@ public sealed class ChatGptConfigTransactionService
         "model_auto_compact_token_limit_scope",
         "tool_output_token_limit",
         "model_reasoning_effort",
+        "plan_mode_reasoning_effort",
         "model_reasoning_summary",
         "model_supports_reasoning_summaries",
         "model_verbosity",
@@ -482,9 +483,8 @@ public sealed class ChatGptConfigTransactionService
             var currentState = await ReadConfigStateAsync(snapshot.ConfigPath, cancellationToken).ConfigureAwait(false);
             var currentDocument = new TomlRootDocument(currentState.Text);
             EnsureAssignmentsStillOwned(currentDocument, snapshot.AppliedAssignments);
-            var updatedDocument = currentDocument.SetRawAssignment(
-                LocalProviderKey,
-                BuildLocalProviderAssignment(openAIBaseUrl));
+            var updatedDocument = currentDocument.ReplaceTableStringValue(
+                LocalProviderKey, "base_url", LoopbackEndpoint.NormalizeBaseUrl(openAIBaseUrl));
             var prepared = snapshot with
             {
                 Stage = ConfigTransactionStage.LocalUpdatePrepared,
@@ -1139,12 +1139,15 @@ public sealed class ChatGptConfigTransactionService
                 $"model_auto_compact_token_limit = {autoCompactTokenLimit}")
             .SetRawAssignment("model_auto_compact_token_limit_scope", null)
             .SetRawAssignment("tool_output_token_limit", toolOutputTokenLimit)
-            .SetRawAssignment("model_reasoning_effort", null)
+            .SetRawAssignment("model_reasoning_effort", request.DefaultReasoningEffort is { } effort
+                ? $"model_reasoning_effort = {JsonSerializer.Serialize(effort)}" : null)
+            .SetRawAssignment("plan_mode_reasoning_effort", null)
             .SetRawAssignment("model_reasoning_summary", null)
             .SetRawAssignment("model_supports_reasoning_summaries", null)
             .SetRawAssignment("model_verbosity", null)
             .SetRawAssignment("service_tier", null)
-            .SetRawAssignment(LocalProviderKey, BuildLocalProviderAssignment(request.OpenAIBaseUrl));
+            .SetRawAssignment(LocalProviderKey, BuildLocalProviderAssignment(
+                request.OpenAIBaseUrl, request.CodexStreamIdleTimeoutMinutes));
 
         localDocument = ApplyModelSandboxSettings(localDocument, request.SandboxSettings, originalAssignments);
         localDocument = ApplyNetworkCompatibility(localDocument, request.SandboxSettings, originalAssignments);
@@ -1395,13 +1398,17 @@ public sealed class ChatGptConfigTransactionService
         return $"{LauncherPermissionProfileKey} = {{ {string.Join(", ", fields)} }}";
     }
 
-    private static string BuildLocalProviderAssignment(Uri baseUri)
+    private static string BuildLocalProviderAssignment(Uri baseUri, int? idleTimeoutMinutes)
     {
         var normalizedBaseUrl = LoopbackEndpoint.NormalizeBaseUrl(baseUri);
         var encodedName = JsonSerializer.Serialize("Local llama.cpp");
         var encodedBaseUrl = JsonSerializer.Serialize(normalizedBaseUrl);
+        var timeout = CodexStreamIdleTimeout.ToMilliseconds(idleTimeoutMinutes);
+        var timeoutAssignment = timeout is int milliseconds
+            ? $", stream_idle_timeout_ms = {milliseconds.ToString(CultureInfo.InvariantCulture)}" : string.Empty;
         return $"{LocalProviderKey} = {{ name = {encodedName}, base_url = {encodedBaseUrl}, "
-            + "wire_api = \"responses\", requires_openai_auth = true, supports_websockets = false }";
+            + "wire_api = \"responses\", requires_openai_auth = true, supports_websockets = false"
+            + timeoutAssignment + " }";
     }
 
     private static TomlRootDocument BuildOpenAiDocument(
@@ -1684,6 +1691,9 @@ public sealed class ChatGptConfigTransactionService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModelSlug);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModelCatalogPath);
         var sandboxErrors = ModelSandboxSettingsValidator.Validate(request.SandboxSettings);
+        _ = CodexStreamIdleTimeout.ToMilliseconds(request.CodexStreamIdleTimeoutMinutes);
+        if (request.DefaultReasoningEffort is { } effort && !CodexReasoningLevels.IsRecognized(effort))
+            throw new ArgumentException("The default reasoning effort is not recognized by Codex.", nameof(request));
         if (sandboxErrors.Count > 0)
         {
             throw new ArgumentException(string.Join(Environment.NewLine, sandboxErrors), nameof(request));

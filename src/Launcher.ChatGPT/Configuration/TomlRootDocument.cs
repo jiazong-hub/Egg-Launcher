@@ -79,6 +79,21 @@ internal sealed class TomlRootDocument
             : throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是字符串。");
     }
 
+    public TomlRootDocument ReplaceTableStringValue(string tableKey, string itemKey, string value)
+    {
+        var assignment = FindSingleAssignment(tableKey)?.Value is InlineTableSyntax inline
+            ? inline.Items.Select(item => item.KeyValue).SingleOrDefault(item => item is not null
+                && PathsEqual(GetKeyPath(item.Key), ParseManagedKey(itemKey)))
+            : FindSingleTableAssignment(tableKey, itemKey);
+        assignment = assignment
+            ?? throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 不存在。");
+        if (assignment.Value is not StringValueSyntax)
+            throw new InvalidDataException($"ChatGPT 配置项 {tableKey}.{itemKey} 必须是字符串。");
+        var span = assignment.Value.Span;
+        return new TomlRootDocument(_text[..span.Offset] + System.Text.Json.JsonSerializer.Serialize(value)
+            + _text[(span.Offset + span.Length)..]);
+    }
+
     // Read a map without rewriting it. Accept both an inline map and a TOML table.
     public IReadOnlyDictionary<string, string>? GetTableStringMap(string tableKey, string itemKey)
     {

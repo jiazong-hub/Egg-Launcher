@@ -50,6 +50,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
     private DateTimeOffset? _lastModelHealthProbeAtUtc;
     private string? _lastModelHealthState;
     private bool _disposed;
+    private readonly Launcher.ChatGPT.Processes.IChatGptClientDetector _clientDetector;
 
     public LocalRouterSupervisor(
         ISettingsStore settingsStore,
@@ -65,9 +66,11 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         Action<string?>? diagnosticRouterRunIdChanged = null,
         Func<string, string, string, Task>? diagnosticEventWriter = null,
         LlamaModelManagementClient? modelManagementClient = null,
-        Func<DiagnosticEvent, Task>? structuredDiagnosticEventWriter = null)
+        Func<DiagnosticEvent, Task>? structuredDiagnosticEventWriter = null,
+        Launcher.ChatGPT.Processes.IChatGptClientDetector? clientDetector = null)
     {
         _settingsStore = settingsStore;
+        _clientDetector = clientDetector ?? new Launcher.ChatGPT.Processes.ChatGptClientDetector();
         _processManager = processManager;
         _safetyProxy = safetyProxy;
         _routerControlClient = routerControlClient;
@@ -313,20 +316,28 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         LlamaRouterStartRequest request;
         try
         {
-            request = CreateStartRequest(settings);
+            ModelProfile? startupProfile = null;
             if (settings.LlamaRoot is string runtimeRoot)
             {
                 var profiles = await new JsonModelProfileStore().LoadAsync(runtimeRoot, cancellationToken).ConfigureAwait(false);
                 var profile = profiles.Profiles.FirstOrDefault(item => item.Id == settings.SelectedModelId);
                 if (profile is not null)
                 {
-                    request = request with
-                    {
-                        ContextShiftRequested = profile.ContextShiftEnabled,
-                        ContextShiftDisabledObserver = reason => ContextShiftCapabilityCache.Write(profile, runtimeRoot,
-                            new ContextShiftCapabilityResult(false, reason, DateTimeOffset.UtcNow)),
-                    };
+                    var guarded = await Launcher.Orchestration.Models.ReasoningStartupGuard.EnsureAsync(
+                        profile, settings, _settingsStore, _dataPaths, _clientDetector, cancellationToken).ConfigureAwait(false);
+                    if (!ReferenceEquals(guarded, profile)) settings = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+                    startupProfile = guarded;
                 }
+            }
+            request = CreateStartRequest(settings);
+            if (startupProfile is { } validated)
+            {
+                request = request with
+                {
+                    ContextShiftRequested = validated.ContextShiftEnabled,
+                    ContextShiftDisabledObserver = reason => ContextShiftCapabilityCache.Write(validated, settings.LlamaRoot!,
+                        new ContextShiftCapabilityResult(false, reason, DateTimeOffset.UtcNow)),
+                };
             }
         }
         catch (Exception exception)
@@ -499,6 +510,12 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         }
 
         var proxyStartupStopwatch = Stopwatch.StartNew();
+        var profiles = await new JsonModelProfileStore().LoadAsync(settings.LlamaRoot!, cancellationToken).ConfigureAwait(false);
+        var activeProfile = profiles.Profiles.FirstOrDefault(profile => profile.Id == settings.SelectedModelId);
+        if (activeProfile is not null && (activeProfile.ThinkingEnabled is not null || activeProfile.ExposeReasoningEffortInChatGpt)
+            && Launcher.Scripts.Templates.ReasoningValidationState.Check(activeProfile, settings.LlamaRoot!).State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
+            throw new InvalidOperationException("思考验证已过期，请关闭 Codex 后重新保存或检测设置。");
+        _safetyProxy.SetThinkingEnabled(activeProfile?.SupportsThinkingSwitch == true ? activeProfile.ThinkingEnabled : null);
         var configuredPort = settings.RouterPort;
         var publicBaseUri = PublicBaseUri(settings.RouterPort);
         try

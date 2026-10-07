@@ -14,6 +14,9 @@ public sealed record ModelParameterDefaults
 
     public int? ToolOutputTokenLimit { get; init; }
 
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? CodexStreamIdleTimeoutMinutes { get; init; }
+
     public string GpuLayers { get; init; } = "auto";
 
     public string? Device { get; init; }
@@ -39,6 +42,15 @@ public sealed record ModelParameterDefaults
     public int IdleSleepSeconds { get; init; } = 300;
 
     public string? ChatTemplateRelativePath { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public bool? ThinkingEnabled { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingDefault)]
+    public bool ExposeReasoningEffortInChatGpt { get; init; }
+
+    public bool ReverseReasoningLevelDisplayOrder { get; init; }
+
 
     public bool MtpEnabled { get; init; }
 
@@ -92,6 +104,7 @@ public sealed record ModelParameterDefaults
             ContextShiftEnabled = profile.ContextShiftEnabled,
             CompactionSafetyReserve = profile.CompactionSafetyReserve,
             ToolOutputTokenLimit = profile.ToolOutputTokenLimit,
+            CodexStreamIdleTimeoutMinutes = profile.CodexStreamIdleTimeoutMinutes,
             GpuLayers = profile.GpuLayers,
             Device = profile.Device,
             MoeExpertPlacement = profile.MoeExpertPlacement,
@@ -105,6 +118,9 @@ public sealed record ModelParameterDefaults
             MicroBatchSize = profile.MicroBatchSize,
             IdleSleepSeconds = profile.IdleSleepSeconds,
             ChatTemplateRelativePath = profile.ChatTemplateRelativePath,
+            ThinkingEnabled = profile.ThinkingEnabled,
+            ExposeReasoningEffortInChatGpt = profile.ExposeReasoningEffortInChatGpt,
+            ReverseReasoningLevelDisplayOrder = profile.ReverseReasoningLevelDisplayOrder,
             MtpEnabled = profile.MtpEnabled,
             MtpSource = profile.MtpSource,
             MtpDraftModelRelativePath = profile.MtpDraftModelRelativePath,
@@ -141,6 +157,7 @@ public sealed record ModelParameterDefaults
             ContextShiftEnabled = ContextShiftEnabled,
             CompactionSafetyReserve = CompactionSafetyReserve,
             ToolOutputTokenLimit = ToolOutputTokenLimit,
+            CodexStreamIdleTimeoutMinutes = CodexStreamIdleTimeoutMinutes,
             GpuLayers = GpuLayers,
             Device = Device,
             MoeExpertPlacement = MoeExpertPlacement,
@@ -154,6 +171,9 @@ public sealed record ModelParameterDefaults
             MicroBatchSize = MicroBatchSize,
             IdleSleepSeconds = IdleSleepSeconds,
             ChatTemplateRelativePath = ChatTemplateRelativePath,
+            ThinkingEnabled = profile.SupportsThinkingSwitch == true ? ThinkingEnabled : null,
+            ExposeReasoningEffortInChatGpt = ExposeReasoningEffortInChatGpt && profile.ReasoningResponsesVerified,
+            ReverseReasoningLevelDisplayOrder = ReverseReasoningLevelDisplayOrder,
             MtpEnabled = MtpEnabled && IsMtpSourceReady(profile),
             // MTP source association is model metadata, not a tunable default. Preserve the
             // current model's verified/detected source instead of restoring a stale file path.

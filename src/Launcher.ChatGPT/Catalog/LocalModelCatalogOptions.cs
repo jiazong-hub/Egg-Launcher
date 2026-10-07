@@ -12,6 +12,8 @@ public sealed record LocalModelCatalogOptions
 
     public IReadOnlyList<string> SupportedReasoningLevels { get; init; } = Array.Empty<string>();
 
+    public bool ReverseReasoningLevelDisplayOrder { get; init; }
+
     public string? DefaultReasoningLevel { get; init; }
 
     public bool SupportsImageInput { get; init; }
