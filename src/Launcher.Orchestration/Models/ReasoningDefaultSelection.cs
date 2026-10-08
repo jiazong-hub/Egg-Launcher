@@ -8,8 +8,7 @@ public static class ReasoningDefaultSelection
 {
     public static string? ForCodex(ModelProfile profile)
     {
-        if ((profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) == false
-            || !profile.ExposeReasoningEffortInChatGpt || !profile.ReasoningResponsesVerified
+        if (!profile.ExposeReasoningEffortInChatGpt || !profile.ReasoningResponsesVerified
             || profile.ReasoningClientCompatible != true || profile.ReasoningCapabilityStatus != ReasoningCapabilityStatus.Verified)
             return null;
         bool Supported(string? level) => level is not null && CodexReasoningLevels.IsRecognized(level)

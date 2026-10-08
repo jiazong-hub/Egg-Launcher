@@ -167,6 +167,14 @@ public sealed class ReasoningValidationScopeTests
         Assert.Contains("show_raw_agent_reasoning = true", await File.ReadAllTextAsync(config));
         Assert.True(saved.ThinkingEnabled);
         Assert.Contains("fit-target = 2048", await File.ReadAllTextAsync(paths.RouterPresetFile));
+        await writer.SaveAsync(saved with { ThinkingEnabled = false }, f.Root, paths.RouterPresetFile, paths.LocalModelCatalogFile, true, synchronizeActiveCodexConfiguration: Sync);
+        saved = (await store.LoadAsync(f.Root)).Profiles.Single();
+        Assert.False(saved.ThinkingEnabled);
+        Assert.True(saved.ExposeReasoningEffortInChatGpt);
+        Assert.True(saved.ShowThinkingProcess);
+        Assert.Contains("model_reasoning_effort = \"medium\"", await File.ReadAllTextAsync(config));
+        Assert.Contains("show_raw_agent_reasoning = false", await File.ReadAllTextAsync(config));
+        Assert.Contains("reasoning = off", await File.ReadAllTextAsync(paths.RouterPresetFile));
         File.AppendAllText(Path.Combine(f.Root, "active.jinja"), "changed");
         await writer.SaveAsync(saved, f.Root, paths.RouterPresetFile, paths.LocalModelCatalogFile, true, synchronizeActiveCodexConfiguration: Sync);
         var reset = (await store.LoadAsync(f.Root)).Profiles.Single();

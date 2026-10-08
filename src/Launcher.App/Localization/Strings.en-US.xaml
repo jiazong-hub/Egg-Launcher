@@ -384,6 +384,7 @@
     <sys:String x:Key="ThinkingEffortSection">Adjust reasoning effort</sys:String>
     <sys:String x:Key="PreferredReasoningLevel">Default reasoning effort</sys:String>
     <sys:String x:Key="InheritReasoningDefault">Inherit model default</sys:String>
+    <sys:String x:Key="EffortWhileThinkingOffWarning">Thinking is currently disabled. Some models apply reasoning effort only when thinking is enabled. Codex may display the selected level while the model does not apply it. Continue?</sys:String>
     <sys:String x:Key="InvalidReasoningDefault">The previously selected default effort is no longer among this model's verified levels. The selection has been reset to inherit the model default.</sys:String>
     <sys:String x:Key="ShowThinkingProcess">Show thinking process</sys:String>
     <sys:String x:Key="ShowThinkingProcessTip">Controls display only, without changing model reasoning or answers. Applies to subsequent requests after Save.</sys:String>

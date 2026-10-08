@@ -384,6 +384,7 @@
     <sys:String x:Key="ThinkingEffortSection">调节思考强度</sys:String>
     <sys:String x:Key="PreferredReasoningLevel">默认思考强度</sys:String>
     <sys:String x:Key="InheritReasoningDefault">沿用模型默认</sys:String>
+    <sys:String x:Key="EffortWhileThinkingOffWarning">当前思考已关闭。部分模型仅在开启思考时应用强度档位；继续设置后，Codex 可能显示所选档位，但模型实际不应用。是否继续？</sys:String>
     <sys:String x:Key="InvalidReasoningDefault">此前选择的默认思考强度已不在当前模型验证通过的档位中，已恢复为“沿用模型默认”。</sys:String>
     <sys:String x:Key="ShowThinkingProcess">显示思考过程</sys:String>
     <sys:String x:Key="ShowThinkingProcessTip">仅控制思考内容的显示，不影响模型思考及回答。保存后对后续请求生效。</sys:String>

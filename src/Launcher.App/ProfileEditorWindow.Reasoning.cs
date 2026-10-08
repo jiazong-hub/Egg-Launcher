@@ -1,6 +1,8 @@
 using System.IO;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using Launcher.ChatGPT.Catalog;
 using Launcher.Models.Profiles;
 using Launcher.Scripts.Templates;
@@ -14,6 +16,7 @@ public partial class ProfileEditorWindow
     private CancellationTokenSource? _reasoningCancellation;
     private bool _populatingReasoning;
     private string? _reasoningOutcome;
+    private bool _effortWhileThinkingOffAccepted;
 
     private ModelProfile EnsureCurrentReasoningValidation(ModelProfile profile)
     {
@@ -48,7 +51,7 @@ public partial class ProfileEditorWindow
         var verified = profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified;
         var recognized = profile.SupportedReasoningLevels.Where(CodexReasoningLevels.IsRecognized).ToArray();
         ReasoningEffortCheckBox.IsEnabled = !busy && verified && profile.ReasoningResponsesVerified && profile.ReasoningClientCompatible == true
-            && recognized.Length > 0 && (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) != false;
+            && recognized.Length > 0;
         ReasoningEffortCheckBox.IsChecked = profile.ExposeReasoningEffortInChatGpt;
         ReverseReasoningOrderCheckBox.IsEnabled = ReasoningEffortCheckBox.IsEnabled && profile.ExposeReasoningEffortInChatGpt;
         ReverseReasoningOrderCheckBox.IsChecked = profile.ReverseReasoningLevelDisplayOrder;
@@ -103,14 +106,15 @@ public partial class ProfileEditorWindow
 
     private void ReasoningEffort_Changed(object sender, RoutedEventArgs e)
     {
-        if (_populatingReasoning) return;
+        if (_populatingReasoning || !ReasoningEffortCheckBox.IsEnabled) return;
         _reasoningProfile = _reasoningProfile with { ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsChecked == true };
         RefreshReasoningUi();
     }
 
     private void ReverseReasoningOrder_Changed(object sender, RoutedEventArgs e)
     {
-        if (!_populatingReasoning) _reasoningProfile = _reasoningProfile with
+        if (_populatingReasoning || !ReverseReasoningOrderCheckBox.IsEnabled) return;
+        _reasoningProfile = _reasoningProfile with
         {
             ReverseReasoningLevelDisplayOrder = ReverseReasoningOrderCheckBox.IsChecked == true
         };
@@ -126,10 +130,55 @@ public partial class ProfileEditorWindow
 
     private void PreferredReasoningLevel_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (!_populatingReasoning) _reasoningProfile = _reasoningProfile with
+        if (_populatingReasoning || !PreferredReasoningLevelComboBox.IsEnabled) return;
+        _reasoningProfile = _reasoningProfile with
         {
             PreferredReasoningLevel = (PreferredReasoningLevelComboBox.SelectedItem as ComboBoxItem)?.Tag as string
         };
+    }
+
+    private bool ConfirmEffortWhileThinkingOff()
+    {
+        if (_effortWhileThinkingOffAccepted || _reasoningProfile.SupportsThinkingSwitch != true
+            || (_reasoningProfile.ThinkingEnabled ?? _reasoningProfile.DefaultThinkingEnabled) != false)
+            return true;
+        var result = MessageBox.Show(this, AppLanguageManager.Text("EffortWhileThinkingOffWarning"),
+            AppLanguageManager.Text("ThinkingSettings"), MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        if (result != MessageBoxResult.Yes) return false;
+        _effortWhileThinkingOffAccepted = true;
+        return true;
+    }
+
+    private void ReasoningEffort_ToggleRequested(object? sender, CancelEventArgs e)
+    {
+        if (!_populatingReasoning && ReasoningEffortCheckBox.IsEnabled && ReasoningEffortCheckBox.IsChecked != true)
+            e.Cancel = !ConfirmEffortWhileThinkingOff();
+    }
+
+    private void ReverseReasoningOrder_ToggleRequested(object? sender, CancelEventArgs e)
+    {
+        if (!_populatingReasoning && ReverseReasoningOrderCheckBox.IsEnabled)
+            e.Cancel = !ConfirmEffortWhileThinkingOff();
+    }
+
+    private void PreferredReasoningLevel_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_populatingReasoning && PreferredReasoningLevelComboBox.IsEnabled)
+            e.Handled = !ConfirmEffortWhileThinkingOff();
+    }
+
+    private void PreferredReasoningLevel_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (!_populatingReasoning && PreferredReasoningLevelComboBox.IsEnabled
+            && key is Key.Up or Key.Down or Key.Left or Key.Right or Key.Home or Key.End or Key.PageUp or Key.PageDown or Key.F4 or Key.Space)
+            e.Handled = !ConfirmEffortWhileThinkingOff();
+    }
+
+    private void PreferredReasoningLevel_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (!_populatingReasoning && PreferredReasoningLevelComboBox.IsEnabled && PreferredReasoningLevelComboBox.IsKeyboardFocusWithin)
+            e.Handled = !ConfirmEffortWhileThinkingOff();
     }
 
     private void NormalizePreferredReasoningLevelForSave()

@@ -133,7 +133,7 @@ public sealed class ThinkingSettingsTests
     }
 
     [Fact]
-    public async Task SavingThinkingOffSuppressesCatalogLevelsButPreservesPreferenceAndDefaults()
+    public async Task SavingThinkingOffPreservesVerifiedCatalogLevelsAndIndependentPreferences()
     {
         var root = Path.Combine(Path.GetTempPath(), "ThinkingSettingsTests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
@@ -159,7 +159,11 @@ public sealed class ThinkingSettingsTests
             var catalog = Path.Combine(root, "catalog.json");
             await LocalModelConfigurationWriter.WriteAsync(profile, root, Path.Combine(root, "preset.ini"), catalog);
             using (var document = JsonDocument.Parse(await File.ReadAllTextAsync(catalog)))
-                Assert.Empty(document.RootElement.GetProperty("models")[0].GetProperty("supported_reasoning_levels").EnumerateArray());
+            {
+                Assert.Equal(["low", "medium", "xhigh", "vendor_native"], document.RootElement.GetProperty("models")[0]
+                    .GetProperty("supported_reasoning_levels").EnumerateArray().Select(item => item.GetProperty("effort").GetString()));
+                Assert.Equal("xhigh", document.RootElement.GetProperty("models")[0].GetProperty("default_reasoning_level").GetString());
+            }
             var defaults = ModelParameterDefaults.FromProfile(profile);
             Assert.False(defaults.ThinkingEnabled);
             Assert.True(defaults.ExposeReasoningEffortInChatGpt);

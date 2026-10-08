@@ -19,7 +19,7 @@ public static class LocalModelConfigurationWriter
                 ReverseReasoningLevelDisplayOrder = profile.ReverseReasoningLevelDisplayOrder,
                 SupportsImageInput = profile.VisionEnabled
                                      && profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified,
-                SupportedReasoningLevels = (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) != false && profile.ReasoningResponsesVerified && profile.ReasoningClientCompatible == true && profile.ExposeReasoningEffortInChatGpt
+                SupportedReasoningLevels = profile.ReasoningResponsesVerified && profile.ReasoningClientCompatible == true && profile.ExposeReasoningEffortInChatGpt
                     && profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified
                         ? profile.SupportedReasoningLevels.Where(CodexReasoningLevels.IsRecognized).ToArray()
                         : Array.Empty<string>(),
