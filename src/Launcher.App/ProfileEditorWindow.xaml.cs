@@ -174,7 +174,7 @@ public partial class ProfileEditorWindow : Window
     private ModelProfile? _probeProfile;
     private ContextShiftCapabilityResult? _shiftCapability;
     private readonly string _runtimeRoot;
-    private readonly ModelProfile _originalProfile;
+    private ModelProfile _originalProfile;
     private readonly int? _modelContextLimit;
     private readonly IReadOnlyList<Choice<int>> _contextChoices;
     private readonly bool _hasEmbeddedMtpCandidate;
@@ -197,10 +197,17 @@ public partial class ProfileEditorWindow : Window
         IReadOnlySet<string>? runtimeCapabilities = null,
         Func<ModelProfile, CancellationToken, Task<ContextShiftCapabilityResult>>? contextShiftProbe = null,
         Func<ModelProfile, CancellationToken, Task<ModelProfile>>? templateProbe = null,
-        Func<ModelProfile, CancellationToken, Task<ModelProfile>>? reasoningProbe = null)
+        Func<ModelProfile, CancellationToken, Task<ModelProfile>>? reasoningProbe = null,
+        Func<ModelProfile, bool>? canEdit = null, Func<bool>? canDetect = null, Launcher.Core.Diagnostics.DiagnosticJournal? diagnostics = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
+        if (profile.ConfigurationError is not null || !profile.ConfigurationInitialized
+            || string.IsNullOrWhiteSpace(profile.PreferredConfigurationPath) || !File.Exists(profile.PreferredConfigurationPath))
+            profile = ModelConfigurationFile.CreateUnloadedDraft(profile);
+        _diagnostics = diagnostics ?? Launcher.Core.Diagnostics.DiagnosticJournal.None;
+        _canEditConfiguration = canEdit ?? (_ => true);
+        _canDetectConfiguration = canDetect ?? (() => true);
         _contextShiftProbe = contextShiftProbe;
         _templateProbe = templateProbe;
         _reasoningProbe = reasoningProbe;
@@ -238,6 +245,7 @@ public partial class ProfileEditorWindow : Window
         Populate(profile);
         ApplyRuntimeCapabilities(runtimeCapabilities);
         UpdateTemplateStatus();
+        InitializeConfigurationFiles();
     }
 
     public ModelProfile UpdatedProfile { get; private set; }
@@ -261,18 +269,19 @@ public partial class ProfileEditorWindow : Window
 
     private void RestoreModelDefaultsButton_Click(object sender, RoutedEventArgs e)
     {
-        var defaults = ModelProfileFactory.RestoreModelDefaults(_originalProfile) with
-        {
-            DisplayName = DisplayNameTextBox.Text.Trim(),
-        };
+        var defaults = ModelProfileFactory.RestoreModelDefaults(_originalProfile);
         Populate(defaults, populateSandbox: false);
     }
 
-    private void SaveButton_Click(object sender, RoutedEventArgs e)
-        => CompleteSave(saveAsModelDefault: false);
+    private async void SaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!await PersistConfigurationAsync(saveAs: false, apply: false)) return;
+        _allowConfigurationClose = true;
+        Close();
+    }
 
-    private void SaveAsModelDefaultButton_Click(object sender, RoutedEventArgs e)
-        => CompleteSave(saveAsModelDefault: true);
+    private async void SaveAsModelDefaultButton_Click(object sender, RoutedEventArgs e)
+        => await PersistConfigurationAsync(saveAs: true, apply: false);
 
     private void ContextSizeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -348,11 +357,9 @@ public partial class ProfileEditorWindow : Window
             element = System.Windows.Media.VisualTreeHelper.GetParent(element) as FrameworkElement;
         if (element is null || element.Name is "ContextShiftCheckBox" or "ProfileEditorTabs"
             or "CompactionSafetyReserveComboBox" or "ToolOutputTokenLimitComboBox" or "CodexStreamIdleTimeoutComboBox"
-            or "DisplayNameTextBox" or "ThinkingEnabledCheckBox" or "ShowThinkingProcessCheckBox" or "ReasoningEffortCheckBox" or "ReverseReasoningOrderCheckBox" or "PreferredReasoningLevelComboBox") return;
+            or "ThinkingEnabledCheckBox" or "ShowThinkingProcessCheckBox" or "ReasoningEffortCheckBox" or "ReverseReasoningOrderCheckBox" or "PreferredReasoningLevelComboBox") return;
+        // Capability evidence can expire without changing the user's requested switch.
         _shiftCapability = null;
-        _changingContextShift = true;
-        ContextShiftCheckBox.IsChecked = false;
-        _changingContextShift = false;
         UpdateContextShiftUiState();
     }
 
@@ -371,7 +378,7 @@ public partial class ProfileEditorWindow : Window
 
     private async Task DetectContextShiftAsync(bool force)
     {
-        if (_contextShiftCancellation is not null) return;
+        if (_contextShiftCancellation is not null || !_canDetectConfiguration()) return;
         _changingContextShift = true;
         ContextShiftCheckBox.IsChecked = false;
         _changingContextShift = false;
@@ -397,6 +404,7 @@ public partial class ProfileEditorWindow : Window
         _contextShiftCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         ProfileEditorTabs.IsEnabled = false;
         SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = RestoreModelDefaultsButton.IsEnabled = false;
+        ApplyConfigurationButton.IsEnabled = LoadConfigurationButton.IsEnabled = false;
         ContextShiftCancelButton.Visibility = Visibility.Visible;
         UpdateContextShiftUiState();
         try
@@ -420,6 +428,7 @@ public partial class ProfileEditorWindow : Window
             _contextShiftCancellation.Dispose();
             _contextShiftCancellation = null;
             ProfileEditorTabs.IsEnabled = true;
+            ApplyConfigurationButton.IsEnabled = LoadConfigurationButton.IsEnabled = true;
             UpdateLongConversationSummary();
             RestoreModelDefaultsButton.IsEnabled = _originalProfile.DefaultParameters is not null;
             ContextShiftCancelButton.Visibility = Visibility.Collapsed;
@@ -552,7 +561,6 @@ public partial class ProfileEditorWindow : Window
         var updated = _originalProfile with
         {
             SchemaVersion = ModelProfile.CurrentSchemaVersion,
-            DisplayName = DisplayNameTextBox.Text.Trim(),
             ContextSize = contextSize,
             CompactionSafetyReserve = reserve,
             ToolOutputTokenLimit = toolLimit,
@@ -615,6 +623,7 @@ public partial class ProfileEditorWindow : Window
             SandboxSettings = sandboxSettings,
             ExtraArguments = extraArguments,
         };
+        updated = Launcher.Scripts.Templates.ModelResourceCatalog.Resolve(updated, _runtimeRoot);
         updated = EnsureCurrentReasoningValidation(updated);
         var errors = ModelProfileValidator.Validate(updated, _runtimeRoot);
         if (errors.Count > 0)
@@ -629,16 +638,6 @@ public partial class ProfileEditorWindow : Window
         }
 
         if (captureForProbe) { _probeProfile = updated; return; }
-        if (updated.ContextShiftEnabled && ContextShiftCapabilityCache.Read(updated, _runtimeRoot)?.Supported != true)
-        {
-            _changingContextShift = true;
-            ContextShiftCheckBox.IsChecked = false;
-            _changingContextShift = false;
-            _shiftCapability = null;
-            UpdateContextShiftUiState();
-            MessageBox.Show(this, AppLanguageManager.Choose("当前参数尚未验证滚动能力，请重新开启开关进行检测。", "Shifting is not verified for these parameters. Enable the switch again to detect support."));
-            return;
-        }
         if (saveAsModelDefault)
         {
             var answer = MessageBox.Show(
@@ -667,15 +666,6 @@ public partial class ProfileEditorWindow : Window
     {
         _populatingConversationLimits = true;
         _populatingProfile = true;
-        DisplayNameTextBox.Text = profile.DisplayName;
-        AliasTextBox.Text = profile.Alias;
-        ModelPathTextBox.Text = profile.ModelRelativePath;
-        ModelTypeTextBlock.Text = profile.ModelType switch
-        {
-            ModelType.Dense => AppLanguageManager.Choose("Dense（稠密模型）", "Dense Model"),
-            ModelType.MoE => AppLanguageManager.Choose("MoE（混合专家模型）", "MoE Model"),
-            _ => AppLanguageManager.Choose("未指定", "Unspecified"),
-        };
         MoeBasicPanel.Visibility = profile.ModelType == ModelType.MoE ? Visibility.Visible : Visibility.Collapsed;
         DenseLoadModePanel.Visibility = profile.ModelType == ModelType.Dense ? Visibility.Visible : Visibility.Collapsed;
         DenseFitPanel.Visibility = profile.ModelType == ModelType.Dense ? Visibility.Visible : Visibility.Collapsed;
@@ -729,7 +719,7 @@ public partial class ProfileEditorWindow : Window
         _shiftCapability = ContextShiftCapabilityCache.Read(profile, _runtimeRoot);
         _probeProfile = profile;
         _changingContextShift = true;
-        ContextShiftCheckBox.IsChecked = profile.ContextShiftEnabled && _shiftCapability?.Supported == true;
+        ContextShiftCheckBox.IsChecked = profile.ContextShiftEnabled;
         _changingContextShift = false;
         UpdateContextShiftUiState();
         if (GpuLayerChoices.Any(choice => choice.Value == profile.GpuLayers))
@@ -1168,11 +1158,14 @@ public partial class ProfileEditorWindow : Window
         var runtimeBlocked = _runtimeSupportsVision == false;
         var enabled = VisionEnableCheckBox.IsChecked == true;
         VisionEnableCheckBox.IsEnabled = enabled || (verified && !runtimeBlocked);
-        VisionSettingsPanel.IsEnabled = enabled && !runtimeBlocked;
+        VisionSettingsPanel.IsEnabled = !runtimeBlocked;
+        VisionExternalProjectorPanel.Visibility = _originalProfile.VisionSource == VisionSourceKind.External
+            ? Visibility.Visible : Visibility.Collapsed;
         VisionStatusTextBlock.Text = runtimeBlocked
             ? AppLanguageManager.Choose("当前 llama.cpp Runtime 未报告 --mmproj，无法启用视觉模块。", "The current llama.cpp Runtime does not report --mmproj, so vision cannot be enabled.")
             : _originalProfile.VisionCapabilityStatus switch
             {
+                _ when !verified && _hasRegisteredVisionResources => AppLanguageManager.Choose("已有可用视觉模块；请在下拉菜单中选择后开启。", "Vision modules are available. Select one from the list to enable vision."),
                 VisionCapabilityStatus.Verified => AppLanguageManager.Choose("已通过 GGUF 元数据识别并建立视觉关联；实际兼容性由 llama.cpp 在正式加载时确认。", "Vision was recognized and associated from GGUF metadata; llama.cpp confirms actual compatibility during normal loading."),
                 VisionCapabilityStatus.BuiltInCandidate => AppLanguageManager.Choose("检测到内置视觉元数据，但尚未在本地模型管理中确认关联。", "Built-in vision metadata was detected but has not yet been associated in Local Model Management."),
                 VisionCapabilityStatus.ExternalConfigured => AppLanguageManager.Choose("外置视觉关联已失效，请在本地模型管理中重新加载并识别。", "The external vision association is stale. Load and recognize it again in Local Model Management."),
@@ -1274,7 +1267,7 @@ public partial class ProfileEditorWindow : Window
             : _hasEmbeddedMtpCandidate
               || _displayedMtpCapabilityStatus is MtpCapabilityStatus.EmbeddedCandidate or MtpCapabilityStatus.Verified;
         MtpEnableCheckBox.IsEnabled = enabled || (!runtimeBlocked && sourceReady);
-        MtpSettingsPanel.IsEnabled = enabled && !runtimeBlocked;
+        MtpSettingsPanel.IsEnabled = !runtimeBlocked;
         var isExternal = source == MtpSourceKind.External;
         MtpExternalModelPanel.Visibility = isExternal ? Visibility.Visible : Visibility.Collapsed;
         MtpExternalResourcesPanel.Visibility = isExternal ? Visibility.Visible : Visibility.Collapsed;
@@ -2074,14 +2067,16 @@ public partial class ProfileEditorWindow : Window
         var busy = _contextShiftCancellation is not null;
         var blocked = _shiftCapability?.Supported == false || _runtimeSupportsContextShift == false
             || VisionEnableCheckBox.IsChecked == true;
-        ContextShiftCheckBox.IsEnabled = !busy && !blocked;
-        ContextShiftDetectButton.IsEnabled = !busy && _runtimeSupportsContextShift == true && VisionEnableCheckBox.IsChecked != true;
+        ContextShiftCheckBox.IsEnabled = !busy && (!blocked || ContextShiftCheckBox.IsChecked == true);
+        ContextShiftDetectButton.IsEnabled = !busy && _canDetectConfiguration() && _runtimeSupportsContextShift == true && VisionEnableCheckBox.IsChecked != true;
         ContextShiftStatusTextBlock.Visibility = Visibility.Visible;
         ContextShiftStatusTextBlock.Text = busy
             ? AppLanguageManager.Choose("正在加载模型并确认实际滚动；可能需要几分钟，可取消。", "Loading the model and confirming actual shifting; this may take several minutes. You can cancel.")
             : (_shiftCapability?.Reason ?? AppLanguageManager.Choose("尚未验证当前配置；首次开启时检测。", "This configuration is unverified; checked on first enable."))
                 + Environment.NewLine + (ContextShiftCheckBox.IsChecked == true
-                    ? AppLanguageManager.Choose("开启：显式使用 --context-shift。", "On: explicitly uses --context-shift.")
+                    ? _shiftCapability?.Supported == true && _runtimeSupportsContextShift == true && VisionEnableCheckBox.IsChecked != true
+                        ? AppLanguageManager.Choose("开启：显式使用 --context-shift。", "On: explicitly uses --context-shift.")
+                        : AppLanguageManager.Choose("已选择开启：验证无效或尚未确认，启动前需重新检测或关闭。", "Requested on: verification is missing or invalid; check again or turn off before starting.")
                     : AppLanguageManager.Choose("关闭：显式使用 --no-context-shift；触顶停止，工具参数仍可能被截断。", "Off: explicitly uses --no-context-shift; generation stops at capacity, and tool arguments may be truncated."));
     }
 

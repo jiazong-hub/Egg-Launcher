@@ -53,13 +53,17 @@ static async Task RunAsync(string[] args)
         EnsureLauncherIsStopped();
         var uninstallPaths = LauncherDataPaths.ForCurrentUser();
         using var uninstallSettings = new JsonSettingsStore(uninstallPaths.SettingsFile);
+        var uninstallDiagnostics = new DiagnosticJournal(new ModeAwareJsonLineDiagnosticLog(
+            uninstallPaths.AgentConciseLogFile, uninstallPaths.AgentFullLogFile));
+        try { uninstallDiagnostics.SetDetailed((await uninstallSettings.LoadAsync()).DetailedDiagnosticsEnabled); }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException) { }
         var uninstallClientDetector = new ChatGptClientDetector();
         await new UninstallPreparationService(
             uninstallSettings,
             uninstallClientDetector,
             new ChatGptConfigTransactionService(uninstallClientDetector),
             uninstallPaths,
-            new WindowsUserRunEntryStore()).PrepareAsync(
+            new WindowsUserRunEntryStore(), uninstallDiagnostics).PrepareAsync(
                 Path.Combine(AppContext.BaseDirectory, "Launcher.App.exe"));
         Console.WriteLine("Egg Launcher uninstall preparation succeeded.");
         return;
@@ -83,6 +87,7 @@ static async Task RunAsync(string[] args)
         paths.AgentConciseLogFile,
         paths.AgentFullLogFile,
         detailedDiagnosticsEnabled);
+    var operationDiagnostics = new DiagnosticJournal(agentLog);
     var codexHome = GetOptionValue(args, "--codex-home");
     var inspector = new ChatGptIntegrationInspector(codexHome);
     var clientDetector = new ChatGptClientDetector();
@@ -157,7 +162,7 @@ static async Task RunAsync(string[] args)
         var recovery = await new ModeRecoveryCoordinator(
             settingsStore,
             new ChatGptConfigTransactionService(clientDetector),
-            paths).RecoverAsync(shutdown.Token);
+            paths, operationDiagnostics).RecoverAsync(shutdown.Token);
         if (recovery.Changed)
         {
             await WriteAgentLogAsync(
@@ -213,7 +218,8 @@ static async Task RunAsync(string[] args)
         diagnosticEventWriter: (eventName, level, message) =>
             WriteAgentDiagnosticEventAsync(eventName, level, message),
         modelManagementClient: new LlamaModelManagementClient(agentHttpClient),
-        structuredDiagnosticEventWriter: WriteAgentDiagnosticEventObjectAsync);
+        structuredDiagnosticEventWriter: WriteAgentDiagnosticEventObjectAsync,
+        diagnostics: operationDiagnostics);
     using var controlCancellation = CancellationTokenSource.CreateLinkedTokenSource(shutdown.Token);
     var controlTask = AgentControlPipe.ListenForShutdownAsync(
         shutdown.Cancel,
@@ -566,10 +572,10 @@ static async Task RunAsync(string[] args)
         var presetPath = Path.Combine(smokeRoot, "models.ini");
         var catalogPath = Path.Combine(smokeRoot, "local-models.json");
         var proxyLogPath = Path.Combine(smokeRoot, "proxy.jsonl");
+        string? chatTemplateOverridePath = null;
 
         try
         {
-            string? chatTemplateOverridePath = null;
             var embeddedTemplate = CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(
                 candidate.PrimaryPath,
                 shutdown.Token);
@@ -577,7 +583,9 @@ static async Task RunAsync(string[] args)
                 embeddedTemplate,
                 out var compatibleTemplate))
             {
-                chatTemplateOverridePath = Path.Combine(smokeRoot, "codex-compatible.jinja");
+                chatTemplateOverridePath = ChatTemplateFile.ValidatePath(
+                    Path.Combine(ChatTemplateFile.GetDirectory(runtimeRoot), $".smoke-{Guid.NewGuid():N}.jinja"), runtimeRoot);
+                Directory.CreateDirectory(ChatTemplateFile.GetDirectory(runtimeRoot));
                 await File.WriteAllTextAsync(
                     chatTemplateOverridePath,
                     CodexChatTemplateCompatibility.OwnershipMarker + "\n" + compatibleTemplate,
@@ -799,6 +807,7 @@ static async Task RunAsync(string[] args)
         }
         finally
         {
+            if (chatTemplateOverridePath is not null && File.Exists(chatTemplateOverridePath)) File.Delete(chatTemplateOverridePath);
             DeleteOwnedSmokeDirectory(smokeRoot);
         }
     }

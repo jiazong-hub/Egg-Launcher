@@ -1,6 +1,6 @@
 # 0002：Launcher 保持为 llama.cpp 的薄管理壳
 
-状态：已采用（2026-09-11；v0.9.1 复核于 2026-09-21）
+状态：已采用（2026-09-11；v0.9.8 复核于 2026-10-18）
 
 ## 决策
 
@@ -8,7 +8,7 @@ llama.cpp 是 Local 模式唯一的模型运行时。Launcher 只管理 GGUF Pro
 
 模型按需加载、空闲卸载与新请求自动唤醒均使用 llama.cpp Router 原生能力。Profile 直接生成 `sleep-idle-seconds` 参数，Agent 不根据 ChatGPT 进程状态调用模型卸载接口。
 
-参数默认值也属于单个模型 Profile：Launcher 只保存用户为该模型建立的参数快照，不把模型 A 的默认值传播给模型 B，也不提供无法根据硬件与模型证明正确的内置推荐。可选自动适配只运行当前 Runtime 自带的 `llama-fit-params`，Launcher 对其 `-c/-ngl/-ts/-ot` 输出做白名单解析，展示后由用户决定是否应用以及是否设为该模型专用默认。
+模型登记负责可信身份与类型，参数 JSON 负责同模型多套运行设置，资源登记负责可复用能力依据。完整参数存入 JSON 不代表全部参数显式传递，未设置项仍由原生成规则省略。没有硬件无关的内置推荐；原生自动适配结果展示后再由用户确认，不覆盖已有配置。
 
 公开 GGUF 搜索只读取 Hugging Face 元数据。模型下载通过 llama.cpp Router 原生 `POST /models` 发起，并通过 `/models/sse` 读取分片字节进度；Launcher 只负责把 `done/total` 可视化为容量、百分比和速度。缓存根目录由 `LLAMA_CACHE` 指向 Runtime 的 `models` 目录。Launcher 不实现网络文件传输、断点续传、校验、重试或格式转换，也不移动 llama.cpp 的原生缓存文件。
 
@@ -35,7 +35,9 @@ Local 模式把回环地址声明为一个使用现有 OpenAI 登录状态、但
 
 Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtime 的 llama-server 任一运行时禁止编辑参数；服务完全停止后允许编辑。其他可用模型仍可编辑，其保存不会覆盖当前 Local 配置。自动适配另有运行条件：必须处于 OpenAI 模式，且当前 Runtime 没有运行中的 llama-server。
 
-参数保存与模式配置使用两个独立入口。`SaveProfileArtifactsAsync` 调用 `ModelArtifactWriter`，由模型文件事务提交或回滚 Profile、备份与 BAT；保存当前配置的 Local 模型时，也将 Catalog 和 Router preset 纳入同一文件事务。保存当前 Local 模型时，在模型文件事务内调用 `ModeSwitchCoordinator` 的 Local 更新路径，立即提交 Codex 受管理配置和恢复记录；模式更新失败时由配置事务回滚，再由外层模型事务恢复文件。保存不启动或重载服务。非当前模型只更新自身文件。`ActivateLocalAsync` 在冷启动或切换模型时重新读取已保存 Profile，再调用 `ModeSwitchCoordinator`，通过已有模式配置事务应用 Codex 的 Context、压缩线、工具输出预算、SSE 等待时间和沙箱设置，并更新 Catalog 与 Router preset。客户端已运行且仍使用同一 Local 模型时，满足复用条件的启动操作可复用现有服务，不重新应用参数。
+参数保存与新启动分离。保存/另存只写 JSON，应用再更新每模型启动预选；`ModelStartupConfiguration.ResolveAsync` 在新启动读取并检查预选、资源及 Runtime 依据，之后由现有事务生成 BAT、Catalog、Router preset 和 Codex 受管设置。失败时沿用回滚边界。运行恢复使用 `AppliedLocalRun` 快照，不把参数编辑直接混入已有服务。
+
+本地认证取自全局 `LocalRequiresOpenAiAuth`，默认 false，启动时传入自定义 Provider；不写入模型 JSON，不修改凭据。认证开关不改变原生本地 compaction、历史查阅或跨 Provider 续聊边界。
 
 ## 明确不做
 
@@ -50,14 +52,14 @@ Local 模式下，当前配置模型在客户端、后台 Agent 或当前 Runtim
 
 ## 配置文件与 BAT
 
-结构化 Profile 是 Launcher 的配置源，生成的 BAT 是可读、可迁移、可独立运行的产物。Launcher 直接从 Profile 构造受控参数，不反向解析任意 BAT，从而避免脚本注入、端口识别和进程归属不确定性。
+用户预选的结构化 JSON 是新启动参数来源。每模型仅生成一套 BAT，全局 Catalog/preset 对应当前新启动快照；多个 JSON 不各自产生一套运行文件。BAT 为可读生成物，不反向解析任意脚本，普通启动必须经过配置校验，直接双击旧 BAT 不属于本版受管入口。
 
-## v0.9.1 模型能力边界
+## v0.9.8 模型能力边界
 
-- Dense/MoE 类型是 Profile 的显式事实。首次添加可以读取 GGUF 元数据辅助识别，但未知结果不猜测；用户更改类型时重建参数配置，不把跨架构参数直接迁移。
+- Dense/MoE 类型是 Profile 的显式事实。首次添加可以读取 GGUF 元数据辅助识别，但未知结果不猜测；用户更改类型只更新登记，不修改既有 JSON；类型不符禁止载入及新启动。
 - MTP、视觉和思考能力由实际元数据或原生隔离验证证明。MTP、视觉检测与关联位于模型管理；思考检测位于参数页“思考设置”，使用实际模板和 Responses 链路，分别确认开关、独立档位、默认值和别名。未知能力如实保留，不默认填中档，不映射。
 - 思考 Responses 验证比较隔离原生进程记录的完整实际提示词，不以输入 token 数量充当传递证据。与可信 Desktop 安装匹配的缓存 CLI 协议 schema 单独确认原始档位兼容性，不依赖独立 CLI 安装。共享指纹检查覆盖编辑、保存、模式切换和 Agent 重启；依据不一致时由现有事务同步清理配置，客户端运行时阻止沿用失效设置。验证时间不构成失效依据。
-- 外置 MTP 与 mmproj 是主模型的可撤销关联，不是独立聊天模型；下载辅助文件不会自动把它绑定到任何 Profile。
+- 外置 MTP 与 mmproj 在主模型资源目录登记，各参数 JSON 独立选择；它们不是聊天模型，下载不自动登记或启用。资源移除只清理登记，不删除文件；仍被配置引用时拒绝移除。视觉沿用元数据/Runtime 识别，不增加图片推理检测；原生能力仍由实际加载确认。
 - 未设置的参数不写入 preset 或命令行，让当前 llama.cpp 保持自己的默认行为。Launcher 不以 UI 默认值伪装 Runtime 推荐。
 - 从模型列表移除只删除 Profile 和 Launcher 拥有的生成物。删除用户模型数据属于用户或 llama 原生受保护缓存管理流程，不由普通列表操作承担。
 

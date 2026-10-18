@@ -1,16 +1,16 @@
 # Architecture decision 0003: per-model Codex sandbox settings
 
-Status: adopted in the local v0.9.2 version; named Codex permission profiles remain beta.
+Status: adopted in v0.9.2; reviewed for v0.9.8 on 2026-10-18. Named Codex permission profiles remain beta.
 
 ## Decision
 
-Store optional Codex command-sandbox settings on each `ModelProfile`, separately from llama.cpp runtime arguments. Profile schema version 7 adds `SandboxSettings`:
+Store optional Codex command-sandbox settings in each model-bound parameter JSON, separately from llama.cpp runtime arguments. `SandboxSettings` originated in schema 7; the current embedded ModelProfile schema is 13 and the user configuration format is 1:
 
 - Network access can inherit Codex's existing setting, be disabled, or allow full outbound access.
 - Additional absolute paths can be granted read-only or read/write access.
 - A null value means the profile has no sandbox override. Loading or saving an untouched legacy profile must not change Codex sandbox settings.
 
-Changing llama.cpp defaults does not change sandbox permissions. Restoring llama.cpp defaults also leaves sandbox settings alone.
+Different configurations for one model can carry different sandbox settings. Save only updates the loaded JSON; Apply additionally chooses that JSON for the model's next startup. Neither writes the live Codex configuration. A new Local activation reads the selected JSON and applies its sandbox settings through the existing transaction. Model resource registration does not change sandbox permissions.
 
 ## Config transaction
 

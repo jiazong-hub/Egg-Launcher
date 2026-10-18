@@ -17,7 +17,7 @@ public static class ChatTemplateValidationCache
         var runtime = new FileInfo(Path.Combine(root, "llama-server.exe"));
         var template = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             ? CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(model.FullName) ?? string.Empty
-            : File.ReadAllText(Path.Combine(root, profile.ChatTemplateRelativePath));
+            : File.ReadAllText(ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath, root));
         return Hash($"{model.FullName}|{model.Length}|{model.LastWriteTimeUtc.Ticks}|{Hash(template)}|"
             + $"{runtime.Length}|{runtime.LastWriteTimeUtc.Ticks}|{ChatTemplateRules.VersionSignature}|{profile.Jinja}");
     }
@@ -32,7 +32,7 @@ public static class ChatTemplateValidationCache
             var record = Read(profile, root);
             return record is not null && record.Signature == Signature(profile, root);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
+        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException)
         {
             return false;
         }
@@ -46,7 +46,7 @@ public static class ChatTemplateValidationCache
     {
         var template = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             ? CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(Path.Combine(root, profile.ModelRelativePath)) ?? string.Empty
-            : await File.ReadAllTextAsync(Path.Combine(root, profile.ChatTemplateRelativePath), cancellationToken);
+            : await File.ReadAllTextAsync(ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath, root), cancellationToken);
         var record = new ChatTemplateValidationRecord(Signature(profile, root), Hash(template), DateTimeOffset.UtcNow);
         var path = PathFor(profile, root);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

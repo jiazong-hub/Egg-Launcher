@@ -27,7 +27,7 @@ public sealed class ReasoningStartupGuardTests
             await File.WriteAllTextAsync(config, official);
             await File.WriteAllTextAsync(Path.Combine(runtime, "model.gguf"), "fixture");
             await File.WriteAllTextAsync(Path.Combine(runtime, "llama-server.exe"), "fixture");
-            var template = Path.Combine(runtime, "active.jinja");
+            var template = Path.Combine(Directory.CreateDirectory(ChatTemplateFile.GetDirectory(runtime)).FullName, "active.jinja");
             await File.WriteAllTextAsync(template, "fixture template");
             var profile = new ModelProfile
             {
@@ -38,7 +38,7 @@ public sealed class ReasoningStartupGuardTests
                 ContextSize = 8192,
                 CompactionSafetyReserve = 2048,
                 ModelType = ModelType.Dense,
-                ChatTemplateRelativePath = "active.jinja",
+                ChatTemplateRelativePath = "scripts/templates/active.jinja",
                 ThinkingEnabled = true,
                 ShowThinkingProcess = true,
                 SupportsThinkingSwitch = true,

@@ -67,7 +67,7 @@ public sealed class ReasoningDisplayOrderTests
                 ModelRelativePath = "model.gguf",
                 ContextSize = 8192,
                 CompactionSafetyReserve = 2048,
-                ChatTemplateRelativePath = "active.jinja",
+                ChatTemplateRelativePath = "scripts/templates/active.jinja",
                 ReasoningCapabilityStatus = ReasoningCapabilityStatus.Verified,
                 ReasoningResponsesVerified = true,
                 ReasoningClientCompatible = true,
@@ -77,7 +77,7 @@ public sealed class ReasoningDisplayOrderTests
                 DefaultReasoningLevel = "xhigh",
             };
             Assert.False(profile.ReverseReasoningLevelDisplayOrder);
-            await File.WriteAllTextAsync(Path.Combine(root, "active.jinja"), "template");
+            await File.WriteAllTextAsync(Path.Combine(Directory.CreateDirectory(ChatTemplateFile.GetDirectory(root)).FullName, "active.jinja"), "template");
             var catalog = Path.Combine(root, "catalog.json");
             var preset = Path.Combine(root, "preset.ini");
             await LocalModelConfigurationWriter.WriteAsync(profile, root, preset, catalog);

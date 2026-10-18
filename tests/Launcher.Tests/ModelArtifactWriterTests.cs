@@ -65,7 +65,7 @@ public sealed class ModelArtifactWriterTests : IDisposable
         var profilePath = Path.Combine(JsonModelProfileStore.GetProfilesDirectory(_root), profile.Id + ".json");
         var batchPath = BatchScriptGenerator.GetOutputPath(_root, profile.Id);
         var originals = new Dictionary<string, string>();
-        foreach (var path in new[] { profilePath, profilePath + ".bak", batchPath, Preset, Catalog })
+        foreach (var path in new[] { profilePath, ModelConfigurationFile.InitialPath(profile, _root), batchPath, Preset, Catalog })
             originals[path] = await File.ReadAllTextAsync(path);
 
         // Permit reads for transaction snapshots, deny overwrite of the last artifact.

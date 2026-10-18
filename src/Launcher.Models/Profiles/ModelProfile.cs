@@ -36,6 +36,19 @@ public sealed record ModelProfile
 
     public required string Alias { get; init; }
 
+    /// <summary>Model registration metadata; configuration files never control this selection.</summary>
+    public bool ConfigurationInitialized { get; init; }
+
+    public string? PreferredConfigurationPath { get; init; }
+
+    public bool ResourceCatalogInitialized { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ConfigurationError { get; init; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? ConfigurationContentDigest { get; init; }
+
     /// <summary>Whether this model is visible as a selectable card in Egg Launcher.</summary>
     public bool ShowInModePage { get; init; } = true;
 

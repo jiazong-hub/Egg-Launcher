@@ -181,10 +181,6 @@ public static partial class ModelProfileValidator
             errors.Add("MoE 专家放置不能同时使用结构化设置和旧版高级参数。");
         }
 
-        if (!profile.Jinja && !string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
-        {
-            errors.Add("使用 Chat Template 文件时必须启用 Jinja。");
-        }
 
         ValidateReasoningCapability(profile, errors);
         ValidateMtp(profile, runtimeRoot, errors);
@@ -209,7 +205,9 @@ public static partial class ModelProfileValidator
             }
         }
 
-        if (profile.DefaultParameters is not null)
+        // Legacy restore-defaults data is retained for migration, but no longer participates
+        // in a model whose runtime settings are owned by independent configuration files.
+        if (profile.DefaultParameters is not null && !profile.ConfigurationInitialized)
         {
             var defaultCandidate = profile.DefaultParameters.ApplyTo(profile) with { DefaultParameters = null };
             foreach (var defaultError in Validate(defaultCandidate, runtimeRoot))
@@ -496,7 +494,7 @@ public static partial class ModelProfileValidator
         ValidateVisionProjectorPath(profile, runtimeRoot, errors);
         if (profile.VisionEnabled && profile.VisionCapabilityStatus != VisionCapabilityStatus.Verified)
         {
-            errors.Add("视觉模块只有通过 llama.cpp 图片请求验证后才能启用。");
+            errors.Add("视觉模块尚无有效识别记录，请在模型管理中重新加载并识别。");
         }
 
         if (profile.VisionEnabled
@@ -660,19 +658,11 @@ public static partial class ModelProfileValidator
 
         try
         {
-            if (!string.Equals(Path.GetExtension(templatePath), ".jinja", StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add("Chat Template 必须是 .jinja 文件。");
-            }
-
-            var root = Path.GetFullPath(runtimeRoot).TrimEnd(
-                Path.DirectorySeparatorChar,
-                Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            var templateFullPath = Path.GetFullPath(Path.Combine(root, templatePath));
-            if (!templateFullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-            {
-                errors.Add("Chat Template 相对路径不能逃逸 Runtime Root。");
-            }
+            ChatTemplateFile.ResolveRelative(templatePath, runtimeRoot);
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            errors.Add(exception.Message);
         }
         catch (Exception exception) when (IsInvalidPathException(exception))
         {

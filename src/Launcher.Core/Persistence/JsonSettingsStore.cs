@@ -14,6 +14,9 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
     private readonly string _settingsPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
+    /// <summary>Metadata from the existing settings read; never serialized as a preference.</summary>
+    public bool LastLoadUsedAuthenticationDefault { get; private set; }
+
     public JsonSettingsStore(string settingsPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(settingsPath);
@@ -27,6 +30,7 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
         {
             if (!File.Exists(_settingsPath))
             {
+                LastLoadUsedAuthenticationDefault = true;
                 return new LauncherSettings();
             }
 
@@ -38,10 +42,10 @@ public sealed class JsonSettingsStore : ISettingsStore, IDisposable
                 bufferSize: 4096,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
 
-            var settings = await JsonSerializer.DeserializeAsync<LauncherSettings>(
-                stream,
-                SerializerOptions,
-                cancellationToken).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+            LastLoadUsedAuthenticationDefault = document.RootElement.ValueKind != JsonValueKind.Object
+                || !document.RootElement.TryGetProperty(nameof(LauncherSettings.LocalRequiresOpenAiAuth), out _);
+            var settings = document.RootElement.Deserialize<LauncherSettings>(SerializerOptions);
 
             return Validate(Migrate(settings));
         }

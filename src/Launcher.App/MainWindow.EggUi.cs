@@ -18,6 +18,24 @@ namespace Launcher.App;
 
 public partial class MainWindow
 {
+    private void ProjectHomeButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://github.com/jiazong-hub/Egg-Launcher",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = AppLanguageManager.Choose(
+                $"无法打开 GitHub 项目主页：{exception.Message}",
+                $"Unable to open the GitHub project page: {exception.Message}");
+        }
+    }
+
     private const int MaximumTrayTooltipLength = 127;
     private readonly bool _startHidden = Environment.GetCommandLineArgs()
         .Any(argument => string.Equals(argument, "--startup", StringComparison.OrdinalIgnoreCase));
@@ -122,7 +140,7 @@ public partial class MainWindow
     {
         Dispatcher.BeginInvoke(new Action(async () =>
         {
-            await LaunchChatGptAsync();
+            await LaunchChatGptAsync("tray");
             RequestTrayStatusRefresh(force: true);
         }));
     }
@@ -1031,6 +1049,7 @@ public partial class MainWindow
 
     private async void ModeCard_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
+        if (IsModeCardActionSource(e.OriginalSource)) return;
         if (_dragInProgress || _reorderModeActive)
         {
             _dragInProgress = false;
@@ -1131,6 +1150,7 @@ public partial class MainWindow
     {
         var clientRunning = GetClientRunningSnapshot();
         LaunchChatGptButton.IsEnabled = CanLaunchChatGpt(clientRunning);
+        UpdateLocalAuthenticationUi();
 
         var selectionLocked = IsModeSelectionLocked();
         ModePageHintText.Text = selectionLocked
@@ -1175,15 +1195,19 @@ public partial class MainWindow
                 _settings.PendingMode == ProviderMode.Local
                     && string.Equals(_settings.PendingModelId, profile.Id, StringComparison.Ordinal),
                 selectionLocked ? 0.5 : 1,
-                !_busy && !_launchInProgress && CanEditProfile(profile)))
+                CanUseModelCardActions(profile)))
             .ToArray());
         var languageIsEnglish = AppLanguageManager.IsEnglish;
         if (_renderedModeCardsEnglish == languageIsEnglish
-            && _renderedModeCards.SequenceEqual(modeCards))
+            && _renderedModeCards.Count == modeCards.Count
+            && _renderedModeCards.Zip(modeCards).All(pair => pair.First.SamePresentation(pair.Second)))
         {
+            foreach (var item in _renderedModeCards) item.RefreshConfiguration(_settings.LlamaRoot);
             return;
         }
 
+        if (_configurationMenu is { IsOpen: true }) _configurationMenu.IsOpen = false;
+        foreach (var item in modeCards) item.RefreshConfiguration(_settings.LlamaRoot);
         _renderedModeCards = modeCards;
         _renderedModeCardsEnglish = languageIsEnglish;
         ModeModelsItemsControl.ItemsSource = _renderedModeCards;
@@ -1192,7 +1216,7 @@ public partial class MainWindow
 
     private bool CanLaunchChatGpt(bool clientRunning)
     {
-        if (_busy || _launchInProgress || clientRunning)
+        if (_busy || _launchInProgress || _modelDialogOpening || _configurationSelectionInProgress || clientRunning)
         {
             return false;
         }
@@ -1203,7 +1227,8 @@ public partial class MainWindow
                     profile.Id,
                     _settings.PendingModelId,
                     StringComparison.Ordinal)
-                    && !IsProfileUnavailable(profile)));
+                    && !IsProfileUnavailable(profile)
+                    && _settings.LlamaRoot is { } root && ModelConfigurationSelection.Inspect(profile, root).Exists));
     }
 
     private string GetActualModeLabel(bool clientRunning) => !clientRunning
@@ -1213,7 +1238,7 @@ public partial class MainWindow
             : "Local LLM";
 
     private bool IsModeSelectionLocked(bool forceClientRefresh = false) =>
-        _busy || _launchInProgress || GetClientRunningSnapshot(forceClientRefresh);
+        _busy || _launchInProgress || _modelDialogOpening || _configurationSelectionInProgress || GetClientRunningSnapshot(forceClientRefresh);
 
     private bool CanEditProfile(ModelProfile profile, bool forceClientRefresh = false)
     {
@@ -1228,7 +1253,7 @@ public partial class MainWindow
     private async void ModeCardSettings_Click(object sender, RoutedEventArgs e)
     {
         e.Handled = true;
-        if (sender is Button { Tag: ModelProfile profile })
+        if (sender is Button { Tag: ModelProfile profile } && CanUseModelCardActions(profile, force: true))
         {
             await EditProfileAsync(profile);
         }
@@ -1236,6 +1261,9 @@ public partial class MainWindow
 
     private async Task EditProfileAsync(ModelProfile profile)
     {
+        if (_modelDialogOpening) return;
+        _modelDialogOpening = true;
+        RefreshEggUiState();
         try { await EditProfileCoreAsync(profile); }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (Exception exception)
@@ -1243,14 +1271,18 @@ public partial class MainWindow
             StatusText.Text = AppLanguageManager.Choose("打开模型参数失败：", "Cannot open model settings: ") + exception.Message;
             MessageBox.Show(this, StatusText.Text, AppLanguageManager.Choose("模型参数", "Model settings"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
+        finally { _modelDialogOpening = false; RefreshEggUiState(); }
     }
 
     private async Task EditProfileCoreAsync(ModelProfile profile)
     {
-        if (_busy || string.IsNullOrWhiteSpace(_settings.LlamaRoot))
+        if (_busy || _launchInProgress || _configurationSelectionInProgress || string.IsNullOrWhiteSpace(_settings.LlamaRoot))
         {
             return;
         }
+        profile = await _profileStore.ReadRegistrationAsync(_settings.LlamaRoot, profile, _lifetime.Token);
+        _ = ModelConfigurationSelection.ListFiles(profile, _settings.LlamaRoot);
+        profile = await ReadSelectedConfigurationForEditorAsync(profile, _settings.LlamaRoot);
 
         if (!CanEditProfile(profile, forceClientRefresh: true))
         {
@@ -1260,7 +1292,7 @@ public partial class MainWindow
 
         if (profile.ModelType == ModelType.Unknown)
         {
-            StatusText.Text = AppLanguageManager.Choose("尚未指定该模型是 Dense 还是 MoE；请先在本地模型管理中指定模型类型。", "This model has not been identified as Dense or MoE. Specify its type in Local Model Management first.");
+            StatusText.Text = AppLanguageManager.Choose("尚未指定该模型是 Dense 还是 MoE；请在本地模型管理 → 模型管理 → 模型类型中指定。", "Specify Dense or MoE in Local Model Management → Model management → Model Type first.");
             MessageBox.Show(
                 this,
                 StatusText.Text,
@@ -1270,70 +1302,16 @@ public partial class MainWindow
             return;
         }
 
-        profile = await InvalidateStaleMtpValidationAsync(
-            profile,
-            _settings.LlamaRoot,
-            _lifetime.Token);
-        profile = await InvalidateStaleVisionValidationAsync(
-            profile,
-            _settings.LlamaRoot,
-            _lifetime.Token);
-        profile = await InvalidateStaleReasoningCapabilityAsync(profile, _settings.LlamaRoot, _lifetime.Token, persist: false);
-        var capabilities = await Launcher.Runtime.Detection.LlamaRuntimeOptionDetector.DetectAsync(
-            _settings.LlamaRoot,
-            _lifetime.Token);
-        var editor = new ProfileEditorWindow(profile, _settings.LlamaRoot, capabilities, DetectContextShiftAsync, CheckEditorChatTemplateAsync, DetectEditorReasoningAsync) { Owner = this };
-        if (editor.ShowDialog() != true)
-        {
-            StatusText.Text = AppLanguageManager.Choose("已取消编辑，模型参数未改变。", "Editing canceled; model parameters were not changed.");
-            return;
-        }
-
-        // The client may have been started while the modal editor was open.
-        if (!CanEditProfile(profile, forceClientRefresh: true))
-        {
-            StatusText.Text = AppLanguageManager.Choose("ChatGPT 已在编辑期间启动；为保护正在运行的模型，本次修改没有保存。", "ChatGPT started while editing. Changes were not saved to protect the running model.");
-            MessageBox.Show(
-                this,
-                StatusText.Text,
-                AppLanguageManager.Choose("无法保存参数", "Unable to Save Parameters"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
-        SetBusy(true);
-        try
-        {
-            await SaveProfileArtifactsAsync(editor.UpdatedProfile, _lifetime.Token);
-            await ReloadProfilesAsync(_settings.LlamaRoot, _lifetime.Token);
-            var saveMessage = editor.SavedAsModelDefault
-                ? AppLanguageManager.Choose($"已保存 {editor.UpdatedProfile.DisplayName}，并设为该模型的专用默认参数。", $"Saved {editor.UpdatedProfile.DisplayName} and set dedicated defaults for this model.")
-                : AppLanguageManager.Choose($"已保存并同步 {editor.UpdatedProfile.DisplayName} 的相关配置；下次启动该模型时载入。", $"Saved and synchronized the related configuration for {editor.UpdatedProfile.DisplayName}; it will load the next time the model starts.");
-            var contextReloadReminder = editor.UpdatedProfile.ContextSize != profile.ContextSize
-                ? AppLanguageManager.Choose(
-                    $" 已配置 {FormatContextTokens(editor.UpdatedProfile.ContextSize)}，重新加载后生效。",
-                    $" Configured to {FormatContextTokens(editor.UpdatedProfile.ContextSize)}; reload the model to apply it.")
-                : string.Empty;
-            var reasoningRestartReminder = editor.UpdatedProfile.ExposeReasoningEffortInChatGpt
-                != profile.ExposeReasoningEffortInChatGpt
-                    ? AppLanguageManager.Choose(
-                        " 思考配置已同步，重新启动本地会话后由 Codex 读取。",
-                        " Thinking configuration is synchronized; Codex reads it when the local session restarts.")
-                    : string.Empty;
-            StatusText.Text = saveMessage + contextReloadReminder + reasoningRestartReminder;
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-        {
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = AppLanguageManager.Choose($"保存模型参数失败：{exception.Message}", $"Failed to save model parameters: {exception.Message}");
-        }
-        finally
-        {
-            SetBusy(false);
-        }
+        await Launcher.Scripts.Templates.ModelResourceCatalog.EnsureMigratedAsync(profile, _settings.LlamaRoot, _lifetime.Token);
+        profile = Launcher.Scripts.Templates.ModelResourceCatalog.Resolve(profile, _settings.LlamaRoot);
+        var capabilities = CanRunModelResourceDetection()
+            ? await Launcher.Runtime.Detection.LlamaRuntimeOptionDetector.DetectAsync(_settings.LlamaRoot, _lifetime.Token)
+            : null;
+        var editor = new ProfileEditorWindow(profile, _settings.LlamaRoot, capabilities, DetectContextShiftAsync, null, DetectEditorReasoningAsync,
+            candidate => CanEditProfile(candidate, forceClientRefresh: true), CanRunModelResourceDetection, _diagnostics)
+        { Owner = this };
+        editor.ShowDialog();
+        await ReloadProfilesAsync(_settings.LlamaRoot, _lifetime.Token);
     }
 
     private async void ModeCardName_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -1389,6 +1367,7 @@ public partial class MainWindow
 
     private void ModeCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        if (IsModeCardActionSource(e.OriginalSource)) { _dragProfile = null; return; }
         if (IsModeSelectionLocked())
         {
             return;
@@ -1490,7 +1469,7 @@ public partial class MainWindow
             SetBusy(true);
             foreach (var profile in _profiles.OrderBy(profile => profile.DisplayOrder))
             {
-                await _profileStore.SaveAsync(_settings.LlamaRoot, profile, _lifetime.Token);
+                await _profileStore.SaveRegistrationAsync(_settings.LlamaRoot, profile, _lifetime.Token);
             }
 
             _reorderDirty = false;
@@ -1509,17 +1488,21 @@ public partial class MainWindow
     private async void LaunchChatGptButton_Click(object sender, RoutedEventArgs e) =>
         await LaunchChatGptAsync();
 
-    private async Task LaunchChatGptAsync()
+    private async Task LaunchChatGptAsync(string source = "home")
     {
-        if (_busy || _launchInProgress || GetClientRunningSnapshot(force: true))
+        await using var operation = _diagnostics.Begin("launch_request", new Dictionary<string, object?>
+        { ["source"] = source, ["pendingMode"] = _settings.PendingMode?.ToString(), ["modelId"] = _settings.PendingModelId });
+        if (_busy || _launchInProgress || _modelDialogOpening || _configurationSelectionInProgress || GetClientRunningSnapshot(force: true))
         {
+            await operation.CompleteAsync("blocked", "client_running_or_operation_busy");
             RefreshEggUiState();
             return;
         }
 
         await WaitForSettingsMutationsAsync();
-        if (_busy || _launchInProgress || GetClientRunningSnapshot(force: true))
+        if (_busy || _launchInProgress || _modelDialogOpening || _configurationSelectionInProgress || GetClientRunningSnapshot(force: true))
         {
+            await operation.CompleteAsync("blocked", "client_running_or_operation_busy");
             RefreshEggUiState();
             return;
         }
@@ -1533,12 +1516,14 @@ public partial class MainWindow
             if (pendingMode == ProviderMode.OpenAI)
             {
                 await ActivateOpenAiAsync(busyStateOwnedByCaller: true);
+                await operation.CompleteAsync("dispatched");
                 return;
             }
 
             if (pendingMode != ProviderMode.Local
                 || _profiles.FirstOrDefault(profile => string.Equals(profile.Id, pendingModelId, StringComparison.Ordinal)) is not { } profile)
             {
+                await operation.CompleteAsync("blocked", "no_mode_or_model_preselected");
                 StatusText.Text = AppLanguageManager.Choose("请先在模式页面预选 OpenAI 或一个有效的本地模型。", "Preselect OpenAI or a valid local model on the Mode page first.");
                 return;
             }
@@ -1555,6 +1540,7 @@ public partial class MainWindow
                     await ClearPendingSelectionAsync();
                 }
 
+                await operation.CompleteAsync("blocked", "model_file_missing");
                 StatusText.Text = AppLanguageManager.Choose("预选模型文件不存在或分片不完整；列表记录已保留并标记为不可用。请恢复文件后重新扫描添加。", "The preselected model file is missing or its shards are incomplete. Its list entry was retained and marked unavailable. Restore the files, then scan and add it again.");
                 return;
             }
@@ -1591,6 +1577,7 @@ public partial class MainWindow
                     MessageBoxResult.Yes);
                 if (answer != MessageBoxResult.Yes)
                 {
+                    await operation.CompleteAsync("cancelled", "downloads_continue");
                     StatusText.Text = AppLanguageManager.Choose("已取消启动，下载任务继续运行。", "Launch canceled; downloads continue.");
                     return;
                 }
@@ -1603,11 +1590,13 @@ public partial class MainWindow
             }
             else if (IsAgentRunning())
             {
+                await operation.CompleteAsync("blocked", "local_agent_running");
                 StatusText.Text = AppLanguageManager.Choose("当前仍有 Egg Local Agent 正在运行。为避免 Router 冲突，本次未启动本地模型。", "An Egg Local Agent is still running. The local model was not started to avoid a Router conflict.");
                 return;
             }
             else if (GetModelDownloadBlockReason() is { } llamaConflict)
             {
+                await operation.CompleteAsync("blocked", "local_service_conflict");
                 StatusText.Text = AppLanguageManager.Choose($"检测到 llama 服务冲突，本次未启动本地模型：{llamaConflict}", $"A llama service conflict was detected; the local model was not started: {llamaConflict}");
                 return;
             }
@@ -1617,6 +1606,7 @@ public partial class MainWindow
                 profile,
                 applyProfileOnLaunch: true,
                 busyStateOwnedByCaller: true);
+            await operation.CompleteAsync("dispatched");
             if (configurationWasRecreated)
             {
                 StatusText.Text = AppLanguageManager.Choose($"未发现 {profile.DisplayName} 的配置文件，已使用默认参数。{StatusText.Text}", $"No configuration was found for {profile.DisplayName}; default parameters were used. {StatusText.Text}");
@@ -1627,6 +1617,7 @@ public partial class MainWindow
         }
         catch (Exception exception)
         {
+            await operation.FailAsync(exception);
             StatusText.Text = AppLanguageManager.Choose($"启动 ChatGPT 失败：{exception.Message}", $"Failed to launch ChatGPT: {exception.Message}");
         }
         finally
@@ -1787,36 +1778,6 @@ public partial class MainWindow
             .ToArray();
     }
 
-    private static void TryDeleteGeneratedTemplate(string runtimeRoot, ModelProfile profile)
-    {
-        if (string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
-        {
-            return;
-        }
-
-        try
-        {
-            var root = Path.GetFullPath(runtimeRoot);
-            var templatesRoot = Path.GetFullPath(Path.Combine(root, "scripts", "templates"));
-            var templatePath = Path.GetFullPath(Path.Combine(root, profile.ChatTemplateRelativePath));
-            var prefix = templatesRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                + Path.DirectorySeparatorChar;
-            if (templatePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                && File.Exists(templatePath)
-                && string.Equals(
-                    File.ReadLines(templatePath).FirstOrDefault(),
-                    Launcher.Scripts.Templates.CodexChatTemplateCompatibility.OwnershipMarker,
-                    StringComparison.Ordinal))
-            {
-                File.Delete(templatePath);
-            }
-        }
-        catch (Exception)
-        {
-            // Never delete a template whose location or ownership cannot be proven.
-        }
-    }
-
     private async void ToggleModelVisibilityButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || string.IsNullOrWhiteSpace(_settings.LlamaRoot)
@@ -1826,9 +1787,11 @@ public partial class MainWindow
         }
 
         var profile = selected.Profile;
+        await using var operation = _diagnostics.Begin("model_visibility", ModelDiagnosticFields(profile));
         if (IsManagedProfileInUse(profile, forceClientRefresh: true))
         {
             StatusText.Text = AppLanguageManager.Choose("当前模型正在运行；停止客户端和相关服务后才能从模式页隐藏。", "The model is running. Stop the client and related services before hiding it from the Mode page.");
+            await operation.CompleteAsync("blocked", "model_in_use");
             UpdateManagedModelMutationButtons();
             return;
         }
@@ -1836,7 +1799,7 @@ public partial class MainWindow
         var updated = profile with { ShowInModePage = !profile.ShowInModePage };
         try
         {
-            await _profileStore.SaveAsync(_settings.LlamaRoot, updated, _lifetime.Token);
+            await _profileStore.SaveRegistrationAsync(_settings.LlamaRoot, updated, _lifetime.Token);
             if (!updated.ShowInModePage
                 && _settings.PendingMode == ProviderMode.Local
                 && string.Equals(_settings.PendingModelId, profile.Id, StringComparison.Ordinal))
@@ -1845,12 +1808,15 @@ public partial class MainWindow
             }
 
             await ReloadProfilesAsync(_settings.LlamaRoot, _lifetime.Token);
+            operation.Set("visible", updated.ShowInModePage);
+            await operation.CompleteAsync();
             StatusText.Text = updated.ShowInModePage
                 ? AppLanguageManager.Choose($"{updated.DisplayName} 已显示在模式页面。", $"{updated.DisplayName} is now shown on the Mode page.")
                 : AppLanguageManager.Choose($"{updated.DisplayName} 已从模式页面隐藏，模型与参数均已保留。", $"{updated.DisplayName} is hidden from the Mode page. Its model and parameters were retained.");
         }
         catch (Exception exception)
         {
+            await operation.FailAsync(exception);
             StatusText.Text = AppLanguageManager.Choose($"更新模型显示状态失败：{exception.Message}", $"Failed to update model visibility: {exception.Message}");
         }
     }
@@ -1864,23 +1830,28 @@ public partial class MainWindow
         }
 
         var profile = selected.Profile;
-        var isApplied = _settings.SelectedMode == ProviderMode.Local
-            && string.Equals(_settings.SelectedModelId, profile.Id, StringComparison.Ordinal);
+        await using var operation = _diagnostics.Begin("model_list_remove", ModelDiagnosticFields(profile));
+        if (Launcher.Orchestration.Models.ModelListRemoval.IsApplied(_settings, profile.Id))
+        {
+            StatusText.Text = AppLanguageManager.Choose(
+                "请先实际切换到在线模式或另一个本地模型，再移除此模型；仅修改预选不算切换。",
+                "Switch to online mode or another local model before removing this model. Changing the preselection alone is not a switch.");
+            await operation.CompleteAsync("blocked", "model_is_applied");
+            UpdateManagedModelMutationButtons();
+            return;
+        }
         if (IsManagedProfileInUse(profile, forceClientRefresh: true))
         {
+            await operation.CompleteAsync("blocked", "model_in_use");
             StatusText.Text = AppLanguageManager.Choose("模型仍在运行或可能被 llama 服务占用；请先关闭客户端并退出相关服务。", "The model is still running or may be in use by a llama service. Close the client and stop related services first.");
             return;
         }
 
         var answer = MessageBox.Show(
             this,
-            isApplied
-                ? AppLanguageManager.Choose(
-                    $"“{profile.DisplayName}”是当前配置的本地模型。建议先切回 OpenAI 再从列表中移除，否则当前 Local 配置会保留到下一次模式切换。\n\n只会移除 Egg Launcher 配置和列表记录，磁盘中的模型文件不会删除。是否继续？",
-                    $"\"{profile.DisplayName}\" is the currently configured local model. Switch to OpenAI before removing it if possible; otherwise the current Local configuration remains until the next mode switch.\n\nOnly the Egg Launcher configuration and list entry will be removed. Model files on disk will not be deleted. Continue?")
-                : AppLanguageManager.Choose(
-                    $"从列表中移除“{profile.DisplayName}”？\n\n只会删除 Egg Launcher 配置和列表记录，磁盘中的模型文件不会删除，之后仍可重新扫描添加。",
-                    $"Remove \"{profile.DisplayName}\" from the list?\n\nOnly the Egg Launcher configuration and list entry will be deleted. Model files on disk will remain and can be added again later."),
+            AppLanguageManager.Choose(
+                $"从列表中移除“{profile.DisplayName}”？\n模型文件：{Path.GetFileName(profile.ModelRelativePath)}\n路径：{Path.GetFullPath(Path.Combine(_settings.LlamaRoot, profile.ModelRelativePath))}\n\n将移除模型登记、列表记录、该模型的启动预选及启动器生成的 BAT。\n模型文件、参数 JSON、模板、外挂文件及能力检测记录全部保留，之后可重新扫描添加。",
+                $"Remove \"{profile.DisplayName}\" from the list?\nModel file: {Path.GetFileName(profile.ModelRelativePath)}\nPath: {Path.GetFullPath(Path.Combine(_settings.LlamaRoot, profile.ModelRelativePath))}\n\nThis removes its registration, list entry, launch preselection, and launcher-generated BAT.\nModel files, parameter JSON files, templates, companion files, and capability records are retained. You can scan and add it again later."),
             AppLanguageManager.Choose("从列表中移除", "Remove from List"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
@@ -1893,25 +1864,18 @@ public partial class MainWindow
         SetBusy(true);
         try
         {
-            BatchScriptGenerator.DeleteOwned(_settings.LlamaRoot, profile.Id);
-            _profileStore.DeleteOwnedProfileFiles(_settings.LlamaRoot, profile.Id);
-            TryDeleteGeneratedTemplate(_settings.LlamaRoot, profile);
-            var clearPending = _settings.PendingMode == ProviderMode.Local
-                && string.Equals(_settings.PendingModelId, profile.Id, StringComparison.Ordinal);
-            await MutateSettingsAsync(
-                settings => settings with
-                {
-                    PendingMode = clearPending ? null : settings.PendingMode,
-                    PendingModelId = clearPending ? null : settings.PendingModelId,
-                    PendingModelRelativePath = clearPending ? null : settings.PendingModelRelativePath,
-                    PendingModelDisplayName = clearPending ? null : settings.PendingModelDisplayName,
-                },
-                _lifetime.Token);
+            await operation.StageAsync("remove_registration_and_owned_files");
+            await Launcher.Orchestration.Models.ModelListRemoval.RemoveAsync(profile, _settings.LlamaRoot,
+                _paths.RouterPresetFile, () => _settings, MutateSettingsAsync, _lifetime.Token);
             await ReloadProfilesAsync(_settings.LlamaRoot, _lifetime.Token);
-            StatusText.Text = AppLanguageManager.Choose($"已从列表中移除 {profile.DisplayName}；磁盘中的模型文件未删除。", $"Removed {profile.DisplayName} from the list. Model files on disk were not deleted.");
+            await operation.CompleteAsync();
+            StatusText.Text = AppLanguageManager.Choose(
+                $"已从列表中移除 {profile.DisplayName}；模型文件、参数配置、模板和能力检测记录均已保留。",
+                $"Removed {profile.DisplayName} from the list. Model files, parameter configurations, templates, and capability records were retained.");
         }
         catch (Exception exception)
         {
+            await operation.FailAsync(exception);
             StatusText.Text = AppLanguageManager.Choose($"从列表中移除失败：{exception.Message}", $"Failed to remove the model from the list: {exception.Message}");
         }
         finally
@@ -1944,11 +1908,32 @@ public partial class MainWindow
         bool IsOpenAi,
         bool IsPending,
         double Opacity,
-        bool CanEdit)
+        bool CanEdit) : System.ComponentModel.INotifyPropertyChanged
     {
+        private PreferredConfigurationState? _configuration;
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        public string StartupConfigurationPrefix => AppLanguageManager.Choose("启动配置：", "Startup: ");
+        public string StartupConfigurationName => _configuration?.Name ?? AppLanguageManager.Choose("无", "None");
+        public string StartupConfigurationText => StartupConfigurationPrefix + StartupConfigurationName;
+        public string? StartupConfigurationToolTip => _configuration?.Error is { } error
+            ? _configuration.Path + Environment.NewLine + error : _configuration?.Path;
+        public bool SamePresentation(ModeCardItem other) => Equals(Profile, other.Profile) && Title == other.Title
+            && Summary == other.Summary && IsOpenAi == other.IsOpenAi && IsPending == other.IsPending
+            && Opacity == other.Opacity && CanEdit == other.CanEdit;
+        public void RefreshConfiguration(string? root) => UpdateConfiguration(Profile is not null && root is not null
+            ? ModelConfigurationSelection.Inspect(Profile, root) : null);
+        public void UpdateConfiguration(PreferredConfigurationState? state)
+        {
+            if (_configuration == state) return;
+            _configuration = state;
+            PropertyChanged?.Invoke(this, new(nameof(StartupConfigurationName)));
+            PropertyChanged?.Invoke(this, new(nameof(StartupConfigurationText)));
+            PropertyChanged?.Invoke(this, new(nameof(StartupConfigurationToolTip)));
+        }
+
         public string CardTitle => IsOpenAi
             ? "OpenAI"
-            : $"Local LLM 【{FormatModelType(Profile?.ModelType ?? ModelType.Unknown)}】{(Profile is not null && VisionValidationFingerprint.HasUsableSource(Profile) ? "【Vision】" : string.Empty)}";
+            : $"Local LLM 【{FormatModelType(Profile?.ModelType ?? ModelType.Unknown)}】";
 
         public string ModelName => IsOpenAi ? string.Empty : Title;
 

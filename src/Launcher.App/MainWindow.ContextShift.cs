@@ -14,8 +14,19 @@ namespace Launcher.App;
 
 public partial class MainWindow
 {
-    private async Task<ContextShiftCapabilityResult> DetectContextShiftAsync(ModelProfile profile, CancellationToken cancellationToken)
+    private Task<ContextShiftCapabilityResult> DetectContextShiftAsync(ModelProfile profile, CancellationToken cancellationToken) =>
+        _diagnostics.RunAsync("context_shift_validation", ModelDiagnosticFields(profile), async operation =>
+        {
+            await operation.StageAsync("native_context_shift_probe");
+            var result = await DetectContextShiftCoreAsync(profile, cancellationToken);
+            operation.Set("supported", result.Supported);
+            if (result.Supported != true) await operation.CompleteAsync("unavailable", "context_shift_not_confirmed");
+            return result;
+        });
+
+    private async Task<ContextShiftCapabilityResult> DetectContextShiftCoreAsync(ModelProfile profile, CancellationToken cancellationToken)
     {
+        if (!CanRunModelResourceDetection()) throw new InvalidOperationException("本地服务运行期间不能检测 / Stop Local services before detection.");
         var root = _settings.LlamaRoot ?? throw new InvalidOperationException("Runtime is not configured.");
         var conflict = GetModelDownloadBlockReason();
         if (HasActiveOrQueuedDownloads || !string.IsNullOrWhiteSpace(conflict)
@@ -40,7 +51,7 @@ public partial class MainWindow
             var log = new ModeAwareJsonLineDiagnosticLog(_paths.AgentConciseLogFile, _paths.AgentFullLogFile,
                 _settings.DetailedDiagnosticsEnabled);
             await using var manager = new LlamaRouterProcessManager(health,
-                diagnosticEventWriter: diagnostic => log.AppendEventAsync(diagnostic), diagnosticRunIdChanged: log.SetRouterRunId);
+                diagnosticEventWriter: new DiagnosticJournal(log).AppendEventAsync, diagnosticRunIdChanged: log.SetRouterRunId);
             manager.SetDetailedDiagnosticsEnabled(_settings.DetailedDiagnosticsEnabled);
             var router = await manager.StartAsync(new LlamaRouterStartRequest
             {

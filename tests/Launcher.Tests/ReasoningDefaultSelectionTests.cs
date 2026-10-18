@@ -125,8 +125,8 @@ public sealed class ReasoningDefaultSelectionTests
         Directory.CreateDirectory(root);
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(root, "active.jinja"), "test template");
-            var original = Profile with { ChatTemplateRelativePath = "active.jinja" };
+            await File.WriteAllTextAsync(Path.Combine(Directory.CreateDirectory(ChatTemplateFile.GetDirectory(root)).FullName, "active.jinja"), "test template");
+            var original = Profile with { ChatTemplateRelativePath = "scripts/templates/active.jinja" };
             var preferred = original with { PreferredReasoningLevel = "medium", ReverseReasoningLevelDisplayOrder = true };
             var preset = Path.Combine(root, "models.ini");
             var catalog = Path.Combine(root, "models.json");

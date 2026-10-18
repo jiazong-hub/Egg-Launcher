@@ -15,6 +15,10 @@ public sealed record LauncherDataPaths(
 {
     public string AgentLogFile => AgentConciseLogFile;
 
+    public string LauncherConciseLogFile => Path.Combine(LogsDirectory, "launcher.concise.jsonl");
+
+    public string LauncherFullLogFile => Path.Combine(LogsDirectory, "launcher.full.jsonl");
+
     public string AgentConciseLogFile => Path.Combine(LogsDirectory, "agent.concise.jsonl");
 
     public string AgentFullLogFile => Path.Combine(LogsDirectory, "agent.full.jsonl");
@@ -28,6 +32,8 @@ public sealed record LauncherDataPaths(
     public string ModeSwitchLockFile => Path.Combine(Root, "mode-switch.lock");
 
     public string ConfigTransactionLockFile => Path.Combine(Root, "config-transaction.lock");
+
+    public string AppliedLocalRunFile => Path.Combine(GeneratedDirectory, "applied-local-run.json");
 
     public static LauncherDataPaths ForCurrentUser(string? rootOverride = null)
     {

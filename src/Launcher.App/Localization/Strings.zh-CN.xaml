@@ -33,7 +33,16 @@
     <sys:String x:Key="SwitchToDarkTheme">切换到深色模式</sys:String>
     <sys:String x:Key="StartAtLogin">开机时启动 Egg Launcher</sys:String>
     <sys:String x:Key="DetailedLogRecording">详细日志记录</sys:String>
-    <sys:String x:Key="DetailedLogRecordingToolTip">开启后记录更完整的请求阶段与 llama.cpp 原生日志。启动器生成的结构化日志不记录对话正文或认证信息；日志文件会更大。</sys:String>
+    <sys:String x:Key="LocalAuthentication">本地模式使用 OpenAI 认证</sys:String>
+    <sys:String x:Key="LocalAuthenticationOn">本地模式 OpenAI 认证：已开启</sys:String>
+    <sys:String x:Key="LocalAuthenticationOff">本地模式 OpenAI 认证：已关闭</sys:String>
+    <sys:String x:Key="LocalAuthenticationOnHint">本地模式 OpenAI 认证：已开启&#10;单击关闭，下次启动本地模式并重启 Codex 后生效。</sys:String>
+    <sys:String x:Key="LocalAuthenticationOffHint">本地模式 OpenAI 认证：已关闭&#10;单击开启，下次启动本地模式并重启 Codex 后生效。</sys:String>
+    <sys:String x:Key="LocalAuthenticationLockedHint">请先关闭 Codex 客户端并停止本地服务，再切换认证方式。</sys:String>
+    <sys:String x:Key="LocalAuthenticationEnabled">已开启本地模式 OpenAI 认证，下次启动本地模式生效。</sys:String>
+    <sys:String x:Key="LocalAuthenticationDisabled">已关闭本地模式 OpenAI 认证，下次启动本地模式生效。</sys:String>
+    <sys:String x:Key="LocalAuthenticationSaveFailed">认证设置保存失败：{0}</sys:String>
+    <sys:String x:Key="DetailedLogRecordingToolTip">开启后增加配置、资源管理、启动与请求的阶段记录，并保留更多 llama.cpp 原生日志。结构化日志不记录对话正文或认证凭据；日志文件会更大。</sys:String>
     <sys:String x:Key="DiagnosticLogs">诊断日志</sys:String>
     <sys:String x:Key="AboutEggLauncher">关于 Egg Launcher</sys:String>
     <sys:String x:Key="ModePageHint">单击预选，启动时应用</sys:String>
@@ -68,7 +77,7 @@
     <sys:String x:Key="RemoveExternalVisionToolTip">取消当前模型与外置视觉投影文件的关联，不删除磁盘文件。</sys:String>
     <sys:String x:Key="EditModelToolTip">编辑当前模型的运行参数。</sys:String>
     <sys:String x:Key="ChangeModelType">模型类型</sys:String>
-    <sys:String x:Key="ChangeModelTypeToolTip">为未指定模型选择类型；更改已确定类型时会重新建立参数配置。</sys:String>
+    <sys:String x:Key="ChangeModelTypeToolTip">在模型管理的模型类型选项卡中更改类型，已有配置文件保持原样。</sys:String>
     <sys:String x:Key="ModelDetails">详情</sys:String>
     <sys:String x:Key="ModelDetailsToolTip">查看当前模型的文件、来源、参数和 llama.cpp 数据。</sys:String>
     <sys:String x:Key="DetectReasoningCapability">检测思考档位</sys:String>
@@ -76,7 +85,7 @@
     <sys:String x:Key="ShowOrHide">在模式卡片中显示/隐藏</sys:String>
     <sys:String x:Key="ShowOrHideToolTip">控制当前模型是否显示为模式页面中的模型卡片；不会删除模型或参数。</sys:String>
     <sys:String x:Key="DeleteModelAndConfig">从列表中移除</sys:String>
-    <sys:String x:Key="DeleteModelAndConfigToolTip">移除该模型的 Egg Launcher 配置和列表记录；不会删除磁盘中的模型文件。</sys:String>
+    <sys:String x:Key="DeleteModelAndConfigToolTip">从管理列表中移除该模型，保留模型文件、参数配置、模板和能力检测记录。当前已应用的模型须先切换到在线模式或另一个本地模型。</sys:String>
     <sys:String x:Key="DownloadCacheManagement">下载与缓存管理</sys:String>
     <sys:String x:Key="CancelCurrentDownload">取消当前下载</sys:String>
     <sys:String x:Key="RefreshCache">刷新缓存</sys:String>
@@ -156,7 +165,7 @@
     <sys:String x:Key="DenseModelToolTip">适用于普通稠密 Transformer 模型。</sys:String>
     <sys:String x:Key="MoeModelOption">MoE（混合专家模型）</sys:String>
     <sys:String x:Key="MoeModelToolTip">适用于包含专家路由和专家权重的混合专家模型。</sys:String>
-    <sys:String x:Key="ModelTypeResetWarning">更改已确定的类型会重新建立参数配置；模型文件本身不会被修改。</sys:String>
+    <sys:String x:Key="ModelTypeResetWarning">修改类型只更新模型登记；类型不同的配置无法载入，改回原类型后可继续使用。</sys:String>
     <sys:String x:Key="Cancel">取消</sys:String>
     <sys:String x:Key="Confirm">确定</sys:String>
 
@@ -184,7 +193,7 @@
     <sys:String x:Key="StopServiceAndExit">停止服务并退出</sys:String>
     <sys:String x:Key="ProfileEditorTitle">编辑本地模型 Profile</sys:String>
     <sys:String x:Key="ModelParameters">模型参数</sys:String>
-    <sys:String x:Key="ModelParametersHint">参数与默认快照只属于当前模型；保存后也不会立即加载模型。</sys:String>
+    <sys:String x:Key="ModelParametersHint">保存更新当前配置；应用将它设为此模型下次启动的配置，不会立即启动模型。</sys:String>
     <sys:String x:Key="DisplayName">显示名称</sys:String>
     <sys:String x:Key="DisplayNameTip">仅影响 Egg Launcher 与 ChatGPT 中显示的模型名称。</sys:String>
     <sys:String x:Key="ModelAlias">模型 Alias</sys:String>
@@ -192,7 +201,7 @@
     <sys:String x:Key="ModelFile">模型文件</sys:String>
     <sys:String x:Key="ModelFileTip">相对于 llama.cpp Runtime Root 的 GGUF 路径。</sys:String>
     <sys:String x:Key="ModelType">模型类型</sys:String>
-    <sys:String x:Key="ModelTypeEditorTip">模型类型在添加时识别一次；如需更改，请返回本地模型管理页面。</sys:String>
+    <sys:String x:Key="ModelTypeEditorTip">在模型管理的模型类型选项卡中更改类型，已有配置文件保持原样。</sys:String>
     <sys:String x:Key="BasicParameters">基础参数</sys:String>
     <sys:String x:Key="ContextSelectionTip">请按模型声明的上下文能力和本机可用显存/内存选择；Egg Launcher 不提供硬件无关的推荐值。</sys:String>
     <sys:String x:Key="CustomContextTip">输入不超过模型上限、且为 256 整数倍的 token 数；支持 96K 这样的写法。</sys:String>
@@ -390,4 +399,26 @@
     <sys:String x:Key="ShowThinkingProcessTip">仅控制思考内容的显示，不影响模型思考及回答。保存后对后续请求生效。</sys:String>
     <sys:String x:Key="InheritThinking">沿用模板默认</sys:String>
     <sys:String x:Key="ThinkingDetectionDetails">检测详情</sys:String>
+    <sys:String x:Key="OpenProjectHome">打开 GitHub 项目主页</sys:String>
+    <sys:String x:Key="TemplateSettings">模板设置</sys:String>
+    <sys:String x:Key="SaveNewConfiguration">保存为新配置</sys:String>
+    <sys:String x:Key="ApplyConfiguration">应用</sys:String>
+    <sys:String x:Key="LoadConfiguration">载入配置</sys:String>
+    <sys:String x:Key="GenerateCompatibleTemplate">生成兼容模板</sys:String>
+    <sys:String x:Key="AddTemplate">添加模板</sys:String>
+    <sys:String x:Key="SaveNewConfigurationTip">另存一份新的配置文件。</sys:String>
+    <sys:String x:Key="SaveConfigurationTip">保存到当前载入的配置文件。</sys:String>
+    <sys:String x:Key="ApplyConfigurationTip">保存参数到当前载入的配置文件，并设为下次启动配置文件。</sys:String>
+    <sys:String x:Key="CancelConfigurationTip">关闭当前页面且不做任何改动。</sys:String>
+    <sys:String x:Key="LoadConfigurationTip">打开已有的配置文件进行编辑。</sys:String>
+    <sys:String x:Key="GenerateCompatibleTemplateTip">检查当前模型的聊天模板，按需生成兼容模板。</sys:String>
+    <sys:String x:Key="AddTemplateTip">选择已有的聊天模板，检查通过后加入当前模型的模板列表。</sys:String>
+    <sys:String x:Key="ModelResourceManagement">模型管理</sys:String>
+    <sys:String x:Key="ModeCardManagement">模型管理</sys:String>
+    <sys:String x:Key="ModeCardParameters">运行参数</sys:String>
+    <sys:String x:Key="ModelResourceManagementTip">管理当前模型的信息、类型、模板、MTP 和视觉模块。</sys:String>
+    <sys:String x:Key="CardDisplayName">卡片显示名称</sys:String>
+    <sys:String x:Key="CardDisplayNameTip">仅修改界面显示名称，不改变模型身份、文件名或配置绑定。</sys:String>
+    <sys:String x:Key="SaveCardDisplayName">保存名称</sys:String>
+    <sys:String x:Key="SaveCardDisplayNameTip">保存显示名称，不修改已有配置文件。</sys:String>
 </ResourceDictionary>

@@ -61,7 +61,7 @@ public static class BatchScriptGenerator
         arguments.Add(profile.ContextShiftEnabled ? "--context-shift" : "--no-context-shift");
 
         arguments.Add(profile.Jinja ? "--jinja" : "--no-jinja");
-        if (!string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
+        if (profile.Jinja && !string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
         {
             arguments.Add(
                 $"--chat-template-file \"%LLAMA_ROOT%\\{EscapeLiteral(profile.ChatTemplateRelativePath)}\"");

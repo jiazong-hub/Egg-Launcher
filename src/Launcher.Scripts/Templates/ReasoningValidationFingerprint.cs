@@ -27,7 +27,7 @@ public static class ReasoningValidationFingerprint
         static string Hash(object? value) => ChatTemplateValidationCache.Hash(JsonSerializer.Serialize(value));
         var template = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             ? CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(Path.Combine(root, profile.ModelRelativePath)) ?? ""
-            : File.ReadAllText(Path.Combine(root, profile.ChatTemplateRelativePath));
+            : File.ReadAllText(ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath, root));
         return new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["model"] = Hash(Stamp(Path.Combine(root, profile.ModelRelativePath))),
@@ -49,7 +49,7 @@ public static class ReasoningValidationFingerprint
         }
         var template = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             ? CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(Path.Combine(root, profile.ModelRelativePath)) ?? ""
-            : File.ReadAllText(Path.Combine(root, profile.ChatTemplateRelativePath));
+            : File.ReadAllText(ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath, root));
         return ChatTemplateValidationCache.Hash(JsonSerializer.Serialize(new
         {
             Version = 4,

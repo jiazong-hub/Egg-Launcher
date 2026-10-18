@@ -189,6 +189,43 @@
             </Setter>
         </Style>
 
+        <Style x:Key="ConfigurationActionButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="ToolTipService.InitialShowDelay" Value="500" />
+        </Style>
+
+        <Style x:Key="ConfigurationStatusButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="148" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="8,0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="8" SnapsToDevicePixels="True"
+                                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ButtonHoverBrush}" />
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ButtonPressedBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource AccentBrightBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="ProfileEditorTabControlStyle" TargetType="TabControl">
             <Setter Property="Template">
                 <Setter.Value>
@@ -232,7 +269,7 @@
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="Template">
@@ -245,7 +282,7 @@
                                 <ContentPresenter ContentSource="Header"
                                                   RecognizesAccessKey="True"
                                                   HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                                  VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                                  VerticalAlignment="Center" />
                             </Border>
                             <Border x:Name="SelectionIndicator"
                                     Height="2"
@@ -291,12 +328,40 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <StackPanel>
-            <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}"
-                       Text="{DynamicResource ModelParameters}" />
-            <TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap"
-                       Text="{DynamicResource ModelParametersHint}" />
-        </StackPanel>
+        <Grid HorizontalAlignment="Left" Width="{Binding SelectedContent.ViewportWidth, ElementName=ProfileEditorTabs}">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,12,0">
+                <TextBlock FontSize="22" FontWeight="SemiBold" Foreground="{DynamicResource PrimaryBrush}" Text="{DynamicResource ModelParameters}" />
+                <TextBlock Margin="0,5,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Text="{DynamicResource ModelParametersHint}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" HorizontalAlignment="Right" Width="148" Grid.IsSharedSizeScope="True">
+                <Button x:Name="LoadedConfigurationButton" Style="{StaticResource ConfigurationStatusButtonStyle}"
+                        Margin="0,0,0,6" Click="LocateLoadedConfiguration_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="ConfigurationStatusLabel" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="LoadedConfigurationLabel" />
+                        <TextBlock x:Name="LoadedConfigurationName" Grid.Column="1" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                        <TextBlock x:Name="LoadedConfigurationDirtyText" Grid.Column="2" Text="*" Margin="4,0,0,0"
+                                   FontWeight="SemiBold" Foreground="{DynamicResource ProfileWarningBrush}" Visibility="Collapsed" />
+                    </Grid>
+                </Button>
+                <Button x:Name="PreferredConfigurationButton" Style="{StaticResource ConfigurationStatusButtonStyle}"
+                        Click="LocatePreferredConfiguration_Click">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" SharedSizeGroup="ConfigurationStatusLabel" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="PreferredConfigurationLabel" />
+                        <TextBlock x:Name="PreferredConfigurationName" Grid.Column="1" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                    </Grid>
+                </Button>
+            </StackPanel>
+        </Grid>
 
         <TabControl x:Name="ProfileEditorTabs" Grid.Row="1" Margin="0,20,0,18"
                     Style="{StaticResource ProfileEditorTabControlStyle}"
@@ -468,21 +533,6 @@
                         </StackPanel>
                     </Grid>
 
-                    <CheckBox FontSize="12" x:Name="JinjaCheckBox" Margin="0,2,0,0" FontWeight="SemiBold"
-                              Checked="TemplatePath_Changed" Unchecked="TemplatePath_Changed"
-                              Content="{DynamicResource EnableJinja}"
-                              ToolTip="{DynamicResource EnableJinjaTip}" />
-
-                    <TextBlock Margin="0,14,0,0" FontWeight="SemiBold" Text="{DynamicResource ChatTemplateFile}" />
-                    <TextBox x:Name="ChatTemplatePathTextBox" Margin="0,5,0,0"
-                             TextChanged="TemplatePath_Changed"
-                             ToolTip="{DynamicResource ChatTemplateFileTip}" />
-                    <TextBlock x:Name="TemplateStatusText" Margin="0,6,0,0" TextWrapping="Wrap" />
-                    <WrapPanel Margin="0,8,0,0">
-                        <Button Content="{DynamicResource CheckChatTemplate}" Click="CheckTemplateButton_Click" />
-                        <Button Content="{DynamicResource OpenTemplateFolder}" Click="OpenTemplateFolder_Click" />
-                        <Button Content="{DynamicResource RestoreEmbeddedTemplate}" Click="RestoreEmbeddedTemplate_Click" />
-                    </WrapPanel>
                     <Grid x:Name="MoeBasicPanel" Margin="0,18,0,0" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/>
@@ -514,6 +564,25 @@
                         </StackPanel>
                     </Grid>
 
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="{DynamicResource TemplateSettings}">
+                <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                    <Border Padding="18" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
+                        <StackPanel>
+                            <CheckBox x:Name="JinjaCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}" Content="{DynamicResource EnableJinja}"
+                                      Checked="TemplatePath_Changed" Unchecked="TemplatePath_Changed" />
+                            <TextBlock Margin="0,18,0,5" Text="{DynamicResource ChatTemplateFile}" FontWeight="SemiBold" />
+                            <ComboBox x:Name="TemplateResourceComboBox" DisplayMemberPath="Label" SelectionChanged="TemplateResource_Changed" />
+                            <TextBox x:Name="ChatTemplatePathTextBox" Visibility="Collapsed" TextChanged="TemplatePath_Changed" />
+                            <TextBlock x:Name="TemplateStatusText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryBrush}" />
                         </StackPanel>
                     </Border>
                 </ScrollViewer>
@@ -588,10 +657,10 @@
                                       Checked="VisionEnableCheckBox_Changed" Unchecked="VisionEnableCheckBox_Changed" />
                             <StackPanel x:Name="VisionSettingsPanel" Margin="0,16,0,0">
                                 <TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionSource}" />
-                                <TextBlock x:Name="VisionSourceValueTextBlock" Margin="0,5,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                                <ComboBox x:Name="VisionResourceComboBox" Margin="0,5,0,12" DisplayMemberPath="Label" SelectionChanged="VisionResource_Changed" />
+                                <TextBlock Visibility="Collapsed" x:Name="VisionSourceValueTextBlock" Margin="0,5,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                                 <StackPanel x:Name="VisionExternalProjectorPanel" Visibility="Collapsed">
-                                    <TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionProjectorFile}" />
-                                    <TextBox x:Name="VisionProjectorPathTextBox" Margin="0,5,0,12" IsReadOnly="True" IsTabStop="False" />
+                                    <TextBox Visibility="Collapsed" x:Name="VisionProjectorPathTextBox" Margin="0,5,0,12" IsReadOnly="True" IsTabStop="False" />
                                 </StackPanel>
                                 <local:ProfileParameterPanel Grid.IsSharedSizeScope="True" Margin="0,0,0,12">
                                     <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionProjectorOffload}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="VisionOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionProjectorOffloadTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
@@ -626,13 +695,14 @@
 
                             <StackPanel x:Name="MtpSettingsPanel" Margin="0,16,0,0">
                                 <TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpSource}" />
-                                <TextBlock x:Name="MtpSourceValueTextBlock" Margin="0,5,0,12"
+                                <ComboBox x:Name="MtpResourceComboBox" Margin="0,5,0,12" DisplayMemberPath="Label" SelectionChanged="MtpResource_Changed" />
+                                <TextBlock Visibility="Collapsed" x:Name="MtpSourceValueTextBlock" Margin="0,5,0,12"
                                            Foreground="{DynamicResource SecondaryBrush}"
                                            TextWrapping="Wrap" ToolTip="{DynamicResource MtpSourceTip}" />
 
                                 <StackPanel x:Name="MtpExternalModelPanel" Visibility="Collapsed">
                                     <TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpCompanionFile}" />
-                                    <TextBox x:Name="MtpDraftModelPathTextBox" Margin="0,5,0,12"
+                                    <TextBox Visibility="Collapsed" x:Name="MtpDraftModelPathTextBox" Margin="0,5,0,12"
                                              IsReadOnly="True" IsTabStop="False"
                                              ToolTip="{DynamicResource MtpCompanionFileTip}" />
                                 </StackPanel>
@@ -771,52 +841,30 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{DynamicResource ModelInformation}">
-                <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
-                              Margin="0,16,0,0" Padding="0,0,12,0"
-                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                              HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
-                              HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Visible">
-                    <Border Padding="18" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}"
-                            HorizontalAlignment="Stretch"
-                            Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
-                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource DisplayName}" />
-                            <TextBox x:Name="DisplayNameTextBox" Margin="0,5,0,12"
-                                     ToolTip="{DynamicResource DisplayNameTip}" />
-
-                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ModelAlias}" />
-                            <TextBox x:Name="AliasTextBox" Margin="0,5,0,12" IsReadOnly="True"
-                                     ToolTip="{DynamicResource ModelAliasTip}" />
-
-                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ModelFile}" />
-                            <TextBox x:Name="ModelPathTextBox" Margin="0,6,0,18" IsReadOnly="True"
-                                     ToolTip="{DynamicResource ModelFileTip}" />
-
-                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource ModelType}" />
-                            <TextBlock x:Name="ModelTypeTextBlock" Margin="0,5,0,0" Padding="9,7"
-                                       Background="{DynamicResource CardBackgroundBrush}" TextWrapping="Wrap"
-                                       ToolTip="{DynamicResource ModelTypeEditorTip}" />
-                        </StackPanel>
-                    </Border>
-                </ScrollViewer>
-            </TabItem>
         </TabControl>
 
         <Grid Grid.Row="2" HorizontalAlignment="Stretch">
             <WrapPanel HorizontalAlignment="Left">
                 <Button x:Name="TemplateCancelButton" Visibility="Collapsed" Content="{DynamicResource CancelDetection}" Click="CancelTemplateCheck_Click" />
                 <Button x:Name="ContextShiftCancelButton" Visibility="Collapsed" Content="{DynamicResource CancelDetection}" Click="ContextShiftCancelButton_Click" Margin="0,0,10,0" />
-            <Button x:Name="RestoreModelDefaultsButton" Padding="14,9" Content="{DynamicResource RestoreModelDefaults}"
+            <Button Visibility="Collapsed" x:Name="RestoreModelDefaultsButton" Padding="14,9" Content="{DynamicResource RestoreModelDefaults}"
                         ToolTip="{DynamicResource RestoreModelDefaultsTip}"
                         Click="RestoreModelDefaultsButton_Click" />
-                <Button Padding="18,9" Content="{DynamicResource Cancel}" IsCancel="True" />
-                <Button Padding="18,9" Content="{DynamicResource Save}" IsDefault="True"
-                        x:Name="SaveProfileButton" Click="SaveButton_Click" />
-                <Button Margin="0" Padding="16,9" Content="{DynamicResource SaveAsModelDefault}"
-                        ToolTip="{DynamicResource SaveAsModelDefaultTip}"
+
+                <Button Style="{StaticResource ConfigurationActionButtonStyle}" Margin="0,0,8,8" Padding="16,9" Content="{DynamicResource SaveNewConfiguration}"
+                        ToolTip="{DynamicResource SaveNewConfigurationTip}"
                         x:Name="SaveModelDefaultButton" Click="SaveAsModelDefaultButton_Click" />
+                <Button Style="{StaticResource ConfigurationActionButtonStyle}" Margin="0,0,8,8" Padding="18,9" Content="{DynamicResource Save}" IsDefault="True"
+                        ToolTip="{DynamicResource SaveConfigurationTip}"
+                        x:Name="SaveProfileButton" Click="SaveButton_Click" />
+                <Button x:Name="ApplyConfigurationButton" Style="{StaticResource ConfigurationActionButtonStyle}" Margin="0,0,8,8" Padding="18,9"
+                        Content="{DynamicResource ApplyConfiguration}" ToolTip="{DynamicResource ApplyConfigurationTip}" Click="ApplyConfiguration_Click" />
+                <Button x:Name="CancelConfigurationButton" Style="{StaticResource ConfigurationActionButtonStyle}" Margin="0,0,8,8" Padding="18,9"
+                        Content="{DynamicResource Cancel}" ToolTip="{DynamicResource CancelConfigurationTip}" Click="CancelConfiguration_Click" />
+                <Button x:Name="LoadConfigurationButton" Style="{StaticResource ConfigurationActionButtonStyle}" Margin="0,0,8,8" Padding="18,9"
+                        Content="{DynamicResource LoadConfiguration}" ToolTip="{DynamicResource LoadConfigurationTip}" Click="LoadConfiguration_Click" />
+
+
             </WrapPanel>
         </Grid>
     </Grid>

@@ -1,0 +1,171 @@
+<Window x:Class="Launcher.App.ModelResourcesWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="{DynamicResource ModelResourceManagement}" Icon="Assets/egg-mark.png"
+        Width="860" Height="620" MinWidth="640" MinHeight="460"
+        FontSize="12" FontFamily="Microsoft YaHei UI" FontWeight="Normal"
+        Background="{DynamicResource WindowBackgroundBrush}" Foreground="{DynamicResource PrimaryBrush}"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="TabActionVisibility" />
+        <Style x:Key="ResourceListFrameStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="14" />
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Grid Background="Transparent">
+                            <ContentPresenter ContentSource="Header" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" />
+                            <Border x:Name="Indicator" Height="2" VerticalAlignment="Bottom" Background="Transparent" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+                                <Setter TargetName="Indicator" Property="Background" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <DataTemplate x:Key="ResourceRowTemplate">
+            <Border Style="{StaticResource CardStyle}" Margin="0,0,0,10" Padding="16,12">
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,16,0" ToolTip="{Binding FullPath}">
+                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Status}" Margin="0,5,0,0" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="{Binding RemoveLabel}" Click="Remove_Click" Tag="{Binding}"
+                            Padding="12,6" FontSize="12" FontWeight="Normal" VerticalAlignment="Center" IsEnabled="{Binding CanRemove}"
+                            ToolTip="{Binding RemoveTip}" ToolTipService.ShowOnDisabled="True"
+                            Visibility="{Binding RemoveVisibility}" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </Window.Resources>
+    <Grid Margin="28">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock x:Name="ModelNameText" FontSize="22" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="DescriptionText" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+        <TextBlock x:Name="AvailabilityText" Grid.Row="1" Margin="0,10,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+        <TabControl x:Name="ResourceTabs" Grid.Row="2" Margin="0,16,0,14" Background="Transparent" BorderThickness="0" SelectionChanged="ResourceTabs_Changed">
+            <TabControl.Template>
+                <ControlTemplate TargetType="TabControl">
+                    <Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                        <TabPanel IsItemsHost="True" />
+                        <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" Margin="0,16,0,0" />
+                    </Grid>
+                </ControlTemplate>
+            </TabControl.Template>
+            <TabItem x:Name="ModelInformationTab" Header="{DynamicResource ModelInformation}">
+                <Grid TextElement.FontWeight="Normal">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Border Style="{StaticResource CardStyle}" Padding="18">
+                            <StackPanel>
+                                <TextBlock Text="{DynamicResource CardDisplayName}" FontWeight="SemiBold" />
+                                <TextBox x:Name="CardDisplayNameTextBox" Margin="0,6,0,16" ToolTip="{DynamicResource CardDisplayNameTip}" TextChanged="CardDisplayName_Changed" />
+                                <TextBlock x:Name="ModelFileNameLabel" FontWeight="SemiBold" />
+                                <TextBox x:Name="ModelFileNameText" Margin="0,6,0,16" IsReadOnly="True" TextWrapping="Wrap" />
+                                <TextBlock Text="{DynamicResource ModelFile}" FontWeight="SemiBold" />
+                                <TextBox x:Name="ModelFilePathText" Margin="0,6,0,16" IsReadOnly="True" TextWrapping="Wrap" />
+                                <TextBlock x:Name="ModelFactsText" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+            <TabItem x:Name="ModelTypeTab" Header="{DynamicResource ModelType}">
+                <Grid TextElement.FontWeight="Normal">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Border Style="{StaticResource CardStyle}" Padding="18">
+                            <StackPanel>
+                                <TextBlock x:Name="DetectedTypeText" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock x:Name="CurrentTypeText" Margin="0,10,0,0" TextWrapping="Wrap" />
+                                <TextBlock x:Name="TypeConfigurationText" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
+                                    <RadioButton x:Name="DenseTypeRadio" GroupName="ManagedModelType" Content="{DynamicResource DenseModelOption}"
+                                                 FontSize="14" Foreground="{DynamicResource PrimaryBrush}" Margin="0,0,22,0" Checked="TypeChoice_Changed" />
+                                    <RadioButton x:Name="MoeTypeRadio" GroupName="ManagedModelType" Content="{DynamicResource MoeModelOption}"
+                                                 FontSize="14" Foreground="{DynamicResource PrimaryBrush}" Checked="TypeChoice_Changed" />
+                                </StackPanel>
+                                <TextBlock x:Name="TypeSelectionHint" Margin="0,18,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="TypeDetectionWarning" Margin="0,10,0,0" Foreground="{DynamicResource ProfileWarningBrush}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+            <TabItem x:Name="TemplateTab">
+                <Border x:Name="TemplateListFrame" Style="{StaticResource ResourceListFrameStyle}" TextElement.FontWeight="Normal">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="TemplateRows" ItemTemplate="{StaticResource ResourceRowTemplate}" />
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem x:Name="MtpTab">
+                <Border x:Name="MtpListFrame" Style="{StaticResource ResourceListFrameStyle}" TextElement.FontWeight="Normal">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="MtpRows" ItemTemplate="{StaticResource ResourceRowTemplate}" />
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+            <TabItem x:Name="VisionTab">
+                <Border x:Name="VisionListFrame" Style="{StaticResource ResourceListFrameStyle}" TextElement.FontWeight="Normal">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="VisionRows" ItemTemplate="{StaticResource ResourceRowTemplate}" />
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+        </TabControl>
+        <Grid Grid.Row="3">
+            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <Border x:Name="ResultContainer" MaxHeight="54" ClipToBounds="True" Margin="0,0,0,10">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Text, ElementName=ResultText}" Value=""><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                            <DataTrigger Binding="{Binding Text, ElementName=ResultText}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed" /></DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <TextBlock x:Name="ResultText" TextWrapping="Wrap" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}"
+                           Foreground="{DynamicResource SecondaryBrush}" />
+            </Border>
+            <StackPanel x:Name="ActionBar" Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, ElementName=ModelInformationTab, Converter={StaticResource TabActionVisibility}}">
+                    <Button x:Name="SaveNameButton" Content="{DynamicResource SaveCardDisplayName}"
+                            ToolTip="{DynamicResource SaveCardDisplayNameTip}" Click="SaveName_Click" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, ElementName=ModelTypeTab, Converter={StaticResource TabActionVisibility}}">
+                    <Button x:Name="SaveTypeButton" Click="SaveType_Click" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, ElementName=TemplateTab, Converter={StaticResource TabActionVisibility}}">
+                    <Button x:Name="GenerateButton" Content="{DynamicResource GenerateCompatibleTemplate}" ToolTip="{DynamicResource GenerateCompatibleTemplateTip}" Click="Generate_Click" />
+                    <Button x:Name="AddTemplateButton" Content="{DynamicResource AddTemplate}" ToolTip="{DynamicResource AddTemplateTip}" Click="AddTemplate_Click" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, ElementName=MtpTab, Converter={StaticResource TabActionVisibility}}">
+                    <Button x:Name="LoadMtpButton" Content="{DynamicResource LoadExternalMtp}" ToolTip="{DynamicResource LoadExternalMtpToolTip}" Click="LoadMtp_Click" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" Visibility="{Binding IsSelected, ElementName=VisionTab, Converter={StaticResource TabActionVisibility}}">
+                    <Button x:Name="LoadVisionButton" Content="{DynamicResource LoadExternalVision}" ToolTip="{DynamicResource LoadExternalVisionToolTip}" Click="LoadVision_Click" />
+                </StackPanel>
+                <Button x:Name="CloseButton" Content="{DynamicResource Close}" Margin="0" Click="Close_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

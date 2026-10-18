@@ -6,7 +6,7 @@ namespace Launcher.Tests;
 public sealed class JsonModelProfileStoreTests
 {
     [Fact]
-    public async Task RecreateMissingProfilesFromBackups_WhenModelExists_UsesCurrentDefaults()
+    public async Task RecreateMissingProfilesFromBackups_WhenRegistrationRemoved_DoesNotResurrectIt()
     {
         var root = CreateRuntimeRoot();
         try
@@ -25,11 +25,8 @@ public sealed class JsonModelProfileStoreTests
             var recreated = await store.RecreateMissingProfilesFromBackupsAsync(root);
             var loaded = await store.LoadAsync(root);
 
-            Assert.Equal(1, recreated);
-            var actual = Assert.Single(loaded.Profiles);
-            Assert.Equal(profile.Id, actual.Id);
-            Assert.Equal(16_384, actual.ContextSize);
-            Assert.Equal("auto", actual.GpuLayers);
+            Assert.Equal(0, recreated);
+            Assert.Empty(loaded.Profiles);
         }
         finally
         {
@@ -62,6 +59,7 @@ public sealed class JsonModelProfileStoreTests
             await store.SaveAsync(root, profile);
             var result = await store.LoadAsync(root);
 
+            Assert.True(result.Profiles.Count == 1, string.Join("; ", result.Diagnostics));
             var loaded = Assert.Single(result.Profiles);
             Assert.Equal(profile.Id, loaded.Id);
             Assert.Equal(profile.DisplayName, loaded.DisplayName);
@@ -123,7 +121,7 @@ public sealed class JsonModelProfileStoreTests
     }
 
     [Fact]
-    public async Task Load_WhenProfileIsInvalid_ReportsBackupWithoutApplyingIt()
+    public async Task Load_WhenProfileIsInvalid_ReportsErrorWithoutApplyingBackup()
     {
         var root = CreateRuntimeRoot();
         try
@@ -139,8 +137,8 @@ public sealed class JsonModelProfileStoreTests
 
             Assert.Empty(result.Profiles);
             var diagnostic = Assert.Single(result.Diagnostics);
-            Assert.Contains(".bak", diagnostic, StringComparison.Ordinal);
-            Assert.Contains("未自动恢复", diagnostic, StringComparison.Ordinal);
+            Assert.Contains("JSON", diagnostic, StringComparison.Ordinal);
+            Assert.False(File.Exists(path + ".bak"));
         }
         finally
         {
@@ -199,6 +197,7 @@ public sealed class JsonModelProfileStoreTests
 
             var result = await new JsonModelProfileStore().LoadAsync(root);
 
+            Assert.True(result.Profiles.Count == 1, string.Join("; ", result.Diagnostics));
             var loaded = Assert.Single(result.Profiles);
             Assert.Equal(300, loaded.IdleSleepSeconds);
             Assert.Equal(ModelProfile.CurrentSchemaVersion, loaded.SchemaVersion);
@@ -240,6 +239,7 @@ public sealed class JsonModelProfileStoreTests
 
             var result = await new JsonModelProfileStore().LoadAsync(root);
 
+            Assert.True(result.Profiles.Count == 1, string.Join("; ", result.Diagnostics));
             var loaded = Assert.Single(result.Profiles);
             Assert.Equal(ModelProfile.CurrentSchemaVersion, loaded.SchemaVersion);
             Assert.Equal(8192, loaded.CompactionSafetyReserve);

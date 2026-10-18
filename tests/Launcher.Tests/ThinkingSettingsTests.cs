@@ -81,7 +81,7 @@ public sealed class ThinkingSettingsTests
     }
 
     [Fact]
-    public async Task LegacyVerifiedCapabilityIsLoadedButRequiresNewDetectionWithoutOverwritingSource()
+    public async Task LegacyVerifiedCapabilityIsMigratedWithoutReusingObsoleteProof()
     {
         var root = Path.Combine(Path.GetTempPath(), "ThinkingSettingsTests", Guid.NewGuid().ToString("N"));
         var directory = JsonModelProfileStore.GetProfilesDirectory(root);
@@ -110,7 +110,8 @@ public sealed class ThinkingSettingsTests
             Assert.Equal(ReasoningCapabilityStatus.Unknown, migrated.ReasoningCapabilityStatus);
             Assert.Null(migrated.ThinkingEnabled);
             Assert.False(migrated.ExposeReasoningEffortInChatGpt);
-            Assert.Equal(original, await File.ReadAllTextAsync(path));
+            Assert.True(migrated.ConfigurationInitialized);
+            Assert.True(File.Exists(migrated.PreferredConfigurationPath));
         }
         finally { Directory.Delete(root, true); }
     }

@@ -79,7 +79,7 @@ public sealed class ModelProfileValidatorTests
     }
 
     [Fact]
-    public void Validate_WhenChatTemplateIsSetWithoutJinja_ReturnsError()
+    public void Validate_WhenChatTemplateIsSetWithoutJinja_PreservesDisabledPreference()
     {
         var profile = ValidProfile() with
         {
@@ -89,7 +89,7 @@ public sealed class ModelProfileValidatorTests
 
         var errors = ModelProfileValidator.Validate(profile, @"D:\llama.cpp");
 
-        Assert.Contains(errors, error => error.Contains("必须启用 Jinja", StringComparison.Ordinal));
+        Assert.DoesNotContain(errors, error => error.Contains("必须启用 Jinja", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public sealed class ModelProfileValidatorTests
 
         var errors = ModelProfileValidator.Validate(profile, @"D:\llama.cpp");
 
-        Assert.Contains(errors, error => error.Contains("图片请求验证", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("有效识别记录", StringComparison.Ordinal));
     }
 
     private static ModelProfile ValidProfile() => new()

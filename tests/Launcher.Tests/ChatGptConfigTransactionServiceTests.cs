@@ -118,7 +118,7 @@ public sealed class ChatGptConfigTransactionServiceTests
             Assert.Contains("name = \"Local llama.cpp\"", localText);
             Assert.Contains("base_url = \"http://127.0.0.1:8080/v1/\"", localText);
             Assert.Contains("wire_api = \"responses\"", localText);
-            Assert.Contains("requires_openai_auth = true", localText);
+            Assert.Contains("requires_openai_auth = false", localText);
             Assert.Contains("supports_websockets = false", localText);
             Assert.DoesNotContain("supports_websockets = false }}", localText, StringComparison.Ordinal);
             Assert.False(SyntaxParser.ParseStrict(localText, "generated-local.toml", validate: true).HasErrors);

@@ -238,6 +238,10 @@ if (-not (Test-Path -LiteralPath $dotnet)) {
 
 $solution = Join-Path $repositoryRoot 'ChatGPTLocalLauncher.sln'
 $stagingRoot = Join-Path $artifactsRoot ('.publish-staging-' + [Guid]::NewGuid().ToString('N'))
+$stagingRoot = [System.IO.Path]::GetFullPath($stagingRoot)
+if (-not $stagingRoot.StartsWith($allowedPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "发布暂存目录必须位于 artifacts 内：$stagingRoot"
+}
 $stagingPackage = Join-Path $stagingRoot 'package'
 $testResults = Join-Path $stagingRoot 'test-results'
 $archiveVerification = Join-Path $stagingRoot 'archive-verification'
@@ -456,6 +460,10 @@ try {
         -Destination $packageDocsPath
 
     foreach ($document in @('release-notes-0.9.7.md', 'thinking-display-review-20261007.md', 'reasoning-default-review-20261007.md', 'reasoning-validation-scope-review-20261007.md')) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot ('docs\' + $document)) -Destination $packageDocsPath
+    }
+
+    foreach ($document in @('release-notes-0.9.8.md', 'release-checks-0.9.8.md', 'development-0.9.8.md', 'multi-configuration-review-20261015.md', 'resource-management-review-20261016.md', 'model-type-management-review-20261016.md', 'model-information-review-20261016.md', 'full-code-audit-0.9.8-20261016.md', 'audit-fixes-review-0.9.8-20261017.md', 'mode-card-configurations-review-20261017.md', 'release-review-0.9.8-20261017.md', 'authentication-toggle-review-20261017.md', 'diagnostics-review-20261018.md', 'runtime-version-review-20261018.md', 'vision-switch-review-20261018.md')) {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot ('docs\' + $document)) -Destination $packageDocsPath
     }
 

@@ -27,30 +27,44 @@ public static class AgentControlPipe
                 PipeTransmissionMode.Byte,
                 PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
             await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
-            using var reader = new StreamReader(
-                server,
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                detectEncodingFromByteOrderMarks: false,
-                bufferSize: 1024,
-                leaveOpen: true);
-            await using var writer = new StreamWriter(
-                server,
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                bufferSize: 1024,
-                leaveOpen: true)
+            using var commandTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            commandTimeout.CancelAfter(TimeSpan.FromSeconds(3));
+            try
             {
-                AutoFlush = true,
-            };
-            var command = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            if (!string.Equals(command, ShutdownCommand, StringComparison.Ordinal))
-            {
-                await writer.WriteLineAsync("unsupported-v1").ConfigureAwait(false);
-                continue;
-            }
+                using var reader = new StreamReader(
+                    server,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    detectEncodingFromByteOrderMarks: false,
+                    bufferSize: 1024,
+                    leaveOpen: true);
+                await using var writer = new StreamWriter(
+                    server,
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                    bufferSize: 1024,
+                    leaveOpen: true)
+                {
+                    AutoFlush = true,
+                };
+                var command = await reader.ReadLineAsync(commandTimeout.Token).ConfigureAwait(false);
+                if (command is null) continue;
+                if (!string.Equals(command, ShutdownCommand, StringComparison.Ordinal))
+                {
+                    await writer.WriteLineAsync("unsupported-v1".AsMemory(), commandTimeout.Token).ConfigureAwait(false);
+                    continue;
+                }
 
-            await writer.WriteLineAsync(AcceptedResponse).ConfigureAwait(false);
-            requestShutdown();
-            return;
+                await writer.WriteLineAsync(AcceptedResponse.AsMemory(), commandTimeout.Token).ConfigureAwait(false);
+                requestShutdown();
+                return;
+            }
+            catch (IOException)
+            {
+                // A disconnected client must not terminate the Agent's control listener.
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                // A silent client releases its connection so subsequent commands can proceed.
+            }
         }
     }
 

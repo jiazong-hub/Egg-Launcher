@@ -46,6 +46,20 @@
         </Canvas></Viewbox>
     </DataTemplate>
 
+    <DataTemplate x:Key="AuthenticationOnIconTemplate">
+        <Viewbox Stretch="Uniform"><Canvas Width="24" Height="24">
+            <Ellipse Style="{StaticResource EggIconEllipseStyle}" Canvas.Left="3" Canvas.Top="3" Width="9" Height="9" />
+            <Path Style="{StaticResource EggIconPathStyle}" Data="M 10.7,10.7 L 21,21 M 16,16 L 19,13 M 19,19 L 22,16" />
+        </Canvas></Viewbox>
+    </DataTemplate>
+
+    <DataTemplate x:Key="AuthenticationOffIconTemplate">
+        <Viewbox Stretch="Uniform"><Canvas Width="24" Height="24">
+            <Ellipse Style="{StaticResource EggIconEllipseStyle}" Canvas.Left="3" Canvas.Top="3" Width="9" Height="9" />
+            <Path Style="{StaticResource EggIconPathStyle}" Data="M 10.7,10.7 L 21,21 M 16,16 L 19,13 M 19,19 L 22,16 M 3,21 L 21,3" />
+        </Canvas></Viewbox>
+    </DataTemplate>
+
     <DataTemplate x:Key="LaunchIconTemplate">
         <Viewbox Stretch="Uniform"><Canvas Width="24" Height="24">
             <Ellipse Style="{StaticResource EggIconEllipseStyle}" Canvas.Left="2" Canvas.Top="2" Width="20" Height="20" />

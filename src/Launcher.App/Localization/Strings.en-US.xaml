@@ -33,7 +33,16 @@
     <sys:String x:Key="SwitchToDarkTheme">Switch to dark mode</sys:String>
     <sys:String x:Key="StartAtLogin">Launch Egg Launcher at startup</sys:String>
     <sys:String x:Key="DetailedLogRecording">Detailed logging</sys:String>
-    <sys:String x:Key="DetailedLogRecordingToolTip">Records more request stages and native llama.cpp output. Launcher structured logs exclude conversation text and authentication information; log files will be larger.</sys:String>
+    <sys:String x:Key="LocalAuthentication">Use OpenAI authentication in Local mode</sys:String>
+    <sys:String x:Key="LocalAuthenticationOn">Local mode OpenAI authentication: On</sys:String>
+    <sys:String x:Key="LocalAuthenticationOff">Local mode OpenAI authentication: Off</sys:String>
+    <sys:String x:Key="LocalAuthenticationOnHint">Local mode OpenAI authentication: On&#10;Click to turn off. Takes effect on the next Local launch after restarting Codex.</sys:String>
+    <sys:String x:Key="LocalAuthenticationOffHint">Local mode OpenAI authentication: Off&#10;Click to turn on. Takes effect on the next Local launch after restarting Codex.</sys:String>
+    <sys:String x:Key="LocalAuthenticationLockedHint">Close Codex and stop Local services before changing authentication.</sys:String>
+    <sys:String x:Key="LocalAuthenticationEnabled">Local mode OpenAI authentication enabled for the next Local launch.</sys:String>
+    <sys:String x:Key="LocalAuthenticationDisabled">Local mode OpenAI authentication disabled for the next Local launch.</sys:String>
+    <sys:String x:Key="LocalAuthenticationSaveFailed">Unable to save authentication setting: {0}</sys:String>
+    <sys:String x:Key="DetailedLogRecordingToolTip">Adds configuration, resource management, startup and request stages, plus more native llama.cpp output. Structured logs exclude conversation text and credentials; log files will be larger.</sys:String>
     <sys:String x:Key="DiagnosticLogs">Diagnostic Logs</sys:String>
     <sys:String x:Key="AboutEggLauncher">About Egg Launcher</sys:String>
     <sys:String x:Key="ModePageHint">Click to preselect; applied at launch</sys:String>
@@ -68,7 +77,7 @@
     <sys:String x:Key="RemoveExternalVisionToolTip">Remove the external vision projector association without deleting the file.</sys:String>
     <sys:String x:Key="EditModelToolTip">Edit runtime parameters for the current model.</sys:String>
     <sys:String x:Key="ChangeModelType">Model Type</sys:String>
-    <sys:String x:Key="ChangeModelTypeToolTip">Select a type for an unspecified model. Changing a confirmed type rebuilds its parameter profile.</sys:String>
+    <sys:String x:Key="ChangeModelTypeToolTip">Change the type in Model management > Model type; existing configuration files stay unchanged.</sys:String>
     <sys:String x:Key="ModelDetails">Details</sys:String>
     <sys:String x:Key="ModelDetailsToolTip">View the current model's files, source, parameters, and llama.cpp data.</sys:String>
     <sys:String x:Key="DetectReasoningCapability">Detect Levels</sys:String>
@@ -76,7 +85,7 @@
     <sys:String x:Key="ShowOrHide">Show/Hide on Mode Page</sys:String>
     <sys:String x:Key="ShowOrHideToolTip">Control whether the current model appears as a model card on the Mode page without deleting its files or parameters.</sys:String>
     <sys:String x:Key="DeleteModelAndConfig">Remove from List</sys:String>
-    <sys:String x:Key="DeleteModelAndConfigToolTip">Remove this model's Egg Launcher configuration and list entry without deleting model files from disk.</sys:String>
+    <sys:String x:Key="DeleteModelAndConfigToolTip">Remove this model from the managed list while retaining model files, parameter configurations, templates, and capability records. Switch to online mode or another local model before removing the applied model.</sys:String>
     <sys:String x:Key="DownloadCacheManagement">Download and Cache Management</sys:String>
     <sys:String x:Key="CancelCurrentDownload">Cancel Current Download</sys:String>
     <sys:String x:Key="RefreshCache">Refresh Cache</sys:String>
@@ -156,7 +165,7 @@
     <sys:String x:Key="DenseModelToolTip">For standard dense Transformer models.</sys:String>
     <sys:String x:Key="MoeModelOption">MoE Model</sys:String>
     <sys:String x:Key="MoeModelToolTip">For mixture-of-experts models with expert routing and expert weights.</sys:String>
-    <sys:String x:Key="ModelTypeResetWarning">Changing a confirmed type rebuilds the parameter profile. The model files are not modified.</sys:String>
+    <sys:String x:Key="ModelTypeResetWarning">Type changes update registration only. Configurations with another type cannot load; switch back to use them again.</sys:String>
     <sys:String x:Key="Cancel">Cancel</sys:String>
     <sys:String x:Key="Confirm">OK</sys:String>
 
@@ -184,7 +193,7 @@
     <sys:String x:Key="StopServiceAndExit">Stop Services and Exit</sys:String>
     <sys:String x:Key="ProfileEditorTitle">Edit Local Model Profile</sys:String>
     <sys:String x:Key="ModelParameters">Model Parameters</sys:String>
-    <sys:String x:Key="ModelParametersHint">Parameters and default snapshots apply only to this model. Saving does not load the model immediately.</sys:String>
+    <sys:String x:Key="ModelParametersHint">Save updates this file. Apply selects it for this model’s next run without starting the model.</sys:String>
     <sys:String x:Key="DisplayName">Display Name</sys:String>
     <sys:String x:Key="DisplayNameTip">Changes only the model name shown in Egg Launcher and ChatGPT.</sys:String>
     <sys:String x:Key="ModelAlias">Model Alias</sys:String>
@@ -192,7 +201,7 @@
     <sys:String x:Key="ModelFile">Model File</sys:String>
     <sys:String x:Key="ModelFileTip">GGUF path relative to the llama.cpp Runtime Root.</sys:String>
     <sys:String x:Key="ModelType">Model Type</sys:String>
-    <sys:String x:Key="ModelTypeEditorTip">Model type is detected once when added. Return to Local Model Management to change it.</sys:String>
+    <sys:String x:Key="ModelTypeEditorTip">Change the type in Model management > Model type; existing configuration files stay unchanged.</sys:String>
     <sys:String x:Key="BasicParameters">Basic</sys:String>
     <sys:String x:Key="ContextSelectionTip">Choose according to the model's declared context capacity and available VRAM/RAM. Egg Launcher does not provide hardware-independent recommendations.</sys:String>
     <sys:String x:Key="CustomContextTip">Enter a token count no greater than the model limit and divisible by 256. Values such as 96K are supported.</sys:String>
@@ -390,4 +399,26 @@
     <sys:String x:Key="ShowThinkingProcessTip">Controls display only, without changing model reasoning or answers. Applies to subsequent requests after Save.</sys:String>
     <sys:String x:Key="InheritThinking">Inherit template default</sys:String>
     <sys:String x:Key="ThinkingDetectionDetails">Detection details</sys:String>
+    <sys:String x:Key="OpenProjectHome">Open GitHub project page</sys:String>
+    <sys:String x:Key="TemplateSettings">Template Settings</sys:String>
+    <sys:String x:Key="SaveNewConfiguration">Save As New Configuration</sys:String>
+    <sys:String x:Key="ApplyConfiguration">Apply</sys:String>
+    <sys:String x:Key="LoadConfiguration">Load Configuration</sys:String>
+    <sys:String x:Key="GenerateCompatibleTemplate">Generate Compatible Template</sys:String>
+    <sys:String x:Key="AddTemplate">Add Template</sys:String>
+    <sys:String x:Key="SaveNewConfigurationTip">Save a new configuration file.</sys:String>
+    <sys:String x:Key="SaveConfigurationTip">Save to the currently loaded configuration file.</sys:String>
+    <sys:String x:Key="ApplyConfigurationTip">Save parameters to the currently loaded configuration file and select it for the next launch.</sys:String>
+    <sys:String x:Key="CancelConfigurationTip">Close this page without making any changes.</sys:String>
+    <sys:String x:Key="LoadConfigurationTip">Open an existing configuration file for editing.</sys:String>
+    <sys:String x:Key="GenerateCompatibleTemplateTip">Check the current model's chat template and generate a compatible template when needed.</sys:String>
+    <sys:String x:Key="AddTemplateTip">Choose an existing chat template and add it to the current model's template list after it passes the checks.</sys:String>
+    <sys:String x:Key="ModelResourceManagement">Model management</sys:String>
+    <sys:String x:Key="ModeCardManagement">Manage</sys:String>
+    <sys:String x:Key="ModeCardParameters">Parameters</sys:String>
+    <sys:String x:Key="ModelResourceManagementTip">Manage information, type, templates, MTP and vision resources for this model.</sys:String>
+    <sys:String x:Key="CardDisplayName">Card display name</sys:String>
+    <sys:String x:Key="CardDisplayNameTip">Changes presentation only, not model identity, filename or configuration bindings.</sys:String>
+    <sys:String x:Key="SaveCardDisplayName">Save name</sys:String>
+    <sys:String x:Key="SaveCardDisplayNameTip">Save the display name without editing existing configurations.</sys:String>
 </ResourceDictionary>

@@ -13,21 +13,33 @@ namespace Launcher.App;
 
 public partial class MainWindow
 {
-    private async Task<ModelProfile> DetectEditorReasoningAsync(ModelProfile profile, CancellationToken cancellationToken)
+    private Task<ModelProfile> DetectEditorReasoningAsync(ModelProfile profile, CancellationToken cancellationToken) =>
+        _diagnostics.RunAsync("reasoning_validation", ModelDiagnosticFields(profile), async operation =>
+        {
+            await operation.StageAsync("native_reasoning_and_template_check");
+            var result = await DetectEditorReasoningCoreAsync(profile, cancellationToken);
+            operation.Set("capabilityStatus", result.ReasoningCapabilityStatus.ToString());
+            operation.Set("supportsThinkingSwitch", result.SupportsThinkingSwitch);
+            if (result.SupportsThinkingSwitch != true && result.ReasoningCapabilityStatus != ReasoningCapabilityStatus.Verified)
+                await operation.CompleteAsync("unavailable", "reasoning_not_verified");
+            return result;
+        });
+
+    private async Task<ModelProfile> DetectEditorReasoningCoreAsync(ModelProfile profile, CancellationToken cancellationToken)
     {
-        if (_busy || HasActiveOrQueuedDownloads || !CanEditProfile(profile, forceClientRefresh: true))
+        if (!CanRunModelResourceDetection() || _busy || HasActiveOrQueuedDownloads || !CanEditProfile(profile, forceClientRefresh: true))
             throw new InvalidOperationException(AppLanguageManager.Choose("当前模型或 Runtime 正在使用，暂时不能检测。", "The model or runtime is in use; detection is unavailable."));
         var conflict = GetModelDownloadBlockReason();
         if (!string.IsNullOrWhiteSpace(conflict)) throw new InvalidOperationException(conflict);
         var root = Path.GetFullPath(_settings.LlamaRoot!);
-        if (!profile.Jinja) throw new InvalidOperationException(AppLanguageManager.Choose("请先在基础参数中开启 Jinja。", "Enable Jinja in Basic Parameters first."));
+        if (!profile.Jinja) throw new InvalidOperationException(AppLanguageManager.Choose("请先在模板设置中开启 Jinja。", "Enable Jinja in Template Settings first."));
         var template = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             ? Launcher.Scripts.Templates.CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(Path.Combine(root, profile.ModelRelativePath))
             : await File.ReadAllTextAsync(Path.Combine(root, profile.ChatTemplateRelativePath), cancellationToken);
         if (string.IsNullOrWhiteSpace(template)) throw new InvalidOperationException("No active chat template was found.");
         if (string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             && Launcher.Scripts.Templates.ChatTemplateRules.Analyze(template).Kind == Launcher.Scripts.Templates.ChatTemplateMatchKind.Repairable)
-            throw new InvalidOperationException(AppLanguageManager.Choose("请先在基础参数中完成模板检测与生成，再检测思考能力。", "Check and generate the compatibility template in Basic Parameters first."));
+            throw new InvalidOperationException(AppLanguageManager.Choose("请先在模型管理中生成兼容模板，并在模板设置中选用，再检测思考能力。", "Generate a compatibility template in Model Management and select it in Template Settings before checking reasoning."));
         if (profile.ExtraArguments.Keys.Any(key => key is "reasoning" or "reasoning-effort" or "reasoning-budget" or "chat-template-kwargs"))
             throw new InvalidOperationException(AppLanguageManager.Choose("请先移除高级参数中的思考覆盖，再执行检测。", "Remove reasoning overrides from Advanced Parameters before detection."));
         var options = await Launcher.Runtime.Detection.LlamaRuntimeOptionDetector.DetectAsync(root, cancellationToken);
@@ -56,11 +68,14 @@ public partial class MainWindow
             ReasoningCapabilitySignature = signature,
             ReasoningCapabilityCheckedAtUtc = DateTimeOffset.UtcNow,
         };
-        return result with
+        result = result with
         {
             ReasoningCapabilitySignature = ComputeReasoningCapabilitySignature(result, root),
             ReasoningValidationBasis = Launcher.Scripts.Templates.ReasoningValidationFingerprint.CaptureBasis(result, root),
         };
+        if (result.SupportsThinkingSwitch == true || result.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified)
+            await Launcher.Scripts.Templates.ModelResourceCatalog.RegisterAsync(result, root, Launcher.Scripts.Templates.ModelResourceKind.Reasoning, cancellationToken);
+        return result;
     }
 
     private static async Task<LlamaReasoningCapability> DetectReasoningCapabilityWithNativeRouterAsync(

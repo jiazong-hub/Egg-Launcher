@@ -32,6 +32,7 @@ public partial class ProfileEditorWindow
             Jinja = JinjaCheckBox.IsChecked == true,
             ChatTemplateRelativePath = NullWhenWhiteSpace(ChatTemplatePathTextBox.Text),
         };
+        if (TemplateResourceComboBox is not null) TemplateResourceComboBox.IsEnabled = profile.Jinja;
         if (!profile.Jinja)
         {
             TemplateStatusText.Text = AppLanguageManager.Choose("Jinja 已关闭；模板检测不可用。", "Jinja is disabled; template checking is unavailable.");
@@ -40,17 +41,20 @@ public partial class ProfileEditorWindow
         try
         {
             var embedded = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath);
+            if (!embedded) ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath!, _runtimeRoot);
             var owned = !embedded && File.Exists(Path.Combine(_runtimeRoot, profile.ChatTemplateRelativePath!))
                 && File.ReadLines(Path.Combine(_runtimeRoot, profile.ChatTemplateRelativePath!)).FirstOrDefault() == CodexChatTemplateCompatibility.OwnershipMarker;
             var source = embedded ? AppLanguageManager.Choose("GGUF 内置模板", "Embedded GGUF template")
                 : owned ? AppLanguageManager.Choose("启动器兼容模板", "Launcher compatibility template")
                 : AppLanguageManager.Choose("用户指定模板", "User-selected template");
-            var status = ChatTemplateValidationCache.IsCurrent(profile, _runtimeRoot)
+            var templateCurrent = ModelResourceCatalog.Read(profile, _runtimeRoot).Records.Any(r => r.Kind == ModelResourceKind.Template
+                && ModelResourceManagement.SamePath(r.ResourcePath, profile.ChatTemplateRelativePath, _runtimeRoot) && r.Evidence.Jinja == profile.Jinja && ModelResourceCatalog.IsCurrent(r, _runtimeRoot));
+            var status = templateCurrent
                 ? AppLanguageManager.Choose("渲染检查通过，实际对话待验证", "Rendering checks passed; inference not verified")
                 : File.Exists(ChatTemplateValidationCache.PathFor(profile, _runtimeRoot))
-                    ? AppLanguageManager.Choose("结果已过期，请重新检测", "Result expired; check again")
+                    ? AppLanguageManager.Choose("验证依据已变化，请重新检测", "Validation basis changed; check again")
                     : AppLanguageManager.Choose("未检测", "Not checked");
-            if (embedded && !ChatTemplateValidationCache.IsCurrent(profile, _runtimeRoot))
+            if (embedded && !templateCurrent)
             {
                 var analysis = ChatTemplateRules.Analyze(CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(
                     Path.Combine(_runtimeRoot, profile.ModelRelativePath)));
@@ -60,7 +64,7 @@ public partial class ProfileEditorWindow
             }
             TemplateStatusText.Text = source + " · " + status;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
         {
             TemplateStatusText.Text = AppLanguageManager.Choose("模板信息读取失败：", "Cannot read template information: ") + exception.Message;
         }
@@ -76,6 +80,7 @@ public partial class ProfileEditorWindow
         _templateCancellation = new CancellationTokenSource(TimeSpan.FromMinutes(15));
         ProfileEditorTabs.IsEnabled = false;
         SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = RestoreModelDefaultsButton.IsEnabled = false;
+        ApplyConfigurationButton.IsEnabled = LoadConfigurationButton.IsEnabled = false;
         TemplateCancelButton.Visibility = Visibility.Visible;
         try
         {
@@ -104,6 +109,7 @@ public partial class ProfileEditorWindow
             {
                 ProfileEditorTabs.IsEnabled = true;
                 SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = true;
+                ApplyConfigurationButton.IsEnabled = LoadConfigurationButton.IsEnabled = true;
                 RestoreModelDefaultsButton.IsEnabled = _originalProfile.DefaultParameters is not null;
                 TemplateCancelButton.Visibility = Visibility.Collapsed;
             }

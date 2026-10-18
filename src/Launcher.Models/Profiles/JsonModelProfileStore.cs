@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Launcher.Models.Scanning;
 
 namespace Launcher.Models.Profiles;
@@ -45,6 +46,7 @@ public sealed class JsonModelProfileStore
                     stream,
                     SerializerOptions,
                     cancellationToken).ConfigureAwait(false);
+                await stream.DisposeAsync().ConfigureAwait(false);
                 if (profile is null)
                 {
                     diagnostics.Add($"{Path.GetFileName(path)}：文件为空。");
@@ -114,7 +116,12 @@ public sealed class JsonModelProfileStore
 
                 // Keep old conversation values visible for correction. Structural
                 // validation remains mandatory; saving and starting validate all bounds.
-                var errors = ModelProfileValidator.Validate(profile, root, validateConversationLimits: false);
+                // Registered models remain manageable when a formerly selected attachment goes
+                // missing. Runtime intent is read from the user document and checked at startup.
+                var validationProfile = profile.ConfigurationInitialized
+                    ? RegistrationValidationProfile(profile)
+                    : profile with { ChatTemplateRelativePath = null, DefaultParameters = null };
+                var errors = ModelProfileValidator.Validate(validationProfile, root, validateConversationLimits: false);
                 if (errors.Count > 0)
                 {
                     diagnostics.Add($"{Path.GetFileName(path)}：{string.Join("；", errors)}");
@@ -134,6 +141,20 @@ public sealed class JsonModelProfileStore
                     continue;
                 }
 
+                if (!profile.ConfigurationInitialized)
+                {
+                    await SaveRegistrationAsync(root, profile, cancellationToken).ConfigureAwait(false);
+                    profile = JsonSerializer.Deserialize<ModelProfile>(await File.ReadAllTextAsync(Path.Combine(profilesDirectory, profile.Id + ".json"), cancellationToken).ConfigureAwait(false), SerializerOptions)!;
+                }
+                try
+                {
+                    profile = await ModelConfigurationFile.ReadAsync(profile.PreferredConfigurationPath ?? "", profile, root, cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or JsonException or ArgumentException)
+                {
+                    profile = profile with { ConfigurationError = exception.Message };
+                    diagnostics.Add($"{profile.DisplayName}：预选配置不可用 / Configuration unavailable: {exception.Message}");
+                }
                 profiles.Add(profile);
             }
             catch (JsonException exception)
@@ -384,108 +405,181 @@ public sealed class JsonModelProfileStore
             return 0;
         }
 
-        var recreatedCount = 0;
-        var reservedIdentifiers = new List<ModelProfile>();
-        foreach (var backupPath in Directory.EnumerateFiles(
-                     profilesDirectory,
-                     "*.json.bak",
-                     SearchOption.TopDirectoryOnly))
+        // Missing user configuration files are never recreated from legacy backups.
+        await Task.CompletedTask.ConfigureAwait(false);
+        return 0;
+    }
+
+    public Task SaveRegistrationAsync(string runtimeRoot, ModelProfile profile, CancellationToken cancellationToken = default)
+        => SaveAsync(runtimeRoot, profile, cancellationToken, registrationOnly: true);
+
+    // Historical runtime fields in a registration must not hide a model after a type change.
+    // The selected parameter document remains subject to full validation on load/save/startup.
+    private static ModelProfile RegistrationValidationProfile(ModelProfile profile) => profile with
+    {
+        MtpEnabled = false,
+        VisionEnabled = false,
+        ChatTemplateRelativePath = null,
+        DefaultParameters = null,
+        MoeExpertPlacement = null,
+        CpuMoeLayers = null,
+    };
+
+    public async Task<ModelProfile> ReadRegistrationAsync(string runtimeRoot, ModelProfile expected, CancellationToken token = default)
+    {
+        var root = Path.GetFullPath(runtimeRoot);
+        ModelConfigurationFile.GetDirectory(expected, root);
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(GetProfilesDirectory(root), expected.Id + ".json"), token).ConfigureAwait(false);
+        return ParseRegistration(bytes, expected);
+    }
+
+    private static ModelProfile ParseRegistration(byte[] bytes, ModelProfile expected)
+    {
+        var registration = JsonSerializer.Deserialize<ModelProfile>(bytes, SerializerOptions)
+            ?? throw new InvalidDataException("模型登记为空 / Empty model registration.");
+        if (registration.Id != expected.Id || !string.Equals(registration.ModelRelativePath, expected.ModelRelativePath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("模型登记已改变，请重新打开管理页面 / Model binding changed; reopen management.");
+        if (!Enum.IsDefined(registration.ModelType) || !Enum.IsDefined(registration.ModelTypeSource))
+            throw new InvalidDataException("模型类型登记无效 / Invalid registered model type.");
+        return registration;
+    }
+
+    /// <summary>Changes registration metadata only. Never writes, creates or deletes a parameter document.</summary>
+    public async Task<ModelProfile> UpdateModelTypeAsync(string runtimeRoot, ModelProfile expected, ModelType type,
+        Func<bool> canChange, CancellationToken token = default)
+    {
+        if (type is not (ModelType.Dense or ModelType.MoE)) throw new InvalidDataException("请选择 Dense 或 MoE / Select Dense or MoE.");
+        var root = Path.GetFullPath(runtimeRoot);
+        ModelConfigurationFile.GetDirectory(expected, root); // Validate the ID before constructing a registration path.
+        var path = Path.Combine(GetProfilesDirectory(root), expected.Id + ".json");
+        if (!canChange()) throw new InvalidOperationException("请先停止本地服务和检测 / Stop local services and detection first.");
+        var bytes = await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
+        var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+        var registration = ParseRegistration(bytes, expected);
+        if (registration.ModelType != expected.ModelType)
+            throw new IOException("模型类型已被其他操作更改，请重新打开管理页面 / Model type changed elsewhere; reopen management.");
+        if (registration.ModelType == type) return registration;
+        var updated = registration with { ModelType = type, ModelTypeSource = ModelTypeSource.UserSelected };
+        var errors = ModelProfileValidator.Validate(RegistrationValidationProfile(updated), root, validateConversationLimits: false);
+        if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
+        var json = JsonNode.Parse(bytes)?.AsObject() ?? throw new InvalidDataException("模型登记格式无效 / Invalid model registration.");
+        SetMetadata(nameof(ModelProfile.ModelType), (int)type);
+        SetMetadata(nameof(ModelProfile.ModelTypeSource), (int)ModelTypeSource.UserSelected);
+        if (!canChange()) throw new InvalidOperationException("本地服务状态已改变，未保存类型 / Local service state changed; type was not saved.");
+        if (ModelConfigurationFile.Digest(path) != digest) throw new IOException("模型登记已被外部修改，请重试 / Registration changed outside the launcher.");
+        await ModelConfigurationFile.WriteAtomicallyAsync(path, json.ToJsonString(SerializerOptions) + Environment.NewLine, token).ConfigureAwait(false);
+        return updated;
+
+        void SetMetadata(string name, int value)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var profilePath = backupPath[..^4];
-            if (File.Exists(profilePath))
-            {
-                continue;
-            }
-
-            try
-            {
-                await using var stream = new FileStream(
-                    backupPath,
-                    FileMode.Open,
-                    FileAccess.Read,
-                    FileShare.Read,
-                    bufferSize: 4096,
-                    FileOptions.Asynchronous | FileOptions.SequentialScan);
-                var previous = await JsonSerializer.DeserializeAsync<ModelProfile>(
-                    stream,
-                    SerializerOptions,
-                    cancellationToken).ConfigureAwait(false);
-                if (previous is null)
-                {
-                    continue;
-                }
-
-                var primaryPath = Path.GetFullPath(Path.Combine(root, previous.ModelRelativePath));
-                if (!File.Exists(primaryPath))
-                {
-                    continue;
-                }
-
-                var candidate = new GgufModelCandidate(
-                    primaryPath,
-                    Path.GetRelativePath(Path.Combine(root, "models"), primaryPath),
-                    previous.DisplayName,
-                    previous.KnownSizeBytes ?? new FileInfo(primaryPath).Length,
-                    previous.KnownShardCount ?? 1,
-                    previous.RemoteModelId,
-                    previous.RemoteRepositoryId,
-                    previous.RemoteQuantization);
-                var recreated = ModelProfileFactory.CreateDefault(
-                    candidate,
-                    root,
-                    reservedIdentifiers,
-                    detectModelType: false) with
-                {
-                    Id = previous.Id,
-                    Alias = previous.Alias,
-                    ShowInModePage = previous.ShowInModePage,
-                    DisplayOrder = previous.DisplayOrder,
-                    ModelType = previous.SchemaVersion >= 4
-                        ? previous.ModelType
-                        : ModelType.Unknown,
-                    ModelTypeSource = previous.SchemaVersion >= 4
-                        ? previous.ModelTypeSource
-                        : ModelTypeSource.Legacy,
-                };
-                await SaveAsync(root, recreated, cancellationToken).ConfigureAwait(false);
-                reservedIdentifiers.Add(recreated);
-                recreatedCount++;
-            }
-            catch (Exception exception) when (
-                exception is JsonException
-                    or IOException
-                    or UnauthorizedAccessException
-                    or InvalidDataException
-                    or ArgumentException)
-            {
-                // A corrupt backup or missing model remains unmanaged and can be scanned normally.
-            }
+            var matches = json.Select(pair => pair.Key).Where(key => key.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length > 1) throw new InvalidDataException("模型登记包含重复字段 / Duplicate registration fields.");
+            json[matches.FirstOrDefault() ?? name] = value;
         }
+    }
 
-        return recreatedCount;
+    /// <summary>Changes the presentation name only; identity, configurations and resource evidence remain untouched.</summary>
+    public async Task<ModelProfile> UpdateDisplayNameAsync(string runtimeRoot, ModelProfile expected, string name,
+        Func<bool> canChange, CancellationToken token = default)
+    {
+        name = name.Trim();
+        if (string.IsNullOrWhiteSpace(name) || name.Any(char.IsControl))
+            throw new InvalidDataException("显示名称不能为空或包含控制字符 / Enter a display name without control characters.");
+        var root = Path.GetFullPath(runtimeRoot);
+        ModelConfigurationFile.GetDirectory(expected, root);
+        var path = Path.Combine(GetProfilesDirectory(root), expected.Id + ".json");
+        if (!canChange()) throw new InvalidOperationException("请先停止本地服务和检测 / Stop local services and detection first.");
+        var bytes = await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
+        var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+        var registration = ParseRegistration(bytes, expected);
+        if (registration.DisplayName != expected.DisplayName)
+            throw new IOException("显示名称已被其他操作更改，请重新打开管理页面 / Display name changed elsewhere; reopen management.");
+        if (registration.DisplayName == name) return registration;
+        var json = JsonNode.Parse(bytes)?.AsObject() ?? throw new InvalidDataException("模型登记格式无效 / Invalid model registration.");
+        var matches = json.Select(pair => pair.Key).Where(key => key.Equals(nameof(ModelProfile.DisplayName), StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (matches.Length > 1) throw new InvalidDataException("模型登记包含重复字段 / Duplicate registration fields.");
+        json[matches.FirstOrDefault() ?? nameof(ModelProfile.DisplayName)] = name;
+        if (!canChange()) throw new InvalidOperationException("本地服务状态已改变，未保存名称 / Local service state changed; name was not saved.");
+        if (ModelConfigurationFile.Digest(path) != digest) throw new IOException("模型登记已被外部修改，请重试 / Registration changed outside the launcher.");
+        await ModelConfigurationFile.WriteAtomicallyAsync(path, json.ToJsonString(SerializerOptions) + Environment.NewLine, token).ConfigureAwait(false);
+        return registration with { DisplayName = name };
+    }
+
+    /// <summary>Updates only the next-launch pointer; parameter documents and other metadata are untouched.</summary>
+    public async Task<ModelProfile> UpdatePreferredConfigurationAsync(string runtimeRoot, ModelProfile expected, string selectedPath,
+        Func<bool> canChange, CancellationToken token = default)
+    {
+        var root = Path.GetFullPath(runtimeRoot);
+        ModelConfigurationFile.GetDirectory(expected, root);
+        if (!canChange()) throw new InvalidOperationException("模型正在使用，不能更改启动配置 / The model is in use; startup configuration cannot be changed.");
+        var path = Path.Combine(GetProfilesDirectory(root), expected.Id + ".json");
+        var bytes = await File.ReadAllBytesAsync(path, token).ConfigureAwait(false);
+        var digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+        var registration = ParseRegistration(bytes, expected);
+        selectedPath = ModelConfigurationSelection.RequireFile(selectedPath, registration, root);
+        if (registration.ConfigurationInitialized
+            && string.Equals(registration.PreferredConfigurationPath, selectedPath, StringComparison.OrdinalIgnoreCase))
+            return registration;
+        var json = JsonNode.Parse(bytes)?.AsObject() ?? throw new InvalidDataException("模型登记格式无效 / Invalid model registration.");
+        SetField(nameof(ModelProfile.PreferredConfigurationPath), JsonValue.Create(selectedPath));
+        SetField(nameof(ModelProfile.ConfigurationInitialized), JsonValue.Create(true));
+        if (!canChange()) throw new InvalidOperationException("模型运行状态已改变，未更改启动配置 / Model state changed; startup selection was not saved.");
+        ModelConfigurationSelection.RequireFile(selectedPath, registration, root);
+        if (ModelConfigurationFile.Digest(path) != digest) throw new IOException("模型登记已被修改，请重试 / Model registration changed; retry.");
+        await ModelConfigurationFile.WriteAtomicallyAsync(path, json.ToJsonString(SerializerOptions) + Environment.NewLine, token).ConfigureAwait(false);
+        return registration with { PreferredConfigurationPath = selectedPath, ConfigurationInitialized = true };
+
+        void SetField(string name, JsonNode? value)
+        {
+            var matches = json.Select(pair => pair.Key).Where(key => key.Equals(name, StringComparison.OrdinalIgnoreCase)).ToArray();
+            if (matches.Length > 1) throw new InvalidDataException("模型登记包含重复字段 / Duplicate registration fields.");
+            json[matches.FirstOrDefault() ?? name] = value;
+        }
     }
 
     public async Task SaveAsync(
         string runtimeRoot,
         ModelProfile profile,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool registrationOnly = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         ArgumentNullException.ThrowIfNull(profile);
         var root = Path.GetFullPath(runtimeRoot);
-        var errors = ModelProfileValidator.Validate(profile, root);
+        var validationProfile = registrationOnly
+            ? profile.ConfigurationInitialized
+                ? RegistrationValidationProfile(profile)
+                : profile with { ChatTemplateRelativePath = null, DefaultParameters = null }
+            : profile;
+        var errors = ModelProfileValidator.Validate(validationProfile, root, validateConversationLimits: !registrationOnly);
         if (errors.Count > 0)
         {
             throw new InvalidDataException(string.Join(Environment.NewLine, errors));
         }
 
         var modelPath = Path.GetFullPath(Path.Combine(root, profile.ModelRelativePath));
-        if (!File.Exists(modelPath))
+        if (!registrationOnly && !File.Exists(modelPath))
         {
             throw new FileNotFoundException("Profile 指向的 GGUF 主模型不存在。", modelPath);
         }
 
+        var existingPath = Path.Combine(GetProfilesDirectory(root), profile.Id + ".json");
+        if (File.Exists(existingPath))
+        {
+            var existing = JsonSerializer.Deserialize<ModelProfile>(await File.ReadAllTextAsync(existingPath, cancellationToken).ConfigureAwait(false), SerializerOptions);
+            if (existing?.ResourceCatalogInitialized == true) profile = profile with { ResourceCatalogInitialized = true };
+            if (!profile.ConfigurationInitialized && existing?.ConfigurationInitialized == true)
+                profile = profile with { ConfigurationInitialized = true, PreferredConfigurationPath = existing.PreferredConfigurationPath };
+        }
+        if (!profile.ConfigurationInitialized)
+        {
+            var initial = ModelConfigurationFile.InitialPath(profile, root);
+            var suffix = 2;
+            while (File.Exists(initial)) initial = Path.Combine(Path.GetDirectoryName(initial)!, $"未命名-{suffix++}.json");
+            await ModelConfigurationFile.WriteInitialAsync(initial, profile, root, cancellationToken).ConfigureAwait(false);
+            profile = profile with { ConfigurationInitialized = true, PreferredConfigurationPath = initial };
+        }
+        if (!registrationOnly && profile.PreferredConfigurationPath is { } configurationPath)
+            await ModelConfigurationFile.WriteAsync(configurationPath, profile, root, cancellationToken, requireExisting: true).ConfigureAwait(false);
         var profilesDirectory = GetProfilesDirectory(root);
         Directory.CreateDirectory(profilesDirectory);
         var path = Path.Combine(profilesDirectory, profile.Id + ".json");
@@ -501,16 +595,7 @@ public sealed class JsonModelProfileStore
                 json,
                 new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
                 cancellationToken).ConfigureAwait(false);
-            if (File.Exists(path))
-            {
-                File.Copy(path, path + ".bak", overwrite: true);
-            }
-
             File.Move(temporaryPath, path, overwrite: true);
-            if (!File.Exists(path + ".bak"))
-            {
-                File.Copy(path, path + ".bak", overwrite: false);
-            }
 
         }
         finally

@@ -49,4 +49,7 @@ public sealed record LauncherSettings
     public bool LlamaMetricsSupported { get; init; }
 
     public bool DetailedDiagnosticsEnabled { get; init; }
+
+    /// <summary>Authentication policy for the next Local client launch; never a model parameter.</summary>
+    public bool LocalRequiresOpenAiAuth { get; init; }
 }

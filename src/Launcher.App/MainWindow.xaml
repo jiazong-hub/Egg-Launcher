@@ -12,6 +12,44 @@
         Loaded="Window_Loaded" SizeChanged="Window_SizeChanged" DpiChanged="Window_DpiChanged" LocationChanged="Window_AdaptiveLocationChanged"
         StateChanged="Window_StateChanged" Closing="Window_Closing" Closed="Window_Closed">
     <Window.Resources>
+        <Style x:Key="ConfigurationMenuStyle" TargetType="ContextMenu">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="{DynamicResource CardBackgroundBrush}" BorderBrush="{DynamicResource ControlBorderBrush}"
+                                BorderThickness="1" CornerRadius="8" Padding="5" Width="180">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="320">
+                                <ItemsPresenter />
+                            </ScrollViewer>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="ConfigurationMenuItemStyle" TargetType="MenuItem">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Border x:Name="Entry" Background="Transparent" CornerRadius="5" Padding="8,7">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="22"/></Grid.ColumnDefinitions>
+                                <TextBlock Text="{TemplateBinding Header}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center" />
+                                <TextBlock x:Name="SelectedMark" Grid.Column="1" Text="√" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource AccentBrightBrush}" Visibility="Hidden" />
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True"><Setter TargetName="SelectedMark" Property="Visibility" Value="Visible"/></Trigger>
+                            <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="Entry" Property="Background" Value="{DynamicResource ButtonHoverBrush}"/></Trigger>
+                            <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Entry" Property="Opacity" Value="0.5"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <Style x:Key="TitleBarButtonStyle" TargetType="Button">
             <Setter Property="Foreground" Value="{DynamicResource PrimaryBrush}" />
             <Setter Property="Background" Value="Transparent" />
@@ -235,10 +273,24 @@
                                         <Border x:Name="LaunchCard" Style="{StaticResource CardStyle}" Margin="0,0,8,8" MinHeight="236">
                                             <Grid>
                                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                                <DockPanel LastChildFill="True">
-                                                    <ContentControl DockPanel.Dock="Left" Width="30" Height="30" Foreground="{DynamicResource AccentBrightBrush}" ContentTemplate="{StaticResource LaunchIconTemplate}" />
-                                                    <TextBlock TextWrapping="Wrap" Margin="14,0,0,0" VerticalAlignment="Center" FontSize="21" FontWeight="SemiBold" Text="{DynamicResource LaunchChatGpt}"/>
-                                                </DockPanel>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                    <DockPanel LastChildFill="True">
+                                                        <ContentControl DockPanel.Dock="Left" Width="30" Height="30" Foreground="{DynamicResource AccentBrightBrush}" ContentTemplate="{StaticResource LaunchIconTemplate}" />
+                                                        <TextBlock TextWrapping="Wrap" Margin="14,0,0,0" VerticalAlignment="Center" FontSize="21" FontWeight="SemiBold" Text="{DynamicResource LaunchChatGpt}"/>
+                                                    </DockPanel>
+                                                    <Button x:Name="LocalAuthenticationButton" Grid.Column="1" Margin="12,0,0,0"
+                                                            HorizontalAlignment="Right" VerticalAlignment="Center" IsEnabled="False"
+                                                            Style="{StaticResource CardCornerIconButtonStyle}"
+                                                            ToolTipService.ShowOnDisabled="True" ToolTipService.InitialShowDelay="500"
+                                                            ToolTip="{DynamicResource LocalAuthenticationOffHint}"
+                                                            AutomationProperties.Name="{DynamicResource LocalAuthentication}"
+                                                            Click="LocalAuthenticationButton_Click">
+                                                        <ContentControl x:Name="LocalAuthenticationIcon" Width="20" Height="20"
+                                                                        Foreground="{DynamicResource PrimaryBrush}"
+                                                                        ContentTemplate="{StaticResource AuthenticationOffIconTemplate}" />
+                                                    </Button>
+                                                </Grid>
                                                 <StackPanel Grid.Row="1" VerticalAlignment="Center">
                                                     <Button x:Name="LaunchChatGptButton" HorizontalAlignment="Center" Width="220" MaxWidth="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=StackPanel}}" Margin="0" Style="{StaticResource PrimaryActionButton}" Content="{DynamicResource LaunchChatGpt}" Click="LaunchChatGptButton_Click" />
                                                 </StackPanel>
@@ -311,6 +363,11 @@
                                                         <TextBlock TextWrapping="Wrap" Margin="14,0,0,0" VerticalAlignment="Center" FontSize="21" FontWeight="SemiBold" Text="{DynamicResource Settings}"/>
                                                     </DockPanel>
                                                     <StackPanel Grid.Column="1" Margin="12,0,0,0" HorizontalAlignment="Right" VerticalAlignment="Center" Orientation="Horizontal">
+                                                        <Button x:Name="ProjectHomeButton" Margin="0,0,8,0" Style="{StaticResource CardCornerIconButtonStyle}"
+                                                                ToolTip="{DynamicResource OpenProjectHome}" AutomationProperties.Name="{DynamicResource OpenProjectHome}" Click="ProjectHomeButton_Click">
+                                                            <ContentControl Width="20" Height="20" Foreground="{DynamicResource PrimaryBrush}"
+                                                                            ContentTemplate="{StaticResource HomeIconTemplate}" />
+                                                        </Button>
                                                         <Button x:Name="LanguageToggleButton" Margin="0,0,8,0" Style="{StaticResource CardCornerIconButtonStyle}"
                                                                 ToolTip="{DynamicResource SwitchLanguageToolTip}" Click="LanguageToggleButton_Click">
                                                             <Button.ContextMenu>
@@ -453,9 +510,27 @@
                                                                    FontSize="16" Foreground="{DynamicResource SecondaryBrush}"
                                                                    Text="{Binding Summary}" Visibility="{Binding OpenAiDetailsVisibility}" />
 
-                                                        <Button Grid.Row="3" Tag="{Binding Profile}" HorizontalAlignment="Center"
-                                                                MinWidth="176" Height="38" Padding="12,6" Margin="0" FontSize="16" Content="{DynamicResource Configure}"
-                                                                Visibility="{Binding SettingsVisibility}" IsEnabled="{Binding CanEdit}" Click="ModeCardSettings_Click" />
+                                                        <Grid Grid.Row="3" HorizontalAlignment="Center" Visibility="{Binding SettingsVisibility}">
+                                                            <Grid.ColumnDefinitions><ColumnDefinition Width="84"/><ColumnDefinition Width="6"/><ColumnDefinition Width="140"/><ColumnDefinition Width="6"/><ColumnDefinition Width="84"/></Grid.ColumnDefinitions>
+                                                            <Button Tag="{Binding Profile}" Height="38" Padding="6,2" Margin="0" FontSize="12"
+                                                                    IsEnabled="{Binding CanEdit}" Click="ModeCardManagement_Click" ToolTip="{DynamicResource ModelResourceManagement}">
+                                                                <TextBlock Text="{DynamicResource ModeCardManagement}" TextWrapping="NoWrap" TextAlignment="Center"/>
+                                                            </Button>
+                                                            <Button Grid.Column="2" Tag="{Binding Profile}" Height="38" Padding="7,2" Margin="0" FontSize="12"
+                                                                    HorizontalContentAlignment="Stretch" IsEnabled="{Binding CanEdit}" Click="ModeCardConfiguration_Click"
+                                                                    ToolTip="{Binding StartupConfigurationToolTip}" AutomationProperties.Name="{Binding StartupConfigurationText}">
+                                                                <Grid HorizontalAlignment="Center">
+                                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="14"/></Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="{Binding StartupConfigurationPrefix}" TextWrapping="NoWrap" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="1" MaxWidth="36" Text="{Binding StartupConfigurationName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" VerticalAlignment="Center"/>
+                                                                    <TextBlock Grid.Column="2" Text="▾" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                                                </Grid>
+                                                            </Button>
+                                                            <Button Grid.Column="4" Tag="{Binding Profile}" Height="38" Padding="6,2" Margin="0" FontSize="12"
+                                                                    IsEnabled="{Binding CanEdit}" Click="ModeCardSettings_Click" ToolTip="{DynamicResource Configure}">
+                                                                <TextBlock Text="{DynamicResource ModeCardParameters}" TextWrapping="NoWrap" TextAlignment="Center"/>
+                                                            </Button>
+                                                        </Grid>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
@@ -564,29 +639,15 @@
                                                 <Button x:Name="EditModelButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
                                                         Content="{DynamicResource EditParameters}" ToolTip="{DynamicResource EditModelToolTip}"
                                                         Click="EditModelButton_Click" />
-                                                <Button x:Name="ChangeModelTypeButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource ChangeModelType}" ToolTip="{DynamicResource ChangeModelTypeToolTip}"
-                                                        Click="ChangeModelTypeButton_Click" />
-                                                <Button x:Name="ModelDetailsButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource ModelDetails}" ToolTip="{DynamicResource ModelDetailsToolTip}"
-                                                        Click="ModelDetailsButton_Click" />
-                                                <Button x:Name="LoadExternalMtpButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource LoadExternalMtp}" ToolTip="{DynamicResource LoadExternalMtpToolTip}"
-                                                        Click="LoadExternalMtpButton_Click" />
-                                                <Button x:Name="RemoveExternalMtpButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource RemoveExternalMtp}" ToolTip="{DynamicResource RemoveExternalMtpToolTip}"
-                                                        Click="RemoveExternalMtpButton_Click" />
-                                                <Button x:Name="LoadExternalVisionButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource LoadExternalVision}" ToolTip="{DynamicResource LoadExternalVisionToolTip}"
-                                                        Click="LoadExternalVisionButton_Click" />
-                                                <Button x:Name="RemoveExternalVisionButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource RemoveExternalVision}" ToolTip="{DynamicResource RemoveExternalVisionToolTip}"
-                                                        Click="RemoveExternalVisionButton_Click" />
+                                                <Button x:Name="ModelResourcesButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
+                                                        Content="{DynamicResource ModelResourceManagement}" ToolTip="{DynamicResource ModelResourceManagementTip}"
+                                                        ToolTipService.InitialShowDelay="500" Click="ModelResourcesButton_Click" />
                                                 <Button x:Name="ToggleModelVisibilityButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
                                                         Content="{DynamicResource ShowOrHide}" ToolTip="{DynamicResource ShowOrHideToolTip}"
                                                         Click="ToggleModelVisibilityButton_Click" />
                                                 <Button x:Name="DeleteLocalModelButton" Margin="0,0,0,8" Padding="12,8" FontSize="13"
                                                         Style="{StaticResource DangerActionButton}" Content="{DynamicResource DeleteModelAndConfig}"
+                                                        ToolTipService.ShowOnDisabled="True" ToolTipService.InitialShowDelay="500"
                                                         ToolTip="{DynamicResource DeleteModelAndConfigToolTip}" Click="DeleteLocalModelButton_Click" />
                                             </WrapPanel>
                                         </StackPanel>

@@ -40,6 +40,7 @@ public sealed class ModelArtifactWriter(
                 return true;
             },
             cancellationToken,
-            localModelCatalogPath: catalogPath);
+            localModelCatalogPath: catalogPath,
+            includeConfiguration: true);
     }
 }

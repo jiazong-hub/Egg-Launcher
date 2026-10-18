@@ -4,6 +4,7 @@ using System.Text;
 using Launcher.ChatGPT.Configuration;
 using Launcher.ChatGPT.Processes;
 using Launcher.Core.Configuration;
+using Launcher.Core.Diagnostics;
 using Launcher.Core.Persistence;
 using Launcher.Core.State;
 using Launcher.Models.Profiles;
@@ -15,12 +16,22 @@ public sealed class ModeSwitchCoordinator(
     ISettingsStore settingsStore,
     IChatGptClientDetector clientDetector,
     ChatGptConfigTransactionService configTransactionService,
-    LauncherDataPaths dataPaths)
+    LauncherDataPaths dataPaths,
+    DiagnosticJournal? diagnostics = null)
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly DiagnosticJournal _diagnostics = diagnostics ?? DiagnosticJournal.None;
 
-    public async Task<ModeSwitchResult> SwitchToLocalAsync(
+    public Task<ModeSwitchResult> SwitchToLocalAsync(LocalModeSwitchRequest request, CancellationToken cancellationToken = default) =>
+        _diagnostics.RunAsync("local_mode_apply", new Dictionary<string, object?>
+        {
+            ["modelId"] = request?.Profile?.Id,
+            ["configuration"] = Path.GetFileName(request?.Profile?.PreferredConfigurationPath),
+        }, operation => SwitchToLocalCoreAsync(request!, operation, cancellationToken));
+
+    private async Task<ModeSwitchResult> SwitchToLocalCoreAsync(
         LocalModeSwitchRequest request,
+        DiagnosticOperation operation,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -33,6 +44,10 @@ public sealed class ModeSwitchCoordinator(
                 dataPaths.ModeSwitchLockFile,
                 cancellationToken).ConfigureAwait(false);
             var settings = await settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+            operation.Set("requestedRequiresOpenAiAuth", settings.LocalRequiresOpenAiAuth);
+            operation.Set("preferenceSource", settingsStore is JsonSettingsStore jsonStore
+                ? jsonStore.LastLoadUsedAuthenticationDefault ? "missing_field_default" : "stored_setting" : "unknown");
+            await operation.StageAsync("check_client_and_model").ConfigureAwait(false);
             if (settings.SelectedMode == ProviderMode.Local)
             {
                 if (clientDetector.IsRunning())
@@ -50,13 +65,15 @@ public sealed class ModeSwitchCoordinator(
 
             var runtimeRoot = Path.GetFullPath(request.RuntimeRoot);
             ValidateRuntimeAndProfile(request.Profile, runtimeRoot);
+            await operation.StageAsync("generate_runtime_files").ConfigureAwait(false);
 
             Directory.CreateDirectory(dataPaths.GeneratedDirectory);
             Directory.CreateDirectory(dataPaths.LogsDirectory);
-            var artifactSnapshot = await CaptureGeneratedArtifactsAsync(cancellationToken).ConfigureAwait(false);
+            Launcher.Scripts.Batch.BatchScriptGenerator.EnsureCanWrite(runtimeRoot, request.Profile.Id);
+            var artifactSnapshot = await CaptureGeneratedArtifactsAsync(runtimeRoot, request.Profile.Id, cancellationToken).ConfigureAwait(false);
             try
             {
-                await WriteGeneratedArtifactsAsync(request.Profile, runtimeRoot, cancellationToken)
+                await WriteGeneratedArtifactsAsync(request.Profile, runtimeRoot, operation, cancellationToken)
                     .ConfigureAwait(false);
 
                 var publicPort = SelectPublicProxyPort(settings, request.RouterPort);
@@ -72,6 +89,7 @@ public sealed class ModeSwitchCoordinator(
                     AutoCompactTokenLimit = request.Profile.AutoCompactTokenLimit,
                     ToolOutputTokenLimit = request.Profile.ToolOutputTokenLimit,
                     CodexStreamIdleTimeoutMinutes = request.Profile.CodexStreamIdleTimeoutMinutes,
+                    RequiresOpenAiAuth = settings.LocalRequiresOpenAiAuth,
                     ShowThinkingProcess = request.Profile.ShowThinkingProcess && request.Profile.SupportsThinkingSwitch == true
                         && (request.Profile.ThinkingEnabled ?? request.Profile.DefaultThinkingEnabled) == true,
                     DefaultReasoningEffort = ReasoningDefaultSelection.ForCodex(request.Profile),
@@ -82,15 +100,20 @@ public sealed class ModeSwitchCoordinator(
 
                 if (settings.SelectedMode == ProviderMode.Local)
                 {
-                    return await UpdateSelectedLocalModelAsync(
+                    await operation.StageAsync("update_local_configuration").ConfigureAwait(false);
+                    var result = await UpdateSelectedLocalModelAsync(
                         settings,
                         request,
                         runtimeRoot,
                         configRequest,
                         artifactSnapshot,
+                        operation,
                         cancellationToken).ConfigureAwait(false);
+                    operation.Set("appliedRequiresOpenAiAuth", settings.LocalRequiresOpenAiAuth);
+                    return result;
                 }
 
+                await operation.StageAsync("write_codex_configuration").ConfigureAwait(false);
                 var transaction = await configTransactionService.ApplyLocalAsync(
                     configRequest,
                     dataPaths,
@@ -99,14 +122,18 @@ public sealed class ModeSwitchCoordinator(
                 try
                 {
                     var updated = targetSettings;
+                    await operation.StageAsync("commit_launcher_settings").ConfigureAwait(false);
                     await settingsStore.SaveAsync(updated, cancellationToken).ConfigureAwait(false);
                     transaction = await configTransactionService.CommitLauncherSettingsAsync(
                         dataPaths.RecoveryFile,
                         cancellationToken).ConfigureAwait(false);
+                    operation.Set("appliedRequiresOpenAiAuth", settings.LocalRequiresOpenAiAuth);
                     return new ModeSwitchResult(true, ProviderMode.Local, updated.SelectedModelId, transaction);
                 }
                 catch
                 {
+                    operation.Set("failureStage", operation.Stage);
+                    await operation.StageAsync("rollback_codex_and_settings").ConfigureAwait(false);
                     await configTransactionService.PrepareOpenAiRestoreAsync(
                         dataPaths.RecoveryFile,
                         targetSettings,
@@ -119,12 +146,15 @@ public sealed class ModeSwitchCoordinator(
                     await configTransactionService.CommitLauncherSettingsAsync(
                         dataPaths.RecoveryFile,
                         CancellationToken.None).ConfigureAwait(false);
+                    operation.Set("configurationRollback", "completed");
                     throw;
                 }
             }
             catch
             {
+                operation.Set("generatedFilesRollbackStage", operation.Stage);
                 await RestoreGeneratedArtifactsAsync(artifactSnapshot, CancellationToken.None).ConfigureAwait(false);
+                operation.Set("generatedFilesRollback", "completed");
                 throw;
             }
         }
@@ -140,6 +170,7 @@ public sealed class ModeSwitchCoordinator(
         string runtimeRoot,
         ChatGptLocalModeRequest configRequest,
         GeneratedArtifactsSnapshot artifactSnapshot,
+        DiagnosticOperation operation,
         CancellationToken cancellationToken)
     {
         try
@@ -148,6 +179,7 @@ public sealed class ModeSwitchCoordinator(
                 configRequest,
                 dataPaths.RecoveryFile,
                 cancellationToken).ConfigureAwait(false);
+            await operation.StageAsync("commit_launcher_settings").ConfigureAwait(false);
             var updated = configRequest.TargetLauncherSettings
                 ?? LocalSettings(settings, request, runtimeRoot, request.RouterPort);
             await settingsStore.SaveAsync(updated, cancellationToken).ConfigureAwait(false);
@@ -158,6 +190,8 @@ public sealed class ModeSwitchCoordinator(
         }
         catch (Exception exception)
         {
+            operation.Set("failureStage", operation.Stage);
+            await operation.StageAsync("rollback_local_update").ConfigureAwait(false);
             var rollbackErrors = new List<Exception>();
             try
             {
@@ -193,17 +227,23 @@ public sealed class ModeSwitchCoordinator(
 
             if (rollbackErrors.Count > 0)
             {
+                operation.Set("rollback", "incomplete");
+                operation.Set("rollbackErrorCount", rollbackErrors.Count);
                 rollbackErrors.Insert(0, exception);
                 throw new AggregateException(
                     "Local 模型切换失败且未能完整回滚，请停止启动 ChatGPT 并检查恢复记录。",
                     rollbackErrors);
             }
 
+            operation.Set("rollback", "completed");
             throw;
         }
     }
 
-    public async Task<ModeSwitchResult> SwitchToOpenAIAsync(CancellationToken cancellationToken = default)
+    public Task<ModeSwitchResult> SwitchToOpenAIAsync(CancellationToken cancellationToken = default) =>
+        _diagnostics.RunAsync("online_mode_restore", null, operation => SwitchToOpenAiCoreAsync(operation, cancellationToken));
+
+    private async Task<ModeSwitchResult> SwitchToOpenAiCoreAsync(DiagnosticOperation operation, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         var officialConfigRestored = false;
@@ -228,15 +268,19 @@ public sealed class ModeSwitchCoordinator(
             }
 
             var updated = settings with { SelectedMode = ProviderMode.OpenAI };
+            await operation.StageAsync("prepare_official_restore").ConfigureAwait(false);
             await configTransactionService.PrepareOpenAiRestoreAsync(
                 dataPaths.RecoveryFile,
                 settings,
                 updated,
                 cancellationToken).ConfigureAwait(false);
+            await operation.StageAsync("restore_official_configuration").ConfigureAwait(false);
             var transaction = await configTransactionService.RestoreOpenAIAsync(
                 dataPaths.RecoveryFile,
                 cancellationToken).ConfigureAwait(false);
             officialConfigRestored = true;
+            operation.Set("officialConfigRestored", true);
+            await operation.StageAsync("commit_launcher_settings").ConfigureAwait(false);
             await settingsStore.SaveAsync(updated, cancellationToken).ConfigureAwait(false);
             transaction = await configTransactionService.CommitLauncherSettingsAsync(
                 dataPaths.RecoveryFile,
@@ -336,16 +380,26 @@ public sealed class ModeSwitchCoordinator(
         return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 
-    private Task WriteGeneratedArtifactsAsync(ModelProfile profile, string runtimeRoot, CancellationToken cancellationToken) =>
-        Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(
-            profile, runtimeRoot, dataPaths.RouterPresetFile, dataPaths.LocalModelCatalogFile, cancellationToken);
+    private async Task WriteGeneratedArtifactsAsync(ModelProfile profile, string runtimeRoot, DiagnosticOperation operation, CancellationToken cancellationToken)
+    {
+        await operation.StageAsync("generate_batch").ConfigureAwait(false);
+        await Launcher.Scripts.Batch.BatchScriptGenerator.WriteOwnedAsync(runtimeRoot, profile, cancellationToken).ConfigureAwait(false);
+        await operation.StageAsync("generate_router_preset_and_catalog").ConfigureAwait(false);
+        await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(
+            profile, runtimeRoot, dataPaths.RouterPresetFile, dataPaths.LocalModelCatalogFile, cancellationToken).ConfigureAwait(false);
+        await operation.StageAsync("write_applied_run_snapshot").ConfigureAwait(false);
+        await Launcher.Orchestration.Models.AppliedLocalRun.WriteAsync(profile, runtimeRoot, dataPaths, cancellationToken).ConfigureAwait(false);
+    }
 
-    private async Task<GeneratedArtifactsSnapshot> CaptureGeneratedArtifactsAsync(
+    private async Task<GeneratedArtifactsSnapshot> CaptureGeneratedArtifactsAsync(string root, string profileId,
         CancellationToken cancellationToken)
     {
         var catalog = await CaptureFileAsync(dataPaths.LocalModelCatalogFile, cancellationToken).ConfigureAwait(false);
         var preset = await CaptureFileAsync(dataPaths.RouterPresetFile, cancellationToken).ConfigureAwait(false);
-        return new GeneratedArtifactsSnapshot(catalog, preset);
+        var applied = await CaptureFileAsync(dataPaths.AppliedLocalRunFile, cancellationToken).ConfigureAwait(false);
+        var batchPath = Launcher.Scripts.Batch.BatchScriptGenerator.GetOutputPath(root, profileId);
+        var batch = await CaptureFileAsync(batchPath, cancellationToken).ConfigureAwait(false);
+        return new GeneratedArtifactsSnapshot(catalog, preset, applied, batchPath, batch);
     }
 
     private async Task RestoreGeneratedArtifactsAsync(
@@ -356,6 +410,8 @@ public sealed class ModeSwitchCoordinator(
             .ConfigureAwait(false);
         await RestoreFileAsync(dataPaths.RouterPresetFile, snapshot.RouterPreset, cancellationToken)
             .ConfigureAwait(false);
+        await RestoreFileAsync(dataPaths.AppliedLocalRunFile, snapshot.AppliedRun, cancellationToken).ConfigureAwait(false);
+        await RestoreFileAsync(snapshot.BatchPath, snapshot.Batch, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<GeneratedFileSnapshot> CaptureFileAsync(
@@ -421,7 +477,10 @@ public sealed class ModeSwitchCoordinator(
 
     private sealed record GeneratedArtifactsSnapshot(
         GeneratedFileSnapshot Catalog,
-        GeneratedFileSnapshot RouterPreset);
+        GeneratedFileSnapshot RouterPreset,
+        GeneratedFileSnapshot AppliedRun,
+        string BatchPath,
+        GeneratedFileSnapshot Batch);
 
     private sealed record GeneratedFileSnapshot(bool Existed, string? Content);
 }

@@ -10,6 +10,8 @@ using Launcher.Core.Persistence;
 using Launcher.Core.Security;
 using Launcher.Runtime.Transport;
 using Launcher.Runtime.Router;
+using Launcher.Runtime.Detection;
+using Launcher.Runtime.Processes;
 using Launcher.Orchestration.ModeSwitch;
 using Launcher.Models.Profiles;
 
@@ -39,10 +41,12 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
     private readonly Action<string?>? _diagnosticRouterRunIdChanged;
     private readonly Func<string, string, string, Task>? _diagnosticEventWriter;
     private readonly Func<DiagnosticEvent, Task>? _structuredDiagnosticEventWriter;
+    private readonly DiagnosticJournal _operationDiagnostics;
     private readonly LlamaModelManagementClient? _modelManagementClient;
+    private readonly LlamaRuntimeVersionReader _runtimeVersionReader;
     private LlamaRouterProcessInfo? _routerInfo;
     private RouterLaunchFingerprint? _activeFingerprint;
-    private string? _thinkingDisplayProfileStamp;
+    private ModelProfile? _runningProfile;
     private RuntimeState? _lastPublishedRuntimeState;
     private DateTimeOffset? _lastRuntimeStateWriteAtUtc;
     private ProviderMode _lastKnownSelectedMode = ProviderMode.OpenAI;
@@ -68,9 +72,12 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         Func<string, string, string, Task>? diagnosticEventWriter = null,
         LlamaModelManagementClient? modelManagementClient = null,
         Func<DiagnosticEvent, Task>? structuredDiagnosticEventWriter = null,
-        Launcher.ChatGPT.Processes.IChatGptClientDetector? clientDetector = null)
+        Launcher.ChatGPT.Processes.IChatGptClientDetector? clientDetector = null,
+        DiagnosticJournal? diagnostics = null,
+        IProcessRunner? runtimeVersionProcessRunner = null)
     {
         _settingsStore = settingsStore;
+        _operationDiagnostics = diagnostics ?? DiagnosticJournal.None;
         _clientDetector = clientDetector ?? new Launcher.ChatGPT.Processes.ChatGptClientDetector();
         _processManager = processManager;
         _safetyProxy = safetyProxy;
@@ -84,6 +91,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         _diagnosticEventWriter = diagnosticEventWriter;
         _structuredDiagnosticEventWriter = structuredDiagnosticEventWriter;
         _modelManagementClient = modelManagementClient;
+        _runtimeVersionReader = new(runtimeVersionProcessRunner ?? new ProcessRunner());
         _routerApiKey = string.IsNullOrWhiteSpace(routerApiKey)
             ? Convert.ToHexString(RandomNumberGenerator.GetBytes(32))
             : routerApiKey;
@@ -109,6 +117,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
 
                 _routerInfo = null;
                 _activeFingerprint = null;
+                _runningProfile = null;
                 if (stopped || !_hasPublishedRuntimeState || !File.Exists(_dataPaths.RuntimeStateFile))
                 {
                     await TryWriteRuntimeStateAsync(new RuntimeState
@@ -318,19 +327,52 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         LlamaRouterStartRequest request;
         try
         {
-            ModelProfile? startupProfile = null;
-            if (settings.LlamaRoot is string runtimeRoot)
+            ModelProfile startupProfile;
+            if (_clientDetector.IsRunning())
             {
-                var profiles = await new JsonModelProfileStore().LoadAsync(runtimeRoot, cancellationToken).ConfigureAwait(false);
-                var profile = profiles.Profiles.FirstOrDefault(item => item.Id == settings.SelectedModelId);
-                if (profile is not null)
-                {
-                    var guarded = await Launcher.Orchestration.Models.ReasoningStartupGuard.EnsureAsync(
-                        profile, settings, _settingsStore, _dataPaths, _clientDetector, cancellationToken).ConfigureAwait(false);
-                    if (!ReferenceEquals(guarded, profile)) settings = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
-                    startupProfile = guarded;
-                }
+                // Recovery of an existing conversation never reads a changed/deleted parameter file.
+                startupProfile = _runningProfile is { } running && running.Id == settings.SelectedModelId ? running
+                    : await Launcher.Orchestration.Models.AppliedLocalRun.ReadAsync(settings.SelectedModelId!, settings.LlamaRoot!, _dataPaths, cancellationToken).ConfigureAwait(false);
             }
+            else
+            {
+                var profiles = await new JsonModelProfileStore().LoadAsync(settings.LlamaRoot!, cancellationToken).ConfigureAwait(false);
+                var model = profiles.Profiles.FirstOrDefault(item => item.Id == settings.SelectedModelId)
+                    ?? throw new InvalidDataException("当前模型登记不存在 / Selected model registration missing.");
+                startupProfile = await Launcher.Orchestration.Models.ModelStartupConfiguration.ResolveAsync(model, settings.LlamaRoot!, cancellationToken, _operationDiagnostics).ConfigureAwait(false);
+            }
+            var expectedPreset = Launcher.Scripts.RouterPreset.RouterPresetGenerator.Generate(startupProfile, settings.LlamaRoot!, false);
+            if (_clientDetector.IsRunning())
+            {
+                if (!File.Exists(_dataPaths.RouterPresetFile) || await File.ReadAllTextAsync(_dataPaths.RouterPresetFile, cancellationToken).ConfigureAwait(false) != expectedPreset)
+                    throw new InvalidOperationException("客户端正在运行且配置不同，请关闭客户端后重新启动 / Close the client before applying a different configuration.");
+            }
+            else if (File.Exists(_dataPaths.RecoveryFile))
+            {
+                var recovery = System.Text.Json.JsonSerializer.Deserialize<Launcher.ChatGPT.Configuration.ManagedConfigSnapshot>(
+                    await File.ReadAllTextAsync(_dataPaths.RecoveryFile, cancellationToken).ConfigureAwait(false))
+                    ?? throw new InvalidDataException("配置恢复记录无效 / Invalid recovery record.");
+                await new Launcher.Orchestration.ModeSwitch.ModeSwitchCoordinator(_settingsStore, _clientDetector,
+                    new Launcher.ChatGPT.Configuration.ChatGptConfigTransactionService(_clientDetector), _dataPaths, _operationDiagnostics)
+                    .SwitchToLocalAsync(new Launcher.Orchestration.ModeSwitch.LocalModeSwitchRequest
+                    {
+                        CodexHome = Path.GetDirectoryName(recovery.ConfigPath)!,
+                        RuntimeRoot = settings.LlamaRoot!,
+                        Profile = startupProfile,
+                        RouterPort = settings.RouterPort,
+                    }, cancellationToken).ConfigureAwait(false);
+                settings = await _settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            await new Launcher.Orchestration.Models.ModelArtifactTransaction().ExecuteAsync(settings.LlamaRoot!, startupProfile.Id, _dataPaths.RouterPresetFile, true,
+                async token =>
+                {
+                    await Launcher.Scripts.Batch.BatchScriptGenerator.WriteOwnedAsync(settings.LlamaRoot!, startupProfile, token).ConfigureAwait(false);
+                    await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(startupProfile, settings.LlamaRoot!, _dataPaths.RouterPresetFile, _dataPaths.LocalModelCatalogFile, token).ConfigureAwait(false);
+                    return true;
+                }, cancellationToken, localModelCatalogPath: _dataPaths.LocalModelCatalogFile, generatedFilesOnly: true).ConfigureAwait(false);
+            await Launcher.Orchestration.Models.AppliedLocalRun.WriteAsync(startupProfile, settings.LlamaRoot!, _dataPaths, cancellationToken,
+                codexApplied: _clientDetector.IsRunning() || File.Exists(_dataPaths.RecoveryFile)).ConfigureAwait(false);
+            _runningProfile = startupProfile;
             request = CreateStartRequest(settings);
             if (startupProfile is { } validated)
             {
@@ -369,6 +411,9 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         var attempt = 0;
         try
         {
+            // Query once per executable identity, outside port retries and health polling.
+            var runtimeVersion = await _runtimeVersionReader.ReadAsync(request.ExecutablePath, cancellationToken)
+                .ConfigureAwait(false);
             while (true)
             {
                 attempt++;
@@ -390,7 +435,6 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
                     _lastModelHealthState = null;
                     _safetyProxy.SetRouterRunId(_routerInfo.DiagnosticRunId);
                     _diagnosticRouterRunIdChanged?.Invoke(_routerInfo.DiagnosticRunId);
-                    var runtimeVersion = ReadRuntimeVersion(request.ExecutablePath);
                     await WriteDiagnosticEventAsync(
                         "router_started",
                         "info",
@@ -398,7 +442,9 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
                         new Dictionary<string, object?>
                         {
                             ["processId"] = _routerInfo.ProcessId,
-                            ["runtimeVersion"] = SafeDiagnosticToken(runtimeVersion),
+                            ["runtimeVersion"] = runtimeVersion.Version,
+                            ["runtimeVersionSource"] = runtimeVersion.Source,
+                            ["runtimeVersionQueryResult"] = _lastDetailedDiagnosticsEnabled == true ? runtimeVersion.QueryResult : null,
                             ["routerRunId"] = _routerInfo.DiagnosticRunId,
                             ["attemptCount"] = attempt,
                             ["startupDurationMs"] = startupStopwatch.ElapsedMilliseconds,
@@ -512,14 +558,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         }
 
         var proxyStartupStopwatch = Stopwatch.StartNew();
-        var profiles = await new JsonModelProfileStore().LoadAsync(settings.LlamaRoot!, cancellationToken).ConfigureAwait(false);
-        var activeProfile = profiles.Profiles.FirstOrDefault(profile => profile.Id == settings.SelectedModelId);
-        if (activeProfile is not null && Launcher.Scripts.Templates.ReasoningValidationState.RequiresCurrentProof(activeProfile))
-        {
-            var check = Launcher.Scripts.Templates.ReasoningValidationState.Check(activeProfile, settings.LlamaRoot!);
-            if (check.State != Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
-                throw new InvalidOperationException(check.Reason + " 请关闭 Codex 后重新保存或检测设置。");
-        }
+        var activeProfile = _runningProfile ?? throw new InvalidOperationException("缺少本次运行配置 / Missing runtime snapshot.");
         _safetyProxy.SetThinkingEnabled(activeProfile?.SupportsThinkingSwitch == true ? activeProfile.ThinkingEnabled : null);
         _safetyProxy.SetShowThinkingProcess(activeProfile?.ShowThinkingProcess == true && activeProfile.SupportsThinkingSwitch == true
             && (activeProfile.ThinkingEnabled ?? activeProfile.DefaultThinkingEnabled) == true);
@@ -631,22 +670,10 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         return settings;
     }
 
-    private async Task RefreshThinkingDisplayAsync(LauncherSettings settings, CancellationToken token)
+    private Task RefreshThinkingDisplayAsync(LauncherSettings settings, CancellationToken token)
     {
-        var path = Path.Combine(JsonModelProfileStore.GetProfilesDirectory(settings.LlamaRoot!), $"{settings.SelectedModelId}.json");
-        var file = new FileInfo(path);
-        var stamp = $"{path}|{file.Exists}|{(file.Exists ? file.Length : 0)}|{(file.Exists ? file.LastWriteTimeUtc.Ticks : 0)}";
-        if (stamp == _thinkingDisplayProfileStamp) return;
-        _safetyProxy.SetShowThinkingProcess(false);
-        if (file.Exists)
-        {
-            var profile = System.Text.Json.JsonSerializer.Deserialize<ModelProfile>(await File.ReadAllTextAsync(path, token).ConfigureAwait(false));
-            if (profile is not null && profile.ShowThinkingProcess && profile.SupportsThinkingSwitch == true
-                && (profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled) == true
-                && Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, settings.LlamaRoot!).State == Launcher.Scripts.Templates.ReasoningValidationStateKind.Current)
-                _safetyProxy.SetShowThinkingProcess(true);
-        }
-        _thinkingDisplayProfileStamp = stamp;
+        // Running transport uses the startup snapshot, not files being edited for the next run.
+        return Task.CompletedTask;
     }
 
     private static bool IsAddressAlreadyInUse(Exception exception)
@@ -971,6 +998,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
         _safetyProxy.SetDetailedDiagnosticsEnabled(detailedDiagnosticsEnabled);
         _processManager.SetDetailedDiagnosticsEnabled(detailedDiagnosticsEnabled);
         _diagnosticModeChanged?.Invoke(detailedDiagnosticsEnabled);
+        _operationDiagnostics.SetDetailed(detailedDiagnosticsEnabled);
 
         if (_lastDetailedDiagnosticsEnabled == detailedDiagnosticsEnabled)
         {
@@ -1110,18 +1138,6 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
             .Where(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '-' or '_')
             .ToArray());
         return string.IsNullOrEmpty(safe) ? "unknown" : safe;
-    }
-
-    private static string ReadRuntimeVersion(string executablePath)
-    {
-        try
-        {
-            return SafeDiagnosticToken(FileVersionInfo.GetVersionInfo(executablePath).ProductVersion);
-        }
-        catch
-        {
-            return "unknown";
-        }
     }
 
     private static string SafeRuntimeError(Exception exception)

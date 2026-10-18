@@ -103,7 +103,7 @@ public sealed class ReasoningValidationScopeTests
 
     [Theory]
     [InlineData("model.gguf", "模型文件")]
-    [InlineData("active.jinja", "聊天模板")]
+    [InlineData("scripts/templates/active.jinja", "聊天模板")]
     [InlineData("llama-server.exe", "可执行文件")]
     [InlineData("runtime.dll", "DLL")]
     [InlineData("codex.exe", "CLI")]
@@ -124,7 +124,7 @@ public sealed class ReasoningValidationScopeTests
         using var f = new Fixture();
         var old = f.Profile with { ReasoningCapabilityCheckedAtUtc = DateTimeOffset.UtcNow.AddYears(-10) };
         Assert.Equal(ReasoningValidationStateKind.Current, ReasoningValidationState.Check(old, f.Root).State);
-        File.Delete(Path.Combine(f.Root, "active.jinja"));
+        File.Delete(Path.Combine(f.Root, "scripts/templates/active.jinja"));
         var check = ReasoningValidationState.Check(old, f.Root);
         Assert.Equal(ReasoningValidationStateKind.Unreadable, check.State);
         Assert.Contains("读取失败", check.Reason);
@@ -175,7 +175,7 @@ public sealed class ReasoningValidationScopeTests
         Assert.Contains("model_reasoning_effort = \"medium\"", await File.ReadAllTextAsync(config));
         Assert.Contains("show_raw_agent_reasoning = false", await File.ReadAllTextAsync(config));
         Assert.Contains("reasoning = off", await File.ReadAllTextAsync(paths.RouterPresetFile));
-        File.AppendAllText(Path.Combine(f.Root, "active.jinja"), "changed");
+        File.AppendAllText(Path.Combine(f.Root, "scripts/templates/active.jinja"), "changed");
         await writer.SaveAsync(saved, f.Root, paths.RouterPresetFile, paths.LocalModelCatalogFile, true, synchronizeActiveCodexConfiguration: Sync);
         var reset = (await store.LoadAsync(f.Root)).Profiles.Single();
         Assert.True(reset.ShowThinkingProcess);
@@ -210,7 +210,8 @@ public sealed class ReasoningValidationScopeTests
         public ModelProfile Profile { get; }
         public Fixture()
         {
-            foreach (var name in new[] { "model.gguf", "active.jinja", "llama-server.exe", "runtime.dll", "codex.exe" })
+            Directory.CreateDirectory(ChatTemplateFile.GetDirectory(Root));
+            foreach (var name in new[] { "model.gguf", "scripts/templates/active.jinja", "llama-server.exe", "runtime.dll", "codex.exe" })
                 File.WriteAllText(Path.Combine(Root, name), "fixture");
             var p = new ModelProfile
             {
@@ -221,7 +222,7 @@ public sealed class ReasoningValidationScopeTests
                 ModelType = ModelType.Dense,
                 ContextSize = 8192,
                 CompactionSafetyReserve = 2048,
-                ChatTemplateRelativePath = "active.jinja",
+                ChatTemplateRelativePath = "scripts/templates/active.jinja",
                 SupportsThinkingSwitch = true,
                 DefaultThinkingEnabled = true,
                 ThinkingEnabled = true,

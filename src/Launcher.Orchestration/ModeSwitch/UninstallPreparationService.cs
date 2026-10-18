@@ -1,6 +1,7 @@
 using Launcher.ChatGPT.Configuration;
 using Launcher.ChatGPT.Processes;
 using Launcher.Core.Configuration;
+using Launcher.Core.Diagnostics;
 using Launcher.Core.Persistence;
 using Launcher.Core.Startup;
 
@@ -15,9 +16,14 @@ public sealed class UninstallPreparationService(
     IChatGptClientDetector clientDetector,
     ChatGptConfigTransactionService configTransactionService,
     LauncherDataPaths dataPaths,
-    IUserRunEntryStore runEntryStore)
+    IUserRunEntryStore runEntryStore,
+    DiagnosticJournal? diagnostics = null)
 {
-    public async Task PrepareAsync(string installedAppExecutablePath, CancellationToken cancellationToken = default)
+    public Task PrepareAsync(string installedAppExecutablePath, CancellationToken cancellationToken = default) =>
+        (diagnostics ?? DiagnosticJournal.None).RunAsync("uninstall_restore", null,
+            async operation => { await PrepareCoreAsync(installedAppExecutablePath, cancellationToken); return true; });
+
+    private async Task PrepareCoreAsync(string installedAppExecutablePath, CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(installedAppExecutablePath);
 
@@ -26,7 +32,7 @@ public sealed class UninstallPreparationService(
             throw new InvalidOperationException("请先完全关闭 ChatGPT Desktop，再卸载 Egg Launcher。");
         }
 
-        var recovery = await new ModeRecoveryCoordinator(settingsStore, configTransactionService, dataPaths)
+        var recovery = await new ModeRecoveryCoordinator(settingsStore, configTransactionService, dataPaths, diagnostics)
             .RecoverAsync(cancellationToken).ConfigureAwait(false);
 
         var settings = await settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);
@@ -41,7 +47,7 @@ public sealed class UninstallPreparationService(
                 settingsStore,
                 clientDetector,
                 configTransactionService,
-                dataPaths).SwitchToOpenAIAsync(cancellationToken).ConfigureAwait(false);
+                dataPaths, diagnostics).SwitchToOpenAIAsync(cancellationToken).ConfigureAwait(false);
         }
 
         settings = await settingsStore.LoadAsync(cancellationToken).ConfigureAwait(false);

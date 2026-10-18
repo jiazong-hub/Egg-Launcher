@@ -77,10 +77,10 @@ public sealed class RouterPresetGeneratorTests
             profile,
             @"D:\llama.cpp",
             loadOnStartup: false,
-            @"C:\Temp\codex-compatible.jinja");
+            @"D:\llama.cpp\scripts\templates\codex-compatible.jinja");
 
         Assert.Contains(
-            "chat-template-file = C:\\Temp\\codex-compatible.jinja\n",
+            "chat-template-file = D:\\llama.cpp\\scripts\\templates\\codex-compatible.jinja\n",
             result,
             StringComparison.Ordinal);
     }

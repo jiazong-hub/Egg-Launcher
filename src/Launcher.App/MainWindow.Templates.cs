@@ -30,6 +30,7 @@ public partial class MainWindow
                 cancellationToken).Task.Unwrap();
         }
 
+        if (!string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)) ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath, root);
         if (!profile.Jinja || (!explicitCheck && !string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)))
             return new(profile, false);
         if (ChatTemplateValidationCache.IsCurrent(profile, root) && !explicitCheck) return new(profile, false);
@@ -45,7 +46,7 @@ public partial class MainWindow
             throw new InvalidOperationException(AppLanguageManager.Choose(
                 "Runtime 正在使用。请关闭客户端并停止本地服务及下载后检测模板。",
                 "The runtime is in use. Close the client and stop local services and downloads before checking the template."));
-        if (MessageBox.Show(this, AppLanguageManager.Choose(
+        if (MessageBox.Show(ResourceDialogOwner, AppLanguageManager.Choose(
                 generate
                     ? "发现已支持的模板位置限制。是否生成并验证兼容模板？\n将临时加载模型，占用内存和显存；检查通过后才填写模板路径。"
                     : "是否使用 llama.cpp 检查当前模板？\n将临时加载模型。检查只验证渲染，不代表实际对话、工具调用或上下文压缩已经验证。",
@@ -58,9 +59,10 @@ public partial class MainWindow
 
         StatusText.Text = AppLanguageManager.Choose("正在隔离加载模型并检查模板渲染…", "Loading the model in isolation and checking template rendering…");
 
-        var directory = Path.Combine(root, "scripts", "templates");
+        var directory = ChatTemplateFile.GetDirectory(root);
+        ChatTemplateFile.ValidatePath(Path.Combine(directory, ".template-check.jinja"), root);
         Directory.CreateDirectory(directory);
-        var candidate = Path.Combine(directory, $".template-check-{Guid.NewGuid():N}.jinja");
+        var candidate = ChatTemplateFile.ValidatePath(Path.Combine(directory, $".template-check-{Guid.NewGuid():N}.jinja"), root);
         var selectedText = generate ? CodexChatTemplateCompatibility.CreateOwnedOutput(source!, analysis.RepairedTemplate!)
             : string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath) ? source
             : await File.ReadAllTextAsync(Path.Combine(root, profile.ChatTemplateRelativePath), cancellationToken);
@@ -89,7 +91,7 @@ public partial class MainWindow
                     stagedFileName)
                 : new CodexChatTemplateCompatibilityResult(profile, false);
             await ChatTemplateValidationCache.WriteAsync(prepared.Profile, root, cancellationToken);
-            return prepared;
+            return prepared with { RenderCheckCompleted = true };
         }
         finally { if (File.Exists(candidate)) File.Delete(candidate); }
     }

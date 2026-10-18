@@ -101,6 +101,7 @@ public static class RouterPresetGenerator
         string runtimeRoot,
         string? chatTemplateOverridePath)
     {
+        if (!profile.Jinja) return null;
         string? candidate = null;
         if (!string.IsNullOrWhiteSpace(chatTemplateOverridePath))
         {
@@ -121,13 +122,7 @@ public static class RouterPresetGenerator
             throw new InvalidDataException("Chat Template 路径包含无效换行符。");
         }
 
-        var fullPath = Path.GetFullPath(candidate);
-        if (!string.Equals(Path.GetExtension(fullPath), ".jinja", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException("Chat Template 文件必须使用 .jinja 扩展名。");
-        }
-
-        return fullPath;
+        return ChatTemplateFile.ValidatePath(candidate, runtimeRoot);
     }
 
     private static void Append(StringBuilder builder, string key, int value) =>

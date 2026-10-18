@@ -1,4 +1,5 @@
 using Launcher.ChatGPT.Processes;
+using Launcher.Models.Profiles;
 using Launcher.Core.Configuration;
 using Launcher.Core.Persistence;
 using Launcher.Core.Security;
@@ -8,11 +9,69 @@ using Launcher.Runtime.Transport;
 using System.Text.Json;
 using System.Net.Sockets;
 using Launcher.Orchestration.ModeSwitch;
+using Launcher.Runtime.Processes;
+using Launcher.Core.Diagnostics;
 
 namespace Launcher.Tests;
 
 public sealed class LocalRouterSupervisorTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task RuntimeVersion_IsRecordedOnceAcrossPortRetriesHeartbeatsAndRecovery(bool detailed, bool queryFails)
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var runtime = Path.Combine(root, "runtime");
+            Directory.CreateDirectory(runtime);
+            await File.WriteAllTextAsync(Path.Combine(runtime, "llama-server.exe"), "fixture");
+            await RegisterModelAsync(runtime, "local-coder");
+            var settings = new MutableSettingsStore(new LauncherSettings
+            {
+                SelectedMode = ProviderMode.Local,
+                SelectedModelId = "local-coder",
+                LlamaRoot = runtime,
+                RouterPort = 18080,
+                DetailedDiagnosticsEnabled = detailed,
+            });
+            var runner = new VersionProcessRunner(queryFails);
+            var manager = new FakeProcessManager { PortBindingFailuresRemaining = 1 };
+            var events = new List<DiagnosticEvent>();
+            await using var supervisor = new LocalRouterSupervisor(settings, manager, new FakeSafetyProxy(), new FakeRouterControlClient(), paths,
+                structuredDiagnosticEventWriter: item => { events.Add(item); return Task.CompletedTask; },
+                clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: runner);
+            Assert.Equal(LocalRouterReconcileAction.Started, (await supervisor.ReconcileAsync()).Action);
+            Assert.Equal(LocalRouterReconcileAction.None, (await supervisor.ReconcileAsync()).Action);
+            manager.SimulateUnexpectedExit();
+            Assert.Equal(LocalRouterReconcileAction.Restarted, (await supervisor.ReconcileAsync()).Action);
+            Assert.Equal(1, runner.Calls);
+            var started = events.Where(item => item.EventName == "router_started").ToArray();
+            Assert.Equal(2, started.Length);
+            Assert.All(started, item =>
+            {
+                Assert.Equal(queryFails ? "unknown" : "12345-abcdef12", item.Properties!["runtimeVersion"]);
+                Assert.Equal(queryFails ? "unavailable" : "version_command", item.Properties["runtimeVersionSource"]);
+                Assert.Equal(detailed ? queryFails ? "query_failed" : "success" : null, item.Properties["runtimeVersionQueryResult"]);
+            });
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private sealed class VersionProcessRunner(bool fails) : IProcessRunner
+    {
+        public int Calls { get; private set; }
+        public Task<ProcessRunResult> RunAsync(string executablePath, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            return fails ? Task.FromException<ProcessRunResult>(new IOException("injected version failure"))
+                : Task.FromResult(new ProcessRunResult(0, "CUDA init\nversion: 12345 (abcdef12)", "", false));
+        }
+    }
+
     [Fact]
     public async Task Reconcile_LocalModeWithoutModel_RemainsStoppedInsteadOfThrowing()
     {
@@ -33,7 +92,7 @@ public sealed class LocalRouterSupervisorTests
                 new FakeProcessManager(),
                 new FakeSafetyProxy(),
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var result = await supervisor.ReconcileAsync();
 
@@ -60,6 +119,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.RuntimeStateFile);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             string? diagnostic = null;
             await using var supervisor = new LocalRouterSupervisor(
                 new MutableSettingsStore(new LauncherSettings
@@ -77,7 +139,7 @@ public sealed class LocalRouterSupervisorTests
                 {
                     diagnostic = message;
                     return Task.CompletedTask;
-                });
+                }, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var result = await supervisor.ReconcileAsync();
 
@@ -102,6 +164,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var manager = new FakeProcessManager { PortBindingFailuresRemaining = 2 };
             await using var supervisor = new LocalRouterSupervisor(
                 new MutableSettingsStore(new LauncherSettings
@@ -114,7 +179,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 new FakeSafetyProxy(),
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var result = await supervisor.ReconcileAsync();
 
@@ -140,6 +205,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var manager = new FakeProcessManager { StartFailure = new InvalidDataException("bad model") };
             await using var supervisor = new LocalRouterSupervisor(
                 new MutableSettingsStore(new LauncherSettings
@@ -152,7 +220,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 new FakeSafetyProxy(),
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             await Assert.ThrowsAsync<InvalidDataException>(() => supervisor.ReconcileAsync());
 
@@ -176,6 +244,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var settingsStore = new MutableSettingsStore(new LauncherSettings
             {
                 SelectedMode = ProviderMode.Local,
@@ -196,7 +267,7 @@ public sealed class LocalRouterSupervisorTests
                 proxy,
                 routerControl,
                 paths,
-                endpointMigrationCoordinator: migration);
+                endpointMigrationCoordinator: migration, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             await supervisor.ReconcileAsync();
 
@@ -225,6 +296,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
 
             var settingsStore = new MutableSettingsStore(new LauncherSettings
             {
@@ -243,7 +317,7 @@ public sealed class LocalRouterSupervisorTests
                 safetyProxy,
                 routerControl,
                 paths,
-                routerApiKey: routerApiKey);
+                routerApiKey: routerApiKey, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var started = await supervisor.ReconcileAsync();
             var runningStateJson = await File.ReadAllTextAsync(paths.RuntimeStateFile);
@@ -295,7 +369,7 @@ public sealed class LocalRouterSupervisorTests
                 new FakeProcessManager(),
                 new FakeSafetyProxy(),
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             await supervisor.ReconcileAsync();
 
@@ -324,7 +398,14 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
 
+            await RegisterModelAsync(runtimeRoot, "local-a");
+            await RegisterModelAsync(runtimeRoot, "local-b");
+            var modelA = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-a");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(modelA, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var settingsStore = new MutableSettingsStore(new LauncherSettings
             {
                 SelectedMode = ProviderMode.Local,
@@ -339,7 +420,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 safetyProxy,
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var started = await supervisor.ReconcileAsync();
             settingsStore.Settings = settingsStore.Settings with { SelectedModelId = "local-b" };
@@ -372,6 +453,7 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\nc = 8192\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
 
             var settingsStore = new MutableSettingsStore(new LauncherSettings
             {
@@ -387,7 +469,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 safetyProxy,
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var started = await supervisor.ReconcileAsync();
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\nc = 16384\n");
@@ -420,6 +502,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var settingsStore = new MutableSettingsStore(new LauncherSettings
             {
                 SelectedMode = ProviderMode.Local,
@@ -434,7 +519,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 safetyProxy,
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             await supervisor.ReconcileAsync();
             manager.SimulateUnexpectedExit();
@@ -464,6 +549,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var time = new ManualTimeProvider(new DateTimeOffset(2026, 9, 12, 0, 0, 0, TimeSpan.Zero));
             await using var supervisor = new LocalRouterSupervisor(
                 new MutableSettingsStore(new LauncherSettings
@@ -477,7 +565,7 @@ public sealed class LocalRouterSupervisorTests
                 new FakeSafetyProxy(),
                 new FakeRouterControlClient(),
                 paths,
-                time);
+                time, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             await supervisor.ReconcileAsync();
             var first = JsonSerializer.Deserialize<RuntimeState>(await File.ReadAllTextAsync(paths.RuntimeStateFile));
@@ -510,6 +598,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var manager = new FakeProcessManager();
             var safetyProxy = new FakeSafetyProxy();
             var routerControl = new FakeRouterControlClient
@@ -530,7 +621,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 safetyProxy,
                 routerControl,
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => supervisor.ReconcileAsync());
@@ -565,6 +656,9 @@ public sealed class LocalRouterSupervisorTests
             Directory.CreateDirectory(paths.GeneratedDirectory);
             await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
             await File.WriteAllTextAsync(paths.RouterPresetFile, "version = 1\n");
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var fixtureProfile = (await new JsonModelProfileStore().LoadAsync(runtimeRoot)).Profiles.Single(p => p.Id == "local-coder");
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(fixtureProfile, runtimeRoot, paths.RouterPresetFile, paths.LocalModelCatalogFile);
             var settingsStore = new MutableSettingsStore(new LauncherSettings
             {
                 SelectedMode = ProviderMode.Local,
@@ -579,7 +673,7 @@ public sealed class LocalRouterSupervisorTests
                 manager,
                 safetyProxy,
                 new FakeRouterControlClient(),
-                paths);
+                paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
             await supervisor.ReconcileAsync();
             settingsStore.Settings = settingsStore.Settings with { SelectedMode = ProviderMode.OpenAI };
             safetyProxy.ThrowOnStop = true;
@@ -693,6 +787,124 @@ public sealed class LocalRouterSupervisorTests
             string modelId,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(new RouterModelActionResult(true, 200, null));
+    }
+
+    [Fact]
+    public async Task RunningConversation_DeletingParameterJsonDoesNotAffectHeartbeatOrRouterRecovery()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var runtime = Path.Combine(root, "runtime");
+            Directory.CreateDirectory(runtime);
+            await File.WriteAllTextAsync(Path.Combine(runtime, "llama-server.exe"), "runtime");
+            await RegisterModelAsync(runtime, "local-coder");
+            var model = Assert.Single((await new JsonModelProfileStore().LoadAsync(runtime)).Profiles);
+            var settings = new MutableSettingsStore(new LauncherSettings { SelectedMode = ProviderMode.Local, SelectedModelId = model.Id, LlamaRoot = runtime, RouterPort = 18080 });
+            var client = new MutableClientDetector();
+            var manager = new FakeProcessManager();
+            await using var supervisor = new LocalRouterSupervisor(settings, manager, new FakeSafetyProxy(), new FakeRouterControlClient(), paths, clientDetector: client, runtimeVersionProcessRunner: new VersionProcessRunner(false));
+            await supervisor.ReconcileAsync();
+            var preset = await File.ReadAllTextAsync(paths.RouterPresetFile);
+            client.Running = true;
+            File.Delete(model.PreferredConfigurationPath!);
+            Assert.Equal(LocalRouterReconcileAction.None, (await supervisor.ReconcileAsync()).Action);
+            manager.SimulateUnexpectedExit();
+            Assert.Equal(LocalRouterReconcileAction.Restarted, (await supervisor.ReconcileAsync()).Action);
+            Assert.Equal(preset, await File.ReadAllTextAsync(paths.RouterPresetFile));
+            Assert.False(File.Exists(model.PreferredConfigurationPath));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public async Task FreshAgentWithRunningClient_UsesCommittedSnapshot_NotEditedCodexOnlyParameters()
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var runtime = Path.Combine(root, "runtime");
+            Directory.CreateDirectory(runtime);
+            await File.WriteAllTextAsync(Path.Combine(runtime, "llama-server.exe"), "runtime");
+            await RegisterModelAsync(runtime, "local-coder");
+            var model = Assert.Single((await new JsonModelProfileStore().LoadAsync(runtime)).Profiles);
+            var applied = model with { CodexStreamIdleTimeoutMinutes = 30, ToolOutputTokenLimit = 1024 };
+            await Launcher.Orchestration.Models.LocalModelConfigurationWriter.WriteAsync(applied, runtime, paths.RouterPresetFile, paths.LocalModelCatalogFile);
+            await Launcher.Orchestration.Models.AppliedLocalRun.WriteAsync(applied, runtime, paths);
+            await ModelConfigurationFile.WriteAsync(model.PreferredConfigurationPath!, model with { CodexStreamIdleTimeoutMinutes = 60 }, runtime);
+            var settings = new MutableSettingsStore(new LauncherSettings { SelectedMode = ProviderMode.Local, SelectedModelId = model.Id, LlamaRoot = runtime, RouterPort = 18080 });
+            await using var supervisor = new LocalRouterSupervisor(settings, new FakeProcessManager(), new FakeSafetyProxy(), new FakeRouterControlClient(), paths,
+                clientDetector: new MutableClientDetector { Running = true }, runtimeVersionProcessRunner: new VersionProcessRunner(false));
+            await supervisor.ReconcileAsync();
+            var recovered = await Launcher.Orchestration.Models.AppliedLocalRun.ReadAsync(model.Id, runtime, paths);
+            Assert.Equal(30, recovered.CodexStreamIdleTimeoutMinutes);
+            Assert.Equal(1024, recovered.ToolOutputTokenLimit);
+            Assert.Equal(60, (await ModelConfigurationFile.ReadAsync(model.PreferredConfigurationPath!, model, runtime)).CodexStreamIdleTimeoutMinutes);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ColdStartup_WithUnverifiedShifting_DoesNotStartProcess(bool negativeProof)
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var runtime = Path.Combine(root, "runtime");
+            Directory.CreateDirectory(runtime);
+            await File.WriteAllTextAsync(Path.Combine(runtime, "llama-server.exe"), "fixture");
+            await RegisterModelAsync(runtime, "local-coder");
+            var model = Assert.Single((await new JsonModelProfileStore().LoadAsync(runtime)).Profiles) with { ContextShiftEnabled = true };
+            await ModelConfigurationFile.WriteAsync(model.PreferredConfigurationPath!, model, runtime);
+            if (negativeProof) ContextShiftCapabilityCache.Write(model, runtime, new(false, "unsupported", DateTimeOffset.UtcNow));
+            var manager = new FakeProcessManager();
+            var settings = new MutableSettingsStore(new LauncherSettings
+            {
+                SelectedMode = ProviderMode.Local,
+                SelectedModelId = model.Id,
+                LlamaRoot = runtime,
+                RouterPort = 18080,
+            });
+            await using var supervisor = new LocalRouterSupervisor(settings, manager, new FakeSafetyProxy(),
+                new FakeRouterControlClient(), paths, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
+            await Assert.ThrowsAsync<InvalidDataException>(() => supervisor.ReconcileAsync());
+            Assert.Equal(0, manager.StartCount);
+            Assert.False(File.Exists(paths.RouterPresetFile));
+            Assert.True((await ModelConfigurationFile.ReadAsync(model.PreferredConfigurationPath!, model, runtime)).ContextShiftEnabled);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private sealed class MutableClientDetector : IChatGptClientDetector
+    {
+        public bool Running { get; set; }
+        public bool IsRunning() => Running;
+    }
+
+    private sealed class StoppedClientDetector : IChatGptClientDetector
+    {
+        public bool IsRunning() => false;
+    }
+
+    private static async Task RegisterModelAsync(string root, string id)
+    {
+        var relative = id + ".gguf";
+        await File.WriteAllTextAsync(Path.Combine(root, relative), "fixture");
+        await new JsonModelProfileStore().SaveAsync(root, new ModelProfile
+        {
+            Id = id,
+            Alias = id,
+            DisplayName = id,
+            ModelRelativePath = relative,
+            ContextSize = 16384,
+            CompactionSafetyReserve = 2048,
+            ModelType = ModelType.Dense,
+        });
     }
 
     private static string CreateTemporaryDirectory()

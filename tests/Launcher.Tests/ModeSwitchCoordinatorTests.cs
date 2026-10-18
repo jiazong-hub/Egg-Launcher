@@ -169,7 +169,7 @@ public sealed class ModeSwitchCoordinatorTests
                 "model_providers.chatgpt_local_launcher =",
                 localConfig,
                 StringComparison.Ordinal);
-            Assert.Contains("requires_openai_auth = true", localConfig, StringComparison.Ordinal);
+            Assert.Contains("requires_openai_auth = false", localConfig, StringComparison.Ordinal);
             Assert.Contains("supports_websockets = false", localConfig, StringComparison.Ordinal);
             Assert.Contains(
                 "base_url = \"http://127.0.0.1:18080/v1/\"",

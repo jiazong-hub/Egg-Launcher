@@ -16,12 +16,19 @@ public sealed class ModelArtifactTransaction
         Func<CancellationToken, Task<T>> action,
         CancellationToken cancellationToken = default,
         IReadOnlyList<string>? additionalTargets = null,
-        string? localModelCatalogPath = null)
+        string? localModelCatalogPath = null,
+        bool registrationRemoval = false,
+        bool generatedFilesOnly = false,
+        bool includeConfiguration = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(profileId);
         ArgumentException.ThrowIfNullOrWhiteSpace(routerPresetPath);
         ArgumentNullException.ThrowIfNull(action);
+        if (registrationRemoval && (includeRouterPreset || additionalTargets is not null))
+            throw new ArgumentException("模型移除事务只能修改登记和 BAT / Removal transactions only change registration and BAT files.");
+        if (generatedFilesOnly && (registrationRemoval || additionalTargets is not null || includeConfiguration))
+            throw new ArgumentException("运行文件生成事务不能修改登记或模板 / Generated-file transactions cannot modify registration or templates.");
 
         var root = Path.GetFullPath(runtimeRoot);
         var scriptsDirectory = Path.Combine(root, "scripts");
@@ -31,13 +38,36 @@ public sealed class ModelArtifactTransaction
             cancellationToken).ConfigureAwait(false);
         var targets = new List<string>
         {
-            Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".json"),
-            Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".json.bak"),
             BatchScriptGenerator.GetOutputPath(root, profileId),
-            Path.Combine(root, "scripts", "templates", profileId + ".codex-compatible.jinja"),
-            Path.Combine(root, "scripts", "templates", profileId + ".embedded.jinja"),
-            Path.Combine(root, "scripts", "templates", profileId + ".validation.json"),
         };
+        if (!generatedFilesOnly)
+            targets.AddRange([
+                Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".json"),
+                Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".json.bak"),
+            ]);
+        if (registrationRemoval)
+            targets.Add(Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".missing"));
+        else if (!generatedFilesOnly)
+            targets.AddRange([
+                Path.Combine(root, "scripts", "templates", profileId + ".codex-compatible.jinja"),
+                Path.Combine(root, "scripts", "templates", profileId + ".embedded.jinja"),
+                Path.Combine(root, "scripts", "templates", profileId + ".validation.json"),
+            ]);
+        var registrationPath = Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), profileId + ".json");
+        // Only callers that actually save parameters may roll back the selected user document.
+        if (includeConfiguration && !registrationRemoval && File.Exists(registrationPath))
+        {
+            try
+            {
+                var registration = System.Text.Json.JsonSerializer.Deserialize<ModelProfile>(await File.ReadAllTextAsync(registrationPath, cancellationToken).ConfigureAwait(false));
+                if (registration?.PreferredConfigurationPath is { } selected)
+                {
+                    try { targets.Add(ModelConfigurationFile.ValidatePath(selected, registration, root)); }
+                    catch (InvalidDataException) { /* Out-of-directory selections cannot be written or restored. */ }
+                }
+            }
+            catch (System.Text.Json.JsonException) { /* Legacy callers may snapshot an unreadable registration before replacing it. */ }
+        }
         if (includeRouterPreset)
         {
             targets.Add(Path.GetFullPath(routerPresetPath));

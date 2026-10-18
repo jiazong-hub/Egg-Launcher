@@ -100,7 +100,7 @@ public sealed class CodexStreamIdleTimeoutTests : IDisposable
         var files = new[]
         {
             Path.Combine(JsonModelProfileStore.GetProfilesDirectory(_root), profile.Id + ".json"),
-            Path.Combine(JsonModelProfileStore.GetProfilesDirectory(_root), profile.Id + ".json.bak"),
+            ModelConfigurationFile.InitialPath(profile, _root),
             BatchScriptGenerator.GetOutputPath(_root, profile.Id), _paths.RouterPresetFile, _paths.LocalModelCatalogFile,
         };
         var original = new Dictionary<string, byte[]>();
@@ -135,7 +135,9 @@ public sealed class CodexStreamIdleTimeoutTests : IDisposable
         var legacy = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(Profile() with { SchemaVersion = 11 }))!;
         legacy.AsObject().Remove(nameof(ModelProfile.CodexStreamIdleTimeoutMinutes));
         await File.WriteAllTextAsync(path, legacy.ToJsonString());
-        var migrated = Assert.Single((await new JsonModelProfileStore().LoadAsync(_root)).Profiles);
+        var migration = await new JsonModelProfileStore().LoadAsync(_root);
+        Assert.True(migration.Profiles.Count == 1, string.Join("; ", migration.Diagnostics));
+        var migrated = Assert.Single(migration.Profiles);
         Assert.Equal(ModelProfile.CurrentSchemaVersion, migrated.SchemaVersion);
         Assert.Null(migrated.CodexStreamIdleTimeoutMinutes);
         var defaults = ModelParameterDefaults.FromProfile(migrated with { CodexStreamIdleTimeoutMinutes = 30 });

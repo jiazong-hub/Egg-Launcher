@@ -25,6 +25,8 @@ public sealed record ChatGptLocalModeRequest
 
     public bool ShowThinkingProcess { get; init; }
 
+    public bool RequiresOpenAiAuth { get; init; }
+
     public ModelSandboxSettings? SandboxSettings { get; init; }
 
     public LauncherSettings? OriginalLauncherSettings { get; init; }

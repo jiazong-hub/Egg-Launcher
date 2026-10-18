@@ -3,9 +3,13 @@ using System.Net.Http.Headers;
 
 namespace Launcher.Models.Remote;
 
-public sealed class HuggingFaceFileDownloadClient(HttpClient httpClient, Uri? endpoint = null)
+public sealed class HuggingFaceFileDownloadClient(
+    HttpClient httpClient, Uri? endpoint = null,
+    TimeSpan? responseTimeout = null, TimeSpan? idleTimeout = null)
 {
     private readonly Uri _endpoint = endpoint ?? new Uri("https://huggingface.co/", UriKind.Absolute);
+    private readonly TimeSpan _responseTimeout = ValidateTimeout(responseTimeout ?? TimeSpan.FromSeconds(90));
+    private readonly TimeSpan _idleTimeout = ValidateTimeout(idleTimeout ?? TimeSpan.FromMinutes(2));
 
     public async Task<string> DownloadMtpFileAsync(
         HuggingFaceMtpFile file,
@@ -86,16 +90,18 @@ public sealed class HuggingFaceFileDownloadClient(HttpClient httpClient, Uri? en
 
         var partial = destination + ".partial";
         var resumeOffset = File.Exists(partial) ? new FileInfo(partial).Length : 0;
+        if (sizeBytes > 0 && resumeOffset > sizeBytes)
+        {
+            File.Delete(partial);
+            resumeOffset = 0;
+        }
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildResolveUri(repositoryId, revision, path));
         if (resumeOffset > 0)
         {
             request.Headers.Range = new RangeHeaderValue(resumeOffset, null);
         }
 
-        using var response = await httpClient.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            cancellationToken).ConfigureAwait(false);
+        using var response = await SendWithTimeoutAsync(request, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable
             && sizeBytes > 0
             && resumeOffset == sizeBytes)
@@ -106,6 +112,18 @@ public sealed class HuggingFaceFileDownloadClient(HttpClient httpClient, Uri? en
         }
 
         response.EnsureSuccessStatusCode();
+        long? rangeLength = null;
+        if (response.StatusCode == HttpStatusCode.PartialContent)
+        {
+            var range = response.Content.Headers.ContentRange;
+            if (range is null || !string.Equals(range.Unit, "bytes", StringComparison.OrdinalIgnoreCase)
+                || range.From != resumeOffset || range.To is null || range.To < range.From
+                || range.Length is { } total && (total <= range.To || sizeBytes > 0 && total != sizeBytes))
+                throw new InvalidDataException("下载续传区间与请求不符，已停止；请重新下载 / Invalid download resume range; restart the download.");
+            rangeLength = range.To.Value - resumeOffset + 1;
+            if (response.Content.Headers.ContentLength is { } length && length != rangeLength)
+                throw new InvalidDataException("下载续传响应长度与区间不符 / Download response length does not match its range.");
+        }
         var append = resumeOffset > 0 && response.StatusCode == HttpStatusCode.PartialContent;
         if (!append)
         {
@@ -115,8 +133,10 @@ public sealed class HuggingFaceFileDownloadClient(HttpClient httpClient, Uri? en
         var responseLength = response.Content.Headers.ContentLength ?? 0;
         var expectedTotal = sizeBytes > 0
             ? sizeBytes
-            : responseLength > 0 ? resumeOffset + responseLength : 0;
+            : response.Content.Headers.ContentRange?.Length
+                ?? (responseLength > 0 ? resumeOffset + responseLength : 0);
         var downloaded = resumeOffset;
+        using var idleSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         {
             await using var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
             await using var output = new FileStream(
@@ -130,7 +150,17 @@ public sealed class HuggingFaceFileDownloadClient(HttpClient httpClient, Uri? en
             progress?.Report(new HuggingFaceFileDownloadProgress(downloaded, expectedTotal));
             while (true)
             {
-                var read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                int read;
+                idleSource.CancelAfter(_idleTimeout);
+                try
+                {
+                    read = await input.ReadAsync(buffer, idleSource.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && idleSource.IsCancellationRequested)
+                {
+                    throw new TimeoutException("下载长时间未收到数据，请重试 / Download timed out waiting for data; retry.");
+                }
+                finally { idleSource.CancelAfter(Timeout.InfiniteTimeSpan); }
                 if (read == 0)
                 {
                     break;
@@ -143,15 +173,35 @@ public sealed class HuggingFaceFileDownloadClient(HttpClient httpClient, Uri? en
 
             await output.FlushAsync(cancellationToken).ConfigureAwait(false);
         }
-        if (sizeBytes > 0 && downloaded != sizeBytes)
+        if (rangeLength is { } expectedRangeLength && downloaded - resumeOffset != expectedRangeLength)
+            throw new InvalidDataException("下载续传数据长度与区间不符 / Received download data does not match its range.");
+        if (expectedTotal > 0 && downloaded != expectedTotal)
         {
             throw new InvalidDataException(
-                $"{displayType} 文件下载大小不完整：期望 {sizeBytes} 字节，实际 {downloaded} 字节。");
+                $"{displayType} 文件下载大小不完整：期望 {expectedTotal} 字节，实际 {downloaded} 字节。");
         }
 
         File.Move(partial, destination, overwrite: true);
         return destination;
     }
+
+    private async Task<HttpResponseMessage> SendWithTimeoutAsync(HttpRequestMessage request, CancellationToken token)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(_responseTimeout);
+        try
+        {
+            return await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!token.IsCancellationRequested && timeout.IsCancellationRequested)
+        {
+            throw new TimeoutException("等待下载服务器响应超时，请重试 / Download server response timed out; retry.");
+        }
+    }
+
+    private static TimeSpan ValidateTimeout(TimeSpan timeout) => timeout > TimeSpan.Zero
+        && timeout.TotalMilliseconds <= uint.MaxValue - 1
+            ? timeout : throw new ArgumentOutOfRangeException(nameof(timeout));
 
     private Uri BuildResolveUri(string repositoryId, string revisionValue, string filePath)
     {

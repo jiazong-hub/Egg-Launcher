@@ -6,7 +6,10 @@ namespace Launcher.Scripts.Templates;
 
 public sealed record CodexChatTemplateCompatibilityResult(
     ModelProfile Profile,
-    bool TemplateGenerated);
+    bool TemplateGenerated)
+{
+    public bool RenderCheckCompleted { get; init; }
+}
 
 /// <summary>
 /// Creates a model-owned llama.cpp chat-template override only when the GGUF's
@@ -68,17 +71,11 @@ public static class CodexChatTemplateCompatibility
             "scripts",
             "templates",
             templateFileName ?? profile.Id + ".codex-compatible.jinja");
-        var outputPath = Path.GetFullPath(Path.Combine(root, relativeTemplatePath));
-        var expectedPrefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            + Path.DirectorySeparatorChar;
-        if (!outputPath.StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidDataException("生成的 Chat Template 路径逃逸 Runtime Root。");
-        }
+        var outputPath = ChatTemplateFile.ResolveRelative(relativeTemplatePath, root);
 
         var output = CreateOwnedOutput(sourceTemplate, compatibleTemplate);
         await WriteOwnedAtomicallyAsync(outputPath, output, cancellationToken, sourceTemplate).ConfigureAwait(false);
-        var backupPath = Path.Combine(root, "scripts", "templates", profile.Id + ".embedded.jinja");
+        var backupPath = ChatTemplateFile.ValidatePath(Path.Combine(ChatTemplateFile.GetDirectory(root), profile.Id + ".embedded.jinja"), root);
         await WriteOwnedAtomicallyAsync(backupPath, CreateOwnedOutput(sourceTemplate, sourceTemplate), cancellationToken).ConfigureAwait(false);
 
         var updatedDefaults = profile.DefaultParameters is null

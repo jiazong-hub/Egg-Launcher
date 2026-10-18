@@ -36,7 +36,7 @@ public partial class ProfileEditorWindow
         _populatingReasoning = true;
         var profile = _reasoningProfile;
         var busy = _reasoningCancellation is not null;
-        DetectReasoningButton.IsEnabled = !busy && _reasoningProbe is not null;
+        DetectReasoningButton.IsEnabled = !busy && _reasoningProbe is not null && _canDetectConfiguration();
         ThinkingEnabledCheckBox.IsEnabled = !busy && profile.SupportsThinkingSwitch == true;
         ThinkingEnabledCheckBox.IsChecked = profile.ThinkingEnabled ?? profile.DefaultThinkingEnabled;
         ShowThinkingProcessCheckBox.IsEnabled = ThinkingEnabledCheckBox.IsEnabled
@@ -219,6 +219,7 @@ public partial class ProfileEditorWindow
         var selected = ProfileEditorTabs.SelectedItem;
         foreach (TabItem tab in ProfileEditorTabs.Items) if (!ReferenceEquals(tab, selected)) tab.IsEnabled = false;
         SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = RestoreModelDefaultsButton.IsEnabled = false;
+        ApplyConfigurationButton.IsEnabled = LoadConfigurationButton.IsEnabled = false;
         CancelReasoningButton.Visibility = Visibility.Visible;
         RefreshReasoningUi();
         try
@@ -242,6 +243,7 @@ public partial class ProfileEditorWindow
             {
                 foreach (TabItem tab in ProfileEditorTabs.Items) tab.IsEnabled = true;
                 SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = true;
+                ApplyConfigurationButton.IsEnabled = LoadConfigurationButton.IsEnabled = true;
                 RestoreModelDefaultsButton.IsEnabled = _originalProfile.DefaultParameters is not null;
                 CancelReasoningButton.Visibility = Visibility.Collapsed;
                 RefreshReasoningUi();

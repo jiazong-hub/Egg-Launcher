@@ -16,15 +16,18 @@ namespace Launcher.App;
 
 public partial class MainWindow
 {
-    private async void LoadExternalMtpButton_Click(object sender, RoutedEventArgs e)
+    private async Task LoadExternalMtpAsync(ModelProfile model)
     {
         if (_busy
             || string.IsNullOrWhiteSpace(_settings.LlamaRoot)
-            || ManagedModelsList.SelectedItem is not ModelListItem { Profile: not null } selected)
+            || !CanEditProfile(model, forceClientRefresh: true))
         {
             return;
         }
 
+        if (!CanRunModelResourceDetection()) return;
+        await using var operation = _diagnostics.Begin("mtp_resource_add", ModelDiagnosticFields(model));
+        await operation.StageAsync("select_and_validate_file");
         var runtimeRoot = Path.GetFullPath(_settings.LlamaRoot);
         var modelsRoot = Path.GetFullPath(Path.Combine(runtimeRoot, "models"));
         var dialog = new Microsoft.Win32.OpenFileDialog
@@ -37,7 +40,7 @@ public partial class MainWindow
             Multiselect = false,
             InitialDirectory = Directory.Exists(modelsRoot) ? modelsRoot : runtimeRoot,
         };
-        if (dialog.ShowDialog(this) != true)
+        if (dialog.ShowDialog(ResourceDialogOwner) != true)
         {
             return;
         }
@@ -45,8 +48,9 @@ public partial class MainWindow
         string relativePath;
         try
         {
+            operation.Set("resource", Path.GetFileName(dialog.FileName));
             relativePath = ValidateExternalMtpSelection(
-                selected.Profile,
+                model,
                 runtimeRoot,
                 dialog.FileName);
         }
@@ -57,8 +61,9 @@ public partial class MainWindow
                                           or NotSupportedException
                                           or OverflowException)
         {
+            await operation.FailAsync(exception, "resource_file_rejected");
             MessageBox.Show(
-                this,
+                ResourceDialogOwner,
                 exception.Message,
                 AppLanguageManager.Choose("不能加载该 MTP 文件", "Unable to Load This MTP File"),
                 MessageBoxButton.OK,
@@ -66,10 +71,16 @@ public partial class MainWindow
             return;
         }
 
+        operation.Set("resource", Path.GetFileName(relativePath));
+        if (await TryReuseResourceAsync(model with { MtpSource = MtpSourceKind.External, MtpDraftModelRelativePath = relativePath },
+                runtimeRoot, Launcher.Scripts.Templates.ModelResourceKind.Mtp))
+        { await operation.CompleteAsync("blocked", "already_registered"); return; }
+
         if (HasActiveOrQueuedDownloads)
         {
+            await operation.CompleteAsync("blocked", "downloads_active");
             MessageBox.Show(
-                this,
+                ResourceDialogOwner,
                 AppLanguageManager.Choose(
                     "请等待当前单文件下载任务结束后再验证 MTP。",
                     "Wait for the current single-file download task to finish before validating MTP."),
@@ -82,8 +93,9 @@ public partial class MainWindow
         var conflict = GetModelDownloadBlockReason();
         if (!string.IsNullOrWhiteSpace(conflict))
         {
+            await operation.CompleteAsync("blocked", "runtime_in_use");
             MessageBox.Show(
-                this,
+                ResourceDialogOwner,
                 AppLanguageManager.Choose(
                     $"当前不能启动隔离验证：{conflict}\n\n请先关闭正在运行的本地模型，再重新加载该文件。",
                     $"Isolated validation cannot start now: {conflict}\n\nStop the running local model and load this file again."),
@@ -94,7 +106,7 @@ public partial class MainWindow
         }
 
         if (MessageBox.Show(
-                this,
+                ResourceDialogOwner,
                 AppLanguageManager.Choose(
                     $"将使用 llama.cpp 临时加载主模型与以下外置 MTP 文件，并执行一次极短推理：\n\n{relativePath}\n\n验证期间会占用正常加载模型所需的内存和显存。继续吗？",
                     $"llama.cpp will temporarily load the main model with this external MTP file and run a very short inference:\n\n{relativePath}\n\nValidation uses the memory and VRAM normally required to load the model. Continue?"),
@@ -109,108 +121,51 @@ public partial class MainWindow
         SetBusy(true);
         try
         {
+            if (!CanRunModelResourceDetection() || !CanEditProfile(model, forceClientRefresh: true))
+                throw new InvalidOperationException(AppLanguageManager.Choose("本地服务状态已改变，请停止服务后再检测。", "Local service state changed. Stop services before checking."));
+            await Launcher.Scripts.Templates.ModelResourceCatalog.EnsureMigratedAsync(model, runtimeRoot, _lifetime.Token);
             StatusText.Text = AppLanguageManager.Choose(
                 "正在由 llama.cpp 联合加载主模型和外置 MTP；这可能需要几分钟…",
                 "llama.cpp is loading the main model and external MTP together. This may take several minutes…");
+            await operation.StageAsync("native_joint_load_and_short_inference");
             var verified = await ValidateExternalMtpWithNativeRouterAsync(
-                selected.Profile,
+                model,
                 runtimeRoot,
                 relativePath,
                 _lifetime.Token);
 
-            if (!CanEditProfile(selected.Profile, forceClientRefresh: true))
+            if (!CanRunModelResourceDetection() || !CanEditProfile(model, forceClientRefresh: true))
             {
                 throw new InvalidOperationException(AppLanguageManager.Choose(
                     "验证期间本地模型被启动，因此没有保存 MTP 关联。",
                     "The local model was started during validation, so the MTP association was not saved."));
             }
 
-            await SaveProfileArtifactsAsync(verified, _lifetime.Token);
+            await operation.StageAsync("register_validated_mtp");
+            await Launcher.Scripts.Templates.ModelResourceCatalog.RegisterAsync(verified, runtimeRoot, Launcher.Scripts.Templates.ModelResourceKind.Mtp, _lifetime.Token);
+            operation.Set("resourceRegistered", true);
             await ReloadProfilesAsync(runtimeRoot, _lifetime.Token);
+            await operation.CompleteAsync();
             StatusText.Text = AppLanguageManager.Choose(
-                $"llama.cpp 已验证 {Path.GetFileName(relativePath)} 可与 {verified.DisplayName} 联合加载；MTP 开关仍保持关闭。",
-                $"llama.cpp verified that {Path.GetFileName(relativePath)} loads with {verified.DisplayName}. The MTP switch remains off.");
+                $"llama.cpp 已验证 {Path.GetFileName(relativePath)} 可与 {verified.DisplayName} 联合加载；已登记到可选资源，已有配置未改变。",
+                $"llama.cpp verified that {Path.GetFileName(relativePath)} loads with {verified.DisplayName}. Registered for selection; existing configurations are unchanged.");
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
+            await operation.CompleteAsync("cancelled");
         }
         catch (Exception exception)
         {
+            await operation.FailAsync(exception, "resource_validation_failed");
             StatusText.Text = AppLanguageManager.Choose(
                 $"外置 MTP 未通过当前配置下的联合加载验证：{exception.Message}",
                 $"The external MTP did not pass joint-load validation with the current configuration: {exception.Message}");
             MessageBox.Show(
-                this,
+                ResourceDialogOwner,
                 StatusText.Text,
                 AppLanguageManager.Choose("MTP 验证失败", "MTP Validation Failed"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
-        }
-        finally
-        {
-            SetBusy(false);
-        }
-    }
-
-    private async void RemoveExternalMtpButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (_busy
-            || string.IsNullOrWhiteSpace(_settings.LlamaRoot)
-            || ManagedModelsList.SelectedItem is not ModelListItem
-            {
-                Profile: { MtpSource: MtpSourceKind.External } profile,
-            }
-            || string.IsNullOrWhiteSpace(profile.MtpDraftModelRelativePath))
-        {
-            return;
-        }
-
-        if (MessageBox.Show(
-                this,
-                AppLanguageManager.Choose(
-                    $"移除 {profile.DisplayName} 与外置 MTP 的关联？\n\n磁盘上的 GGUF 文件不会被删除。",
-                    $"Remove the external MTP association from {profile.DisplayName}?\n\nThe GGUF file on disk will not be deleted."),
-                AppLanguageManager.Choose("移除外置 MTP", "Remove External MTP"),
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question,
-                MessageBoxResult.No) != MessageBoxResult.Yes)
-        {
-            return;
-        }
-
-        SetBusy(true);
-        try
-        {
-            var runtimeRoot = Path.GetFullPath(_settings.LlamaRoot);
-            var embedded = DetectEmbeddedMtp(profile, runtimeRoot);
-            var updated = profile with
-            {
-                MtpEnabled = false,
-                MtpSource = MtpSourceKind.Embedded,
-                MtpCapabilityStatus = embedded
-                    ? MtpCapabilityStatus.EmbeddedCandidate
-                    : MtpCapabilityStatus.Unknown,
-                MtpDraftModelRelativePath = null,
-                MtpDraftGpuLayers = null,
-                MtpDraftDevice = null,
-                MtpDraftCacheTypeK = null,
-                MtpDraftCacheTypeV = null,
-                MtpDraftThreads = null,
-                MtpDraftBatchThreads = null,
-                MtpValidationSignature = null,
-                MtpValidatedAtUtc = null,
-            };
-            await SaveProfileArtifactsAsync(updated, _lifetime.Token);
-            await ReloadProfilesAsync(runtimeRoot, _lifetime.Token);
-            StatusText.Text = AppLanguageManager.Choose(
-                "已移除外置 MTP 关联；原文件未删除，MTP 开关已关闭。",
-                "The external MTP association was removed. The original file was not deleted, and MTP is off.");
-        }
-        catch (Exception exception)
-        {
-            StatusText.Text = AppLanguageManager.Choose(
-                $"移除外置 MTP 关联失败：{exception.Message}",
-                $"Failed to remove the external MTP association: {exception.Message}");
         }
         finally
         {

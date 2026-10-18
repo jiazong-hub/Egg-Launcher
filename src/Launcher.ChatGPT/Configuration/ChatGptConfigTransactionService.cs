@@ -1149,7 +1149,7 @@ public sealed class ChatGptConfigTransactionService
             .SetRawAssignment("model_verbosity", null)
             .SetRawAssignment("service_tier", null)
             .SetRawAssignment(LocalProviderKey, BuildLocalProviderAssignment(
-                request.OpenAIBaseUrl, request.CodexStreamIdleTimeoutMinutes));
+                request.OpenAIBaseUrl, request.CodexStreamIdleTimeoutMinutes, request.RequiresOpenAiAuth));
 
         localDocument = ApplyModelSandboxSettings(localDocument, request.SandboxSettings, originalAssignments);
         localDocument = ApplyNetworkCompatibility(localDocument, request.SandboxSettings, originalAssignments);
@@ -1400,7 +1400,7 @@ public sealed class ChatGptConfigTransactionService
         return $"{LauncherPermissionProfileKey} = {{ {string.Join(", ", fields)} }}";
     }
 
-    private static string BuildLocalProviderAssignment(Uri baseUri, int? idleTimeoutMinutes)
+    private static string BuildLocalProviderAssignment(Uri baseUri, int? idleTimeoutMinutes, bool requiresOpenAiAuth)
     {
         var normalizedBaseUrl = LoopbackEndpoint.NormalizeBaseUrl(baseUri);
         var encodedName = JsonSerializer.Serialize("Local llama.cpp");
@@ -1409,7 +1409,7 @@ public sealed class ChatGptConfigTransactionService
         var timeoutAssignment = timeout is int milliseconds
             ? $", stream_idle_timeout_ms = {milliseconds.ToString(CultureInfo.InvariantCulture)}" : string.Empty;
         return $"{LocalProviderKey} = {{ name = {encodedName}, base_url = {encodedBaseUrl}, "
-            + "wire_api = \"responses\", requires_openai_auth = true, supports_websockets = false"
+            + $"wire_api = \"responses\", requires_openai_auth = {requiresOpenAiAuth.ToString().ToLowerInvariant()}, supports_websockets = false"
             + timeoutAssignment + " }";
     }
 
