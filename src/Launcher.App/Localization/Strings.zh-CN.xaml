@@ -113,6 +113,17 @@
     <sys:String x:Key="LocalDataDirectory">本地数据目录</sys:String>
     <sys:String x:Key="LocalDataBody">模型与 Runtime 数据位于用户自行选择的 llama.cpp 目录。删除应用文件不会自动删除这些数据。</sys:String>
     <sys:String x:Key="ChangelogTab">更新日志</sys:String>
+    <sys:String x:Key="ReleaseNote098Title">0.9.8 · 2026-10-18</sys:String>
+    <sys:String x:Key="ReleaseNote098Item1">• 增加多配置文件支持</sys:String>
+    <sys:String x:Key="ReleaseNote098Item2">• 梳理模型管理与运行参数</sys:String>
+    <sys:String x:Key="ReleaseNote098Item3">• 完善模板及外挂管理</sys:String>
+    <sys:String x:Key="ReleaseNote098Item4">• 增加启动配置快捷选择</sys:String>
+    <sys:String x:Key="ReleaseNote098Item5">• 增加模型卡片快捷入口</sys:String>
+    <sys:String x:Key="ReleaseNote098Item6">• 增加 OpenAI 认证开关</sys:String>
+    <sys:String x:Key="ReleaseNote098Item7">• 完善诊断日志</sys:String>
+    <sys:String x:Key="ReleaseNote098Item8">• 优化界面与操作提示</sys:String>
+    <sys:String x:Key="ReleaseNote098Item9">• 修复边界问题</sys:String>
+    <sys:String x:Key="ReleaseNote098Item10">• 增加 GitHub 主页入口</sys:String>
     <sys:String x:Key="ReleaseNote097Title">0.9.7 · 2026-10-07</sys:String>
     <sys:String x:Key="ReleaseNote097Item1">• 新增 Codex SSE 空闲等待时间调节。</sys:String>
     <sys:String x:Key="ReleaseNote097Item2">• 改进思考档位验证，新增“思考设置”选项卡。</sys:String>

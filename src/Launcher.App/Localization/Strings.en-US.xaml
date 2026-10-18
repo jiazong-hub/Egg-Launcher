@@ -113,6 +113,17 @@
     <sys:String x:Key="LocalDataDirectory">Local Data Directory</sys:String>
     <sys:String x:Key="LocalDataBody">Model and Runtime data remain in the llama.cpp directory selected by the user. Removing the application files does not automatically remove that data.</sys:String>
     <sys:String x:Key="ChangelogTab">Changelog</sys:String>
+    <sys:String x:Key="ReleaseNote098Title">0.9.8 · 2026-10-18</sys:String>
+    <sys:String x:Key="ReleaseNote098Item1">• Add multiple configuration files</sys:String>
+    <sys:String x:Key="ReleaseNote098Item2">• Separate model management and runtime parameters</sys:String>
+    <sys:String x:Key="ReleaseNote098Item3">• Improve template and auxiliary file management</sys:String>
+    <sys:String x:Key="ReleaseNote098Item4">• Add quick startup configuration selection</sys:String>
+    <sys:String x:Key="ReleaseNote098Item5">• Add model card shortcuts</sys:String>
+    <sys:String x:Key="ReleaseNote098Item6">• Add an OpenAI authentication toggle</sys:String>
+    <sys:String x:Key="ReleaseNote098Item7">• Improve diagnostic logging</sys:String>
+    <sys:String x:Key="ReleaseNote098Item8">• Refine the interface and tooltips</sys:String>
+    <sys:String x:Key="ReleaseNote098Item9">• Fix boundary cases</sys:String>
+    <sys:String x:Key="ReleaseNote098Item10">• Add a GitHub homepage shortcut</sys:String>
     <sys:String x:Key="ReleaseNote097Title">0.9.7 · 2026-10-07</sys:String>
     <sys:String x:Key="ReleaseNote097Item1">• Add per-model Codex SSE idle timeout adjustment.</sys:String>
     <sys:String x:Key="ReleaseNote097Item2">• Improve reasoning effort validation and add the Thinking Settings tab.</sys:String>
