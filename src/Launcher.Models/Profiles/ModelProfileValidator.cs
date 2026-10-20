@@ -22,12 +22,15 @@ public static partial class ModelProfileValidator
         ],
         StringComparer.OrdinalIgnoreCase);
 
-    public static IReadOnlyList<string> Validate(ModelProfile profile, string runtimeRoot, bool validateConversationLimits = true)
+    public static IReadOnlyList<string> Validate(ModelProfile profile, string runtimeRoot, bool validateConversationLimits = true,
+        bool requireRuntimeEvidence = true)
     {
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
 
         var errors = new List<string>();
+        if (profile.RuntimeParameters is null) errors.Add("扩展参数无效 / Invalid runtime parameters.");
+        else errors.AddRange(profile.RuntimeParameters.Validate());
 
         if (!CodexStreamIdleTimeout.IsValid(profile.CodexStreamIdleTimeoutMinutes))
             errors.Add("Codex SSE 空闲等待时间必须为 5 分钟的正整数倍，或沿用 Codex 默认值。");
@@ -182,9 +185,10 @@ public static partial class ModelProfileValidator
         }
 
 
-        ValidateReasoningCapability(profile, errors);
-        ValidateMtp(profile, runtimeRoot, errors);
-        ValidateVision(profile, runtimeRoot, errors);
+        ValidateReasoningCapability(profile, errors, requireRuntimeEvidence);
+        ValidateMtp(profile, runtimeRoot, errors, requireRuntimeEvidence);
+        errors.AddRange(NgramOptions.Validate(profile.Ngram, runtimeRoot, checkFiles: requireRuntimeEvidence));
+        ValidateVision(profile, runtimeRoot, errors, requireRuntimeEvidence);
         ValidateContextCheckpoints(profile, errors);
         ValidateKeep(profile, errors);
 
@@ -194,7 +198,9 @@ public static partial class ModelProfileValidator
             {
                 errors.Add($"高级参数键无效：{argument.Key}。");
             }
-            else if (RouterControlledOrProfileKeys.Contains(argument.Key))
+            else if (RouterControlledOrProfileKeys.Contains(argument.Key)
+                     || NgramOptions.IsManagedKey(argument.Key.ToLowerInvariant())
+                     || argument.Key is "spec-synth-rates" or "spec-synth-len")
             {
                 errors.Add($"高级参数不能覆盖受管理参数：{argument.Key}。");
             }
@@ -210,7 +216,7 @@ public static partial class ModelProfileValidator
         if (profile.DefaultParameters is not null && !profile.ConfigurationInitialized)
         {
             var defaultCandidate = profile.DefaultParameters.ApplyTo(profile) with { DefaultParameters = null };
-            foreach (var defaultError in Validate(defaultCandidate, runtimeRoot))
+            foreach (var defaultError in Validate(defaultCandidate, runtimeRoot, validateConversationLimits, requireRuntimeEvidence))
             {
                 errors.Add($"此模型的默认参数无效：{defaultError}");
             }
@@ -265,9 +271,9 @@ public static partial class ModelProfileValidator
         }
     }
 
-    private static void ValidateReasoningCapability(ModelProfile profile, ICollection<string> errors)
+    private static void ValidateReasoningCapability(ModelProfile profile, ICollection<string> errors, bool requireRuntimeEvidence)
     {
-        if (profile.ThinkingEnabled is not null && profile.SupportsThinkingSwitch != true)
+        if (requireRuntimeEvidence && profile.ThinkingEnabled is not null && profile.SupportsThinkingSwitch != true)
             errors.Add("思考开关必须通过当前模板及 Responses 路径验证后才能设置。");
         if (profile.ThinkingEnabled is not null && profile.ExtraArguments.Keys.Any(key => key is "reasoning" or "reasoning-effort" or "reasoning-budget" or "chat-template-kwargs"))
             errors.Add("思考开关不能与高级参数中的思考覆盖同时使用。");
@@ -305,7 +311,7 @@ public static partial class ModelProfileValidator
             errors.Add("未验证的思考强度能力不能保存档位或默认值。");
         }
 
-        if (profile.ExposeReasoningEffortInChatGpt
+        if (requireRuntimeEvidence && profile.ExposeReasoningEffortInChatGpt
             && (profile.ReasoningCapabilityStatus != ReasoningCapabilityStatus.Verified || !profile.ReasoningResponsesVerified))
         {
             errors.Add("只有档位已经明确验证时，才能向 ChatGPT 开放思考强度调节。");
@@ -321,7 +327,7 @@ public static partial class ModelProfileValidator
     private static void ValidateMtp(
         ModelProfile profile,
         string runtimeRoot,
-        ICollection<string> errors)
+        ICollection<string> errors, bool requireRuntimeEvidence)
     {
         if (profile.MtpDraftMaxTokens is <= 0)
         {
@@ -356,6 +362,7 @@ public static partial class ModelProfileValidator
         }
 
         if (profile.MtpDraftGpuLayers is not null
+            && profile.MtpDraftGpuLayers is not ("auto" or "all")
             && (!int.TryParse(
                     profile.MtpDraftGpuLayers,
                     NumberStyles.None,
@@ -363,7 +370,7 @@ public static partial class ModelProfileValidator
                     out var mtpGpuLayers)
                 || mtpGpuLayers < 0))
         {
-            errors.Add("MTP GPU Layers 必须是非负整数，或留空使用自动值。");
+            errors.Add("MTP GPU Layers 必须是非负整数、auto、all，或留空使用默认值。");
         }
 
         if (profile.MtpDraftCacheTypeK is not null && !IsSafeCacheType(profile.MtpDraftCacheTypeK))
@@ -381,7 +388,7 @@ public static partial class ModelProfileValidator
             errors.Add("MTP Device 不能包含控制字符。");
         }
 
-        ValidateMtpCompanionPath(profile, runtimeRoot, errors);
+        ValidateMtpCompanionPath(profile, runtimeRoot, errors, requireRuntimeEvidence);
 
         if (profile.MtpEnabled && profile.MtpSource == MtpSourceKind.External)
         {
@@ -390,13 +397,13 @@ public static partial class ModelProfileValidator
                 errors.Add("启用外部 MTP 时必须先在模型管理中加载匹配的 MTP 辅助 GGUF 文件。");
             }
 
-            if (profile.MtpCapabilityStatus != MtpCapabilityStatus.Verified)
+            if (requireRuntimeEvidence && profile.MtpCapabilityStatus != MtpCapabilityStatus.Verified)
             {
                 errors.Add("外部 MTP 只有通过 llama.cpp 联合加载验证后才能启用。");
             }
         }
 
-        if (profile.MtpEnabled
+        if (requireRuntimeEvidence && profile.MtpEnabled
             && profile.MtpSource == MtpSourceKind.Embedded
             && profile.MtpCapabilityStatus is not (MtpCapabilityStatus.EmbeddedCandidate or MtpCapabilityStatus.Verified))
         {
@@ -420,7 +427,7 @@ public static partial class ModelProfileValidator
     private static void ValidateMtpCompanionPath(
         ModelProfile profile,
         string runtimeRoot,
-        ICollection<string> errors)
+        ICollection<string> errors, bool requireRuntimeEvidence)
     {
         var companionPath = profile.MtpDraftModelRelativePath;
         if (string.IsNullOrWhiteSpace(companionPath))
@@ -454,7 +461,7 @@ public static partial class ModelProfileValidator
             {
                 errors.Add("MTP 辅助模型不能与主模型使用同一个文件。");
             }
-            else if (profile.MtpEnabled
+            else if (requireRuntimeEvidence && profile.MtpEnabled
                      && profile.MtpSource == MtpSourceKind.External
                      && !File.Exists(companionFullPath))
             {
@@ -470,7 +477,7 @@ public static partial class ModelProfileValidator
     private static bool IsUnitInterval(double? value) =>
         value is null || double.IsFinite(value.Value) && value.Value is >= 0 and <= 1;
 
-    private static void ValidateVision(ModelProfile profile, string runtimeRoot, ICollection<string> errors)
+    private static void ValidateVision(ModelProfile profile, string runtimeRoot, ICollection<string> errors, bool requireRuntimeEvidence)
     {
         if (profile.VisionImageMinTokens is <= 0
             || profile.VisionImageMaxTokens is <= 0
@@ -491,8 +498,8 @@ public static partial class ModelProfileValidator
             errors.Add("视觉模块 Device 不能包含控制字符。");
         }
 
-        ValidateVisionProjectorPath(profile, runtimeRoot, errors);
-        if (profile.VisionEnabled && profile.VisionCapabilityStatus != VisionCapabilityStatus.Verified)
+        ValidateVisionProjectorPath(profile, runtimeRoot, errors, requireRuntimeEvidence);
+        if (requireRuntimeEvidence && profile.VisionEnabled && profile.VisionCapabilityStatus != VisionCapabilityStatus.Verified)
         {
             errors.Add("视觉模块尚无有效识别记录，请在模型管理中重新加载并识别。");
         }
@@ -521,7 +528,7 @@ public static partial class ModelProfileValidator
     private static void ValidateVisionProjectorPath(
         ModelProfile profile,
         string runtimeRoot,
-        ICollection<string> errors)
+        ICollection<string> errors, bool requireRuntimeEvidence)
     {
         var relativePath = profile.VisionProjectorRelativePath;
         if (string.IsNullOrWhiteSpace(relativePath))
@@ -553,7 +560,7 @@ public static partial class ModelProfileValidator
             {
                 errors.Add("视觉投影文件不能与主模型使用同一个文件。");
             }
-            else if (profile.VisionSource == VisionSourceKind.External
+            else if (requireRuntimeEvidence && profile.VisionEnabled && profile.VisionSource == VisionSourceKind.External
                      && profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified
                      && !File.Exists(projector))
             {

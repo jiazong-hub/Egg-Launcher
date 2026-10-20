@@ -36,6 +36,10 @@ public sealed class ModeSwitchCoordinator(
     {
         ArgumentNullException.ThrowIfNull(request);
         ValidateLocalRequest(request);
+        operation.Set("llamaCustomNames", request.Profile.CustomParameters.Llama.Select(r => r.Name).ToArray());
+        operation.Set("codexCustomNames", request.Profile.CustomParameters.Codex.Select(r => r.Name).ToArray());
+        operation.SetDetail("runtimeParameters", request.Profile.RuntimeParameters);
+        operation.SetDetail("experimentalEffect", "unverified");
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -94,6 +98,7 @@ public sealed class ModeSwitchCoordinator(
                         && (request.Profile.ThinkingEnabled ?? request.Profile.DefaultThinkingEnabled) == true,
                     DefaultReasoningEffort = ReasoningDefaultSelection.ForCodex(request.Profile),
                     SandboxSettings = request.Profile.SandboxSettings,
+                    CustomParameters = request.Profile.CustomParameters.Codex,
                     OriginalLauncherSettings = settings,
                     TargetLauncherSettings = targetSettings,
                 };
@@ -280,6 +285,8 @@ public sealed class ModeSwitchCoordinator(
                 cancellationToken).ConfigureAwait(false);
             officialConfigRestored = true;
             operation.Set("officialConfigRestored", true);
+            operation.Set("restoredCustomKeys", transaction.OriginalAssignments.Keys
+                .Where(k => k.StartsWith("custom:", StringComparison.Ordinal)).Select(k => k[7..]).ToArray());
             await operation.StageAsync("commit_launcher_settings").ConfigureAwait(false);
             await settingsStore.SaveAsync(updated, cancellationToken).ConfigureAwait(false);
             transaction = await configTransactionService.CommitLauncherSettingsAsync(
@@ -338,7 +345,7 @@ public sealed class ModeSwitchCoordinator(
             throw new FileNotFoundException("Profile 指向的 GGUF 主模型不存在。", modelPath);
         }
 
-        if (!string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
+        if (profile.Jinja && !string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
         {
             var templatePath = Path.GetFullPath(Path.Combine(runtimeRoot, profile.ChatTemplateRelativePath));
             if (!File.Exists(templatePath))

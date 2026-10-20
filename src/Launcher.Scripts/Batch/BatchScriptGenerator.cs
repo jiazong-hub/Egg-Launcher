@@ -79,16 +79,17 @@ public static class BatchScriptGenerator
 
         foreach (var argument in ModelFeatureArguments.Generate(profile, path => path))
         {
-            if (argument.Key is "spec-draft-model" or "mmproj")
+            if (argument.Key is "spec-draft-model" or "mmproj" or "lookup-cache-static" or "lookup-cache-dynamic")
             {
                 var relativePath = Path.GetRelativePath(root, Path.GetFullPath(Path.Combine(root, argument.Value!)));
                 arguments.Add($"--{argument.Key} \"%LLAMA_ROOT%\\{EscapeLiteral(relativePath)}\"");
             }
             else
             {
+                var command = argument.Key.StartsWith('-') ? argument.Key : "--" + argument.Key;
                 arguments.Add(argument.Value is null
-                    ? $"--{argument.Key}"
-                    : $"--{argument.Key} {QuoteValue(argument.Value)}");
+                    ? command
+                    : $"{command} {QuoteValue(argument.Value)}");
             }
         }
 
@@ -213,7 +214,10 @@ public static class BatchScriptGenerator
             throw new InvalidDataException("BAT 参数包含无法安全转义的字符。");
         }
 
-        return $"\"{EscapeLiteral(value)}\"";
+        // Windows argv parsing treats backslashes before the closing quote specially.
+        var literal = EscapeLiteral(value);
+        var trailingSlashes = literal.Length - literal.TrimEnd('\\').Length;
+        return "\"" + literal + new string('\\', trailingSlashes) + "\"";
     }
 
     private static string EscapeLiteral(string value) => value.Replace("%", "%%", StringComparison.Ordinal);

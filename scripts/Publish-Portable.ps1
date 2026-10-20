@@ -467,6 +467,10 @@ try {
         Copy-Item -LiteralPath (Join-Path $repositoryRoot ('docs\' + $document)) -Destination $packageDocsPath
     }
 
+    foreach ($document in @('release-notes-0.9.9.md', 'release-checks-0.9.9.md', 'development-0.9.9.md', 'ngram-implementation-review-20261018.md', 'parameters-0.9.9-review-20261018.md', 'resource-recheck-review-20261019.md', 'template-isolation-review-20261018.md', 'validation-boundaries-review-20261019.md', 'draft-acceptance-review-20261020.md')) {
+        Copy-Item -LiteralPath (Join-Path $repositoryRoot ('docs\' + $document)) -Destination $packageDocsPath
+    }
+
     $sourceFiles = Get-ChildItem -LiteralPath $repositoryRoot -Recurse -File |
         Where-Object {
             $relative = [System.IO.Path]::GetRelativePath($repositoryRoot, $_.FullName)

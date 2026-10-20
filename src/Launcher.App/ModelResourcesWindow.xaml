@@ -15,6 +15,36 @@
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Padding" Value="14" />
         </Style>
+        <Style x:Key="ResourceRemoveButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14" SnapsToDevicePixels="True">
+                            <Path Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M 0,0 L 10,10 M 10,0 L 0,10" Stretch="Uniform"
+                                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.5"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource DangerBrush}" />
+                    <Setter Property="Background" Value="{DynamicResource DangerSurfaceBrush}" />
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True"><Setter Property="Opacity" Value="0.8" /></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35" /></Trigger>
+            </Style.Triggers>
+        </Style>
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
             <Setter Property="Padding" Value="14,10" />
@@ -48,10 +78,18 @@
                         <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                         <TextBlock Text="{Binding Status}" Margin="0,5,0,0" FontSize="12" FontWeight="Normal" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
-                    <Button Grid.Column="1" Content="{Binding RemoveLabel}" Click="Remove_Click" Tag="{Binding}"
-                            Padding="12,6" FontSize="12" FontWeight="Normal" VerticalAlignment="Center" IsEnabled="{Binding CanRemove}"
+                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="84"/><ColumnDefinition Width="10"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions>
+                    <Button Content="{Binding RecheckLabel}" Click="Recheck_Click" Tag="{Binding}"
+                            Padding="12,6" FontSize="12" FontWeight="Normal" IsEnabled="{Binding CanRecheck}"
+                            ToolTip="{Binding RecheckTip}" ToolTipService.ShowOnDisabled="True" Margin="0"
+                            Visibility="{Binding RecheckVisibility}" />
+                    <Button Grid.Column="2" Style="{StaticResource ResourceRemoveButtonStyle}" Click="Remove_Click" Tag="{Binding}"
+                            IsEnabled="{Binding CanRemove}" AutomationProperties.Name="{Binding RemoveLabel}"
+                            AutomationProperties.HelpText="{Binding RemoveTip}"
                             ToolTip="{Binding RemoveTip}" ToolTipService.ShowOnDisabled="True"
                             Visibility="{Binding RemoveVisibility}" />
+                    </Grid>
                 </Grid>
             </Border>
         </DataTemplate>

@@ -10,6 +10,8 @@ public interface ILlamaRouterProcessManager : IAsyncDisposable
 
     string? ContextShiftDisabledReason => null;
 
+    Launcher.Core.Configuration.DraftAcceptanceSnapshot? LatestDraftAcceptance => null;
+
     void SetDetailedDiagnosticsEnabled(bool enabled) { }
 
     Task<LlamaRouterProcessInfo> StartAsync(

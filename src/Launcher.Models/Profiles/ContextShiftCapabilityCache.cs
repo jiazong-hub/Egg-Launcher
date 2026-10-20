@@ -11,6 +11,26 @@ public static class ContextShiftCapabilityCache
 {
     public static string Fingerprint(ModelProfile profile, string runtimeRoot)
     {
+        static string Stamp(string path)
+        {
+            var file = new FileInfo(Path.GetFullPath(path));
+            return $"{file.FullName}|{file.Exists}|{(file.Exists ? file.Length : 0)}|{(file.Exists ? file.LastWriteTimeUtc.Ticks : 0)}";
+        }
+        var probe = ContextShiftProbeProfile.Create(profile);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new
+        {
+            Version = 2,
+            Runtime = Stamp(Path.Combine(runtimeRoot, "llama-server.exe")),
+            Libraries = Directory.Exists(runtimeRoot) ? Directory.GetFiles(runtimeRoot, "*.dll").Order(StringComparer.OrdinalIgnoreCase).Select(Stamp).ToArray() : [],
+            Model = Stamp(Path.Combine(runtimeRoot, probe.ModelRelativePath)),
+            Draft = probe.MtpEnabled && probe.MtpDraftModelRelativePath is { } draft ? Stamp(Path.Combine(runtimeRoot, draft)) : null,
+            Parameters = ModelParameterDefaults.FromProfile(probe),
+        }))));
+    }
+
+    // Exact old calculation: only a matching old key can authorize migration, never a nearby configuration.
+    public static string LegacyFingerprint(ModelProfile profile, string runtimeRoot)
+    {
         static string FileStamp(string path)
         {
             var file = new FileInfo(Path.GetFullPath(path));
@@ -26,6 +46,9 @@ public static class ContextShiftCapabilityCache
             ShowThinkingProcess = false,
             PreferredReasoningLevel = null,
             ExposeReasoningEffortInChatGpt = false,
+            // Controlled capability probes do not execute experimental arguments or n-gram.
+            CustomParameters = new(),
+            Ngram = new(),
         });
         parameters = parameters with
         {
@@ -58,7 +81,16 @@ public static class ContextShiftCapabilityCache
         try
         {
             var path = CachePath(profile, runtimeRoot);
-            return File.Exists(path) ? JsonSerializer.Deserialize<ContextShiftCapabilityResult>(File.ReadAllText(path)) : null;
+            if (File.Exists(path)) return JsonSerializer.Deserialize<ContextShiftCapabilityResult>(File.ReadAllText(path));
+            var legacy = Path.Combine(Path.GetDirectoryName(path)!, LegacyFingerprint(profile, runtimeRoot) + ".json");
+            if (!File.Exists(legacy)) return null;
+            var result = JsonSerializer.Deserialize<ContextShiftCapabilityResult>(File.ReadAllText(legacy));
+            if (result is not null)
+            {
+                try { Write(profile, runtimeRoot, result); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+            return result;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException or ArgumentException)
         { return null; }

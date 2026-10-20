@@ -14,10 +14,16 @@ public static class ReasoningValidationFingerprint
         "no-host", "ctx-checkpoints", "swa-checkpoints", "keep", "cpu-moe", "n-cpu-moe",
     };
 
-    public static string Compute(ModelProfile profile, string root) =>
-        ChatTemplateValidationCache.Hash(JsonSerializer.Serialize(new { Version = 5, Basis = CaptureBasis(profile, root) }));
+    private static readonly HashSet<string> ReasoningArguments = new(StringComparer.Ordinal)
+    { "reasoning", "reasoning-effort", "reasoning-budget", "chat-template-kwargs" };
 
-    public static IReadOnlyDictionary<string, string> CaptureBasis(ModelProfile profile, string root)
+    public static string Compute(ModelProfile profile, string root) =>
+        ChatTemplateValidationCache.Hash(JsonSerializer.Serialize(new { Version = 6, Basis = CaptureBasis(profile, root) }));
+
+    public static string ComputeVersion5(ModelProfile profile, string root) =>
+        ChatTemplateValidationCache.Hash(JsonSerializer.Serialize(new { Version = 5, Basis = CaptureBasis(profile, root, legacy: true) }));
+
+    public static IReadOnlyDictionary<string, string> CaptureBasis(ModelProfile profile, string root, bool legacy = false)
     {
         static string Stamp(string path)
         {
@@ -35,7 +41,8 @@ public static class ReasoningValidationFingerprint
             ["runtime"] = Hash(Stamp(Path.Combine(root, "llama-server.exe"))),
             ["libraries"] = Hash(Directory.Exists(root) ? Directory.GetFiles(root, "*.dll").Order(StringComparer.OrdinalIgnoreCase).Select(Stamp).ToArray() : []),
             ["client"] = Hash(profile.ReasoningClientExecutablePath is { } client ? Stamp(client) : null),
-            ["arguments"] = Hash(profile.ExtraArguments.Where(pair => !IndependentArguments.Contains(pair.Key)).OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray()),
+            ["arguments"] = Hash(profile.ExtraArguments.Where(pair => legacy ? !IndependentArguments.Contains(pair.Key) : ReasoningArguments.Contains(pair.Key))
+                .OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray()),
         };
     }
 

@@ -11,6 +11,7 @@ using Launcher.Models.Scanning;
 using Launcher.Runtime.Detection;
 using Launcher.Runtime.Router;
 using Launcher.Scripts.RouterPreset;
+using Launcher.Scripts.Templates;
 
 namespace Launcher.App;
 
@@ -235,15 +236,9 @@ public partial class MainWindow
                 "The current llama.cpp Runtime does not report --spec-type and --spec-draft-model, so external MTP cannot be validated."));
         }
 
-        var validating = profile with
-        {
-            MtpEnabled = true,
-            MtpSource = MtpSourceKind.External,
-            MtpCapabilityStatus = MtpCapabilityStatus.Verified,
-            MtpDraftModelRelativePath = companionRelativePath,
-            MtpValidationSignature = "VALIDATION-PENDING",
-            MtpValidatedAtUtc = DateTimeOffset.UtcNow,
-        };
+        var basisBefore = MtpValidationFingerprint.Compute(profile with
+        { MtpSource = MtpSourceKind.External, MtpDraftModelRelativePath = companionRelativePath }, runtimeRoot);
+        var validating = ExternalMtpValidationProfile.Create(profile, companionRelativePath);
 
         var scriptsDirectory = Path.Combine(runtimeRoot, "scripts");
         Directory.CreateDirectory(scriptsDirectory);
@@ -328,9 +323,11 @@ public partial class MainWindow
                     diagnostic = diagnostic[..500];
                 }
 
-                throw new InvalidOperationException(AppLanguageManager.Choose(
+                var message = AppLanguageManager.Choose(
                     $"llama.cpp 已启动但极短推理失败，HTTP {(int)response.StatusCode}：{diagnostic}",
-                    $"llama.cpp started, but the short inference failed with HTTP {(int)response.StatusCode}: {diagnostic}"));
+                    $"llama.cpp started, but the short inference failed with HTTP {(int)response.StatusCode}: {diagnostic}");
+                if ((int)response.StatusCode is 400 or 422) throw new ModelResourceValidationException(message);
+                throw new InvalidOperationException(message);
             }
 
             var verified = validating with
@@ -340,6 +337,8 @@ public partial class MainWindow
                 MtpValidationSignature = null,
                 MtpValidatedAtUtc = DateTimeOffset.UtcNow,
             };
+            if (basisBefore != MtpValidationFingerprint.Compute(verified, runtimeRoot))
+                throw new InvalidOperationException("MTP 检测期间模型、外挂或运行库已改变，请重新检测 / MTP validation source changed; check again.");
             return verified with
             {
                 MtpValidationSignature = MtpValidationFingerprint.Compute(verified, runtimeRoot),

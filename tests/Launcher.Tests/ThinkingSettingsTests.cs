@@ -81,7 +81,7 @@ public sealed class ThinkingSettingsTests
     }
 
     [Fact]
-    public async Task LegacyVerifiedCapabilityIsMigratedWithoutReusingObsoleteProof()
+    public async Task LegacyIntentIsMigratedButObsoleteProofCannotGrantCapability()
     {
         var root = Path.Combine(Path.GetTempPath(), "ThinkingSettingsTests", Guid.NewGuid().ToString("N"));
         var directory = JsonModelProfileStore.GetProfilesDirectory(root);
@@ -107,9 +107,13 @@ public sealed class ThinkingSettingsTests
             await File.WriteAllTextAsync(path, original);
             var result = await new JsonModelProfileStore().LoadAsync(root);
             var migrated = Assert.Single(result.Profiles);
-            Assert.Equal(ReasoningCapabilityStatus.Unknown, migrated.ReasoningCapabilityStatus);
+            Assert.Equal(ReasoningCapabilityStatus.Verified, migrated.ReasoningCapabilityStatus);
             Assert.Null(migrated.ThinkingEnabled);
-            Assert.False(migrated.ExposeReasoningEffortInChatGpt);
+            Assert.True(migrated.ExposeReasoningEffortInChatGpt);
+            Assert.NotEqual(Launcher.Scripts.Templates.ReasoningValidationStateKind.Current,
+                Launcher.Scripts.Templates.ReasoningValidationState.Check(migrated, root).State);
+            Assert.Equal(ReasoningCapabilityStatus.Unknown,
+                Launcher.Scripts.Templates.ModelResourceCatalog.Resolve(migrated, root).ReasoningCapabilityStatus);
             Assert.True(migrated.ConfigurationInitialized);
             Assert.True(File.Exists(migrated.PreferredConfigurationPath));
         }

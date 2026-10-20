@@ -26,10 +26,27 @@ public static class ModelStartupConfiguration
         operation.Set("visionResource", Path.GetFileName(profile.VisionProjectorRelativePath));
         operation.Set("mtpEnabled", profile.MtpEnabled);
         operation.Set("mtpResource", Path.GetFileName(profile.MtpDraftModelRelativePath));
+        operation.Set("ngramEnabled", profile.Ngram.Enabled);
+        operation.Set("ngramTypes", string.Join(',', profile.Ngram.Types));
+        operation.SetDetail("ngramParameters", profile.Ngram.Parameters);
+        operation.Set("llamaCustomNames", profile.CustomParameters.Llama.Select(r => r.Name).ToArray());
+        operation.Set("codexCustomNames", profile.CustomParameters.Codex.Select(r => r.Name).ToArray());
+        operation.SetDetail("batchSize", profile.BatchSize);
+        operation.SetDetail("microBatchSize", profile.MicroBatchSize);
+        operation.SetDetail("runtimeParameters", profile.RuntimeParameters);
+        operation.SetDetail("mtpDraftGpuLayers", profile.MtpDraftGpuLayers);
+        // Arbitrary custom values can be credentials or private paths. Never log them.
+        operation.SetDetail("customDelivery", "llama=model_preset_and_bat;codex=local_config_transaction;effect=unverified");
+        operation.SetDetail("staticCache", Path.GetFileName(profile.Ngram.StaticCachePath));
+        operation.SetDetail("dynamicCache", Path.GetFileName(profile.Ngram.DynamicCachePath));
         await operation.StageAsync("resolve_resources").ConfigureAwait(false);
         profile = ModelResourceCatalog.Resolve(profile, root);
         if (!string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath))
             ChatTemplateFile.ResolveRelative(profile.ChatTemplateRelativePath, root);
+        if (profile.Jinja && profile.ChatTemplateRelativePath is null
+            && ModelResourceCatalog.Read(model, root).Records.Any(r => r.Kind == ModelResourceKind.Template
+                && r.ResourcePath is null && r.ValidationRejected))
+            throw new InvalidDataException("内置模板重新检测未通过，请重新检测或选择可用模板 / Embedded template recheck failed; recheck or select a usable template.");
         if (profile.Jinja && profile.ChatTemplateRelativePath is not null
             && !ModelResourceCatalog.Read(model, root).Records.Any(r => r.Kind == ModelResourceKind.Template
                 && ModelResourceManagement.SamePath(r.ResourcePath, profile.ChatTemplateRelativePath, root) && ModelResourceCatalog.IsCurrent(r, root)))
@@ -51,11 +68,19 @@ public static class ModelStartupConfiguration
         if (profile.ContextShiftEnabled && ContextShiftCapabilityCache.Read(profile, root)?.Supported != true)
             throw new InvalidDataException("当前配置的上下文滚动尚无有效验证，请重新检测或关闭 / Context shifting is unverified; check it again or turn it off.");
         var keepRequested = profile.ExtraArguments.Keys.Any(key => key.Equals("keep", StringComparison.OrdinalIgnoreCase));
-        if (!profile.ContextShiftEnabled && !keepRequested) return;
+        var checkpointsRequested = profile.ExtraArguments.Keys.Any(key => key is "ctx-checkpoints" or "swa-checkpoints");
+        if (!profile.ContextShiftEnabled && !keepRequested && !checkpointsRequested && !profile.Ngram.Enabled && !profile.RuntimeParameters.HasIntent) return;
         var options = await LlamaRuntimeOptionDetector.DetectAsync(root, token).ConfigureAwait(false);
+        foreach (var argument in profile.RuntimeParameters.Arguments(profile))
+            if (options?.Contains(argument.Key) != true)
+                throw new InvalidDataException($"当前运行库无法确认支持 --{argument.Key} / Runtime support is unconfirmed.");
+        var ngramErrors = NgramOptions.ValidateRuntime(profile.Ngram, profile.MtpEnabled, options);
+        if (ngramErrors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, ngramErrors));
         if (profile.ContextShiftEnabled && options?.Contains("context-shift") != true)
             throw new InvalidDataException("当前 llama.cpp Runtime 无法确认支持 --context-shift，请关闭滚动或更换 Runtime / Runtime support for --context-shift could not be confirmed.");
         if (keepRequested && options?.Contains("keep") != true)
             throw new InvalidDataException("当前 llama.cpp Runtime 无法确认支持 --keep，请清空保留开头 token 设置或更换 Runtime / Runtime support for --keep could not be confirmed.");
+        if (checkpointsRequested && options?.Contains("ctx-checkpoints") != true)
+            throw new InvalidDataException("当前运行库无法确认支持上下文检查点 / Runtime checkpoint support is unconfirmed.");
     }
 }

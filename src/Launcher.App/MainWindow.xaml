@@ -242,9 +242,10 @@
                                 <StackPanel HorizontalAlignment="Center" Margin="0,0,0,8"><TextBlock Text="{DynamicResource Vram}" Foreground="{DynamicResource SecondaryBrush}" HorizontalAlignment="Center"/><Grid Width="48" Height="48" Margin="0,6,0,0"><local:CircularProgressRing x:Name="SidebarVramRing" TrackBrush="{DynamicResource PerformanceRingTrackBrush}" ProgressBrush="{DynamicResource PerformanceRingProgressBrush}"/><TextBlock x:Name="SidebarVramText" FontSize="12" Text="—" HorizontalAlignment="Center" VerticalAlignment="Center"/></Grid></StackPanel>
                             </UniformGrid>
                             <Grid Margin="8,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="0.9*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="1.1*"/></Grid.ColumnDefinitions>
                                 <StackPanel><TextBlock Text="{DynamicResource Speed}" Foreground="{DynamicResource SecondaryBrush}"/><TextBlock x:Name="SidebarSpeedText" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="15" Text="–"/></StackPanel>
-                                <StackPanel Grid.Column="1" Margin="16,0,0,0"><TextBlock Text="{DynamicResource Context}" Foreground="{DynamicResource SecondaryBrush}"/><TextBlock x:Name="SidebarContextText" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="15" Text="–"/></StackPanel>
+                                <StackPanel Grid.Column="1" Margin="4,0" MinWidth="48" ToolTip="{DynamicResource AcceptanceUnavailableTip}" x:Name="SidebarAcceptancePanel"><TextBlock Text="{DynamicResource AcceptanceRate}" Foreground="{DynamicResource SecondaryBrush}"/><TextBlock x:Name="SidebarAcceptanceText" Margin="0,4,0,0" FontSize="15" Text="–"/></StackPanel>
+                                <StackPanel Grid.Column="2" Margin="4,0,0,0"><TextBlock Text="{DynamicResource Context}" Foreground="{DynamicResource SecondaryBrush}"/><TextBlock x:Name="SidebarContextText" TextWrapping="Wrap" Margin="0,4,0,0" FontSize="15" Text="–"/></StackPanel>
                             </Grid>
                         </StackPanel>
                     </Grid>
@@ -435,7 +436,7 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <Grid Opacity="{Binding Opacity}">
+                                                    <Grid>
                                                         <Grid.RowDefinitions>
                                                             <RowDefinition Height="28" />
                                                             <RowDefinition Height="Auto" />
@@ -443,7 +444,7 @@
                                                             <RowDefinition Height="38" />
                                                         </Grid.RowDefinitions>
 
-                                                        <Grid>
+                                                        <Grid Opacity="{Binding Opacity}">
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="28" />
                                                                 <ColumnDefinition Width="*" />
@@ -468,14 +469,14 @@
                                                                       IsChecked="{Binding IsPending, Mode=OneWay}" />
                                                         </Grid>
 
-                                                        <TextBlock Grid.Row="1" Tag="{Binding Profile}" Margin="10,10,10,0"
+                                                        <TextBlock Grid.Row="1" Opacity="{Binding Opacity}" Tag="{Binding Profile}" Margin="10,10,10,0"
                                                                    HorizontalAlignment="Center" MaxWidth="310"
                                                                    FontSize="18" FontWeight="SemiBold"
                                                                    Text="{Binding ModelName}" ToolTip="{Binding ModelName}"
                                                                    TextTrimming="CharacterEllipsis" TextWrapping="NoWrap"
                                                                    MouseLeftButtonUp="ModeCardName_MouseLeftButtonUp" />
 
-                                                        <Grid Grid.Row="2" Margin="0,10,0,6" HorizontalAlignment="Center"
+                                                        <Grid Grid.Row="2" Opacity="{Binding Opacity}" Margin="0,10,0,6" HorizontalAlignment="Center"
                                                               VerticalAlignment="Center" Visibility="{Binding LocalDetailsVisibility}">
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="82" />
@@ -506,7 +507,7 @@
                                                             <TextBlock Grid.Row="2" Grid.Column="4" Style="{StaticResource ModeParameterValueStyle}" Text="{Binding RightValue3}" />
                                                         </Grid>
 
-                                                        <TextBlock Grid.Row="2" Margin="24,8" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                        <TextBlock Grid.Row="2" Opacity="{Binding Opacity}" Margin="24,8" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                    FontSize="16" Foreground="{DynamicResource SecondaryBrush}"
                                                                    Text="{Binding Summary}" Visibility="{Binding OpenAiDetailsVisibility}" />
 
@@ -636,12 +637,12 @@
                                             </ListBox>
                                             <TextBlock x:Name="SelectedModelDetailsText" Margin="0,10,0,0" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                                             <WrapPanel Margin="0,12,0,0">
-                                                <Button x:Name="EditModelButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
-                                                        Content="{DynamicResource EditParameters}" ToolTip="{DynamicResource EditModelToolTip}"
-                                                        Click="EditModelButton_Click" />
                                                 <Button x:Name="ModelResourcesButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
                                                         Content="{DynamicResource ModelResourceManagement}" ToolTip="{DynamicResource ModelResourceManagementTip}"
                                                         ToolTipService.InitialShowDelay="500" Click="ModelResourcesButton_Click" />
+                                                <Button x:Name="EditModelButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
+                                                        Content="{DynamicResource EditParameters}" ToolTip="{DynamicResource EditModelToolTip}"
+                                                        Click="EditModelButton_Click" />
                                                 <Button x:Name="ToggleModelVisibilityButton" Margin="0,0,8,8" Padding="12,8" FontSize="13"
                                                         Content="{DynamicResource ShowOrHide}" ToolTip="{DynamicResource ShowOrHideToolTip}"
                                                         Click="ToggleModelVisibilityButton_Click" />

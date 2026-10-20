@@ -122,15 +122,15 @@ public sealed class ModelResourceManagementTests : IDisposable
     }
 
     [Fact]
-    public async Task VisionReuse_RequiresSameTemplateContext()
+    public async Task VisionReuse_IsIndependentOfTemplateContext()
     {
         var profile = await Register(ModelResourceKind.Vision);
         var different = profile with { ChatTemplateRelativePath = "scripts/templates/another.jinja" };
         await File.WriteAllTextAsync(Path.Combine(_root, different.ChatTemplateRelativePath!), "{{ messages }}");
-        Assert.Null(ModelResourceManagement.FindReusable(different, _root, ModelResourceKind.Vision));
+        Assert.NotNull(ModelResourceManagement.FindReusable(different, _root, ModelResourceKind.Vision));
         var revised = different with { VisionValidationSignature = VisionValidationFingerprint.Compute(different, _root) };
         await ModelResourceCatalog.RegisterAsync(revised, _root, ModelResourceKind.Vision);
-        Assert.Equal(2, ModelResourceCatalog.Read(Model, _root).Records.Count);
+        Assert.Single(ModelResourceCatalog.Read(Model, _root).Records);
         Assert.NotNull(ModelResourceManagement.FindReusable(profile, _root, ModelResourceKind.Vision));
         Assert.NotNull(ModelResourceManagement.FindReusable(revised, _root, ModelResourceKind.Vision));
     }
@@ -182,9 +182,7 @@ public sealed class ModelResourceManagementTests : IDisposable
     [Theory]
     [InlineData("models/main.gguf")]
     [InlineData("models/vision.gguf")]
-    [InlineData("llama-server.exe")]
-    [InlineData("mtmd.dll")]
-    public async Task VisionMetadataReuse_StillRejectsChangedModelProjectorOrRuntime(string changedPath)
+    public async Task VisionMetadataReuse_StillRejectsChangedModelOrProjector(string changedPath)
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "mtmd.dll"), "fixture");
         var proof = await Register(ModelResourceKind.Vision);
@@ -299,6 +297,47 @@ public sealed class ModelResourceManagementTests : IDisposable
         Assert.Null(ModelResourceManagement.FindGeneratedTemplate(Model, _root));
     }
 
+    [Fact]
+    public async Task GeneratedTemplate_ExpiredByRuntimeUpdate_CanBeRecheckedWithStaleCapabilities()
+    {
+        await Register(ModelResourceKind.Mtp);
+        var mtpEvidence = JsonSerializer.Serialize(Assert.Single(ModelResourceCatalog.Read(Model, _root).Records));
+        var source = Model with
+        {
+            ThinkingEnabled = true,
+            SupportsThinkingSwitch = null,
+            VisionEnabled = true,
+            VisionSource = VisionSourceKind.External,
+            VisionProjectorRelativePath = "models/deleted.gguf"
+        };
+        var first = await CodexChatTemplateCompatibility.EnsureAsync(source, _root,
+            templateFileName: "model.old.codex-compatible.jinja");
+        await ChatTemplateValidationCache.WriteAsync(first.Profile, _root, CancellationToken.None);
+        await ModelResourceCatalog.RegisterAsync(first.Profile, _root, ModelResourceKind.Template);
+        Assert.NotNull(ModelResourceManagement.FindGeneratedTemplate(source, _root));
+        var oldPath = Path.Combine(_root, first.Profile.ChatTemplateRelativePath!);
+        var oldText = await File.ReadAllTextAsync(oldPath);
+
+        await File.AppendAllTextAsync(Path.Combine(_root, "llama-server.exe"), "updated");
+        Assert.Null(ModelResourceManagement.FindGeneratedTemplate(source, _root));
+        var replacement = await CodexChatTemplateCompatibility.EnsureAsync(source, _root,
+            templateFileName: "model.new.codex-compatible.jinja");
+        Assert.NotEmpty(Launcher.Scripts.RouterPreset.RouterPresetGenerator.Generate(
+            TemplateValidationProfile.Create(replacement.Profile), _root, true));
+        // Native rendering is not run with these GGUF fixtures; simulate its successful result.
+        await ChatTemplateValidationCache.WriteAsync(replacement.Profile, _root, CancellationToken.None);
+        await ModelResourceCatalog.RegisterAsync(replacement.Profile, _root, ModelResourceKind.Template);
+
+        Assert.Equal(replacement.Profile.ChatTemplateRelativePath,
+            ModelResourceManagement.FindGeneratedTemplate(source, _root)!.ResourcePath);
+        Assert.Equal(oldText, await File.ReadAllTextAsync(oldPath));
+        Assert.True(source.ThinkingEnabled);
+        Assert.True(source.VisionEnabled);
+        Assert.Null(source.ChatTemplateRelativePath);
+        Assert.Equal(mtpEvidence, JsonSerializer.Serialize(Assert.Single(ModelResourceCatalog.Read(source, _root).Records,
+            record => record.Kind == ModelResourceKind.Mtp)));
+    }
+
     [Theory]
     [InlineData(ModelResourceKind.Template)]
     [InlineData(ModelResourceKind.Mtp)]
@@ -339,7 +378,7 @@ public sealed class ModelResourceManagementTests : IDisposable
         await File.WriteAllTextAsync(Path.Combine(_root, other.ChatTemplateRelativePath!), "{{ messages }}");
         other = other with { VisionValidationSignature = VisionValidationFingerprint.Compute(other, _root) };
         await ModelResourceCatalog.RegisterAsync(other, _root, ModelResourceKind.Vision);
-        Assert.Equal(2, ModelResourceCatalog.Read(Model, _root).Records.Count);
+        Assert.Single(ModelResourceCatalog.Read(Model, _root).Records);
         await ModelResourceManagement.RemoveAsync(Model, _root, ModelResourceKind.Vision, profile.VisionProjectorRelativePath!, () => true);
         Assert.Empty(ModelResourceCatalog.Read(Model, _root).Records);
         Assert.True(File.Exists(Path.Combine(_root, profile.VisionProjectorRelativePath!)));

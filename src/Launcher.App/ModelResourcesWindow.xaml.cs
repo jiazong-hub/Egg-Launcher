@@ -16,7 +16,11 @@ public partial class ModelResourcesWindow : Window
     private ModelProfile _model;
     private readonly string _root;
     private readonly Func<bool> _canMutate;
+    private readonly Func<bool> _canEditMetadata;
     private readonly Func<ModelResourceAction, Task<string>> _action;
+    private readonly Func<ModelResourceKind, string?, Task<string>>? _recheck;
+    private IReadOnlyList<ModelResourceReference> _referencedResources = [];
+    private bool _discoveringReferences;
     private readonly bool _embeddedMtp;
     private readonly bool _embeddedVision;
     private readonly Func<ModelType, Task<ModelProfile>>? _saveType;
@@ -26,16 +30,21 @@ public partial class ModelResourcesWindow : Window
     private bool _working;
     private string? _snapshot;
 
-    private sealed record ResourceRow(string Name, string Status, string? FullPath, ModelResourceKind Kind, string? Path, bool CanRemove)
+    private sealed record ResourceRow(string Name, string Status, string? FullPath, ModelResourceKind Kind, string? Path,
+        bool CanRemove, bool CanRecheck, bool Registered = true)
     {
+        public string RecheckLabel => AppLanguageManager.Choose("重新检测", "Recheck");
+        public string RecheckTip => AppLanguageManager.Choose("重新检查此资源并更新验证记录，不修改配置文件。", "Check this resource again and update its evidence without editing configurations.");
+        public Visibility RecheckVisibility => Kind == ModelResourceKind.Mtp && Path is null ? Visibility.Collapsed : Visibility.Visible;
         public string RemoveLabel => AppLanguageManager.Choose("移除", "Remove");
-        public string RemoveTip => AppLanguageManager.Choose("从当前模型的可选资源中移除，保留硬盘文件。", "Remove registration for this model; keep the file on disk.");
-        public Visibility RemoveVisibility => Path is null ? Visibility.Collapsed : Visibility.Visible;
+        public string RemoveTip => AppLanguageManager.Choose("移除此资源登记，不删除硬盘文件。", "Remove this resource registration; keep the file on disk.");
+        public Visibility RemoveVisibility => Path is null || !Registered ? Visibility.Collapsed : Visibility.Visible;
     }
 
     public ModelResourcesWindow(ModelProfile model, string root, Func<bool> canMutate,
         Func<ModelResourceAction, Task<string>> action, bool embeddedMtp, bool embeddedVision,
-        Func<ModelType, Task<ModelProfile>>? saveType = null, Func<string, Task<ModelProfile>>? saveName = null, Launcher.Core.Diagnostics.DiagnosticJournal? diagnostics = null)
+        Func<ModelType, Task<ModelProfile>>? saveType = null, Func<string, Task<ModelProfile>>? saveName = null, Launcher.Core.Diagnostics.DiagnosticJournal? diagnostics = null,
+        Func<ModelResourceKind, string?, Task<string>>? recheck = null, Func<bool>? canEditMetadata = null)
     {
         InitializeComponent();
         SourceInitialized += (_, _) => AdaptiveWindowSizing.FitDialog(this, 860, 620, 640, 460);
@@ -43,7 +52,9 @@ public partial class ModelResourcesWindow : Window
         _model = model;
         _root = root;
         _canMutate = canMutate;
+        _canEditMetadata = canEditMetadata ?? canMutate;
         _action = action;
+        _recheck = recheck;
         _embeddedMtp = embeddedMtp;
         _embeddedVision = embeddedVision;
         _saveType = saveType;
@@ -64,9 +75,9 @@ public partial class ModelResourcesWindow : Window
         TemplateTab.Header = AppLanguageManager.Choose("模板管理", "Templates");
         MtpTab.Header = AppLanguageManager.Choose("MTP 文件管理", "MTP files");
         VisionTab.Header = AppLanguageManager.Choose("视觉模块管理", "Vision modules");
-        Activated += (_, _) => RefreshResources();
+        Activated += async (_, _) => { RefreshResources(); await DiscoverReferencesAsync(); };
         _timer.Tick += (_, _) => { if (!_working) RefreshResources(); };
-        Loaded += (_, _) => { RefreshResources(); _timer.Start(); };
+        Loaded += async (_, _) => { RefreshResources(); _timer.Start(); await DiscoverReferencesAsync(); };
         Closed += (_, _) => _timer.Stop();
         Closing += (_, e) => { if (_working) e.Cancel = true; };
         RefreshResources();
@@ -75,16 +86,17 @@ public partial class ModelResourcesWindow : Window
     private void RefreshResources()
     {
         var allowed = !_working && _canMutate();
-        RefreshModelInformation(allowed);
-        RefreshTypeUi(allowed);
+        var editable = !_working && _canEditMetadata();
+        RefreshModelInformation(editable);
+        RefreshTypeUi(editable);
         GenerateButton.IsEnabled = AddTemplateButton.IsEnabled = LoadMtpButton.IsEnabled = LoadVisionButton.IsEnabled = allowed;
         CloseButton.IsEnabled = !_working;
         AvailabilityText.Text = _working ? AppLanguageManager.Choose("正在处理，请等待完成。", "Working; wait for completion.")
-            : allowed ? ResourceTabs.SelectedItem == ModelInformationTab
+            : (ResourceTabs.SelectedItem == ModelInformationTab || ResourceTabs.SelectedItem == ModelTypeTab ? editable : allowed) ? ResourceTabs.SelectedItem == ModelInformationTab
                 ? AppLanguageManager.Choose("显示名称仅用于展示，不改变模型身份或配置绑定。", "The display name changes presentation only, not model identity or configuration bindings.")
                 : ResourceTabs.SelectedItem == ModelTypeTab
                 ? AppLanguageManager.Choose("选择类型后点击“保存类型”生效。", "Choose a type and select Save type to make it effective.")
-                : AppLanguageManager.Choose("移除仅清理登记；被配置引用的资源需要先修改相关配置。", "Removal keeps source files. Update referencing configurations before removing a registration.")
+                : AppLanguageManager.Choose("重新检测无需修改配置；移除被引用的登记前仍需修改相关配置。", "Recheck without editing configurations. Update referencing configurations before removing a registration.")
             : AppLanguageManager.Choose("当前仅可查看。请停止本地服务、检测及下载后再修改。", "View only. Stop local services, detection and downloads before making changes.");
         try
         {
@@ -106,6 +118,32 @@ public partial class ModelResourcesWindow : Window
             ResultText.Text = ex.Message;
             _snapshot = null;
         }
+    }
+
+    private async Task DiscoverReferencesAsync()
+    {
+        if (_discoveringReferences || _working) return;
+        _discoveringReferences = true;
+        try
+        {
+            var found = await ModelResourceRecheck.DiscoverAsync(_model, _root);
+            _referencedResources = found.References;
+            if (found.Warnings.Count > 0)
+            {
+                ResultText.Text = AppLanguageManager.Choose("以下配置无法读取，未从中发现资源：", "Could not discover resources in these configurations: ")
+                    + string.Join(", ", found.Warnings);
+                await _diagnostics.WriteAsync("resource_reference_discovery", "unavailable",
+                    new Dictionary<string, object?> { ["modelId"] = _model.Id, ["reasonCode"] = "configuration_unreadable", ["count"] = found.Warnings.Count });
+            }
+            RefreshResources();
+        }
+        catch (Exception ex)
+        {
+            ResultText.Text = ex.Message;
+            await _diagnostics.WriteAsync("resource_reference_discovery", "failed",
+                new Dictionary<string, object?> { ["modelId"] = _model.Id }, ex);
+        }
+        finally { _discoveringReferences = false; }
     }
 
     private static string TypeName(ModelType type) => type switch
@@ -159,7 +197,7 @@ public partial class ModelResourcesWindow : Window
 
     private void CardDisplayName_Changed(object sender, TextChangedEventArgs e)
     {
-        if (_model is not null && _canMutate is not null && ModelFactsText is not null) RefreshModelInformation(!_working && _canMutate());
+        if (_model is not null && _canEditMetadata is not null && ModelFactsText is not null) RefreshModelInformation(!_working && _canEditMetadata());
     }
 
     private async void SaveName_Click(object sender, RoutedEventArgs e)
@@ -177,7 +215,7 @@ public partial class ModelResourcesWindow : Window
             ModelNameText.ToolTip = _model.DisplayName;
             if (_model.ModelType != previousType) ResetTypeSelection();
             ResultText.Text = AppLanguageManager.Choose("显示名称已保存；模型身份和所有配置文件保持原样。", "Display name saved; model identity and all configuration files were kept unchanged.");
-        });
+        }, metadataOnly: true);
     }
 
     private ModelType? ChosenType => DenseTypeRadio.IsChecked == true ? ModelType.Dense : MoeTypeRadio.IsChecked == true ? ModelType.MoE : null;
@@ -208,7 +246,7 @@ public partial class ModelResourcesWindow : Window
 
     private void TypeChoice_Changed(object sender, RoutedEventArgs e)
     {
-        if (_canMutate is not null && _model is not null) RefreshTypeUi(!_working && _canMutate());
+        if (_canEditMetadata is not null && _model is not null) RefreshTypeUi(!_working && _canEditMetadata());
     }
 
     private void ResourceTabs_Changed(object sender, SelectionChangedEventArgs e)
@@ -218,14 +256,14 @@ public partial class ModelResourcesWindow : Window
 
     private async void SaveType_Click(object sender, RoutedEventArgs e)
     {
-        if (_saveType is null || ChosenType is not { } selected || selected == _model.ModelType) return;
+        if (_saveType is null || !SaveTypeButton.IsEnabled || ChosenType is not { } selected || selected == _model.ModelType) return;
         await RunAsync(async () =>
         {
             _model = await _diagnostics.RunAsync("model_type_save", new Dictionary<string, object?> { ["modelId"] = _model.Id, ["previousType"] = _model.ModelType.ToString(), ["requestedType"] = selected.ToString() },
                 _ => _saveType(selected));
             ResetTypeSelection();
             ResultText.Text = AppLanguageManager.Choose("模型类型已保存；所有配置文件保持原样。", "Model type saved; all configuration files were kept unchanged.");
-        });
+        }, metadataOnly: true);
     }
 
     private List<ResourceRow> Rows(ModelResourceKind kind, IReadOnlyList<ModelResourceRecord> records, bool allowed)
@@ -246,18 +284,24 @@ public partial class ModelResourcesWindow : Window
             _ when _embeddedVision => AppLanguageManager.Choose("检测到内置视觉元数据；可通过加载视觉模块确认关联。", "Built-in vision metadata detected; use Load Vision Module to confirm the association."),
             _ => AppLanguageManager.Choose("未确认内置视觉能力。", "No built-in vision confirmed."),
         };
-        var result = new List<ResourceRow> { new(builtInName, builtInStatus, null, kind, null, false) };
-        foreach (var group in relevant.Where(record => record.ResourcePath is not null)
-                     .GroupBy(record => System.IO.Path.GetFullPath(System.IO.Path.Combine(_root, record.ResourcePath!)), StringComparer.OrdinalIgnoreCase)
+        if (!builtInVerified && relevant.Any(record => record.ResourcePath is null && record.ValidationRejected))
+            builtInStatus = AppLanguageManager.Choose("重新检测未通过，请重新检测或选择其他资源", "Recheck failed; recheck or select another resource");
+        var canRecheck = allowed && _recheck is not null && File.Exists(System.IO.Path.Combine(_root, _model.ModelRelativePath));
+        var result = new List<ResourceRow> { new(builtInName, builtInStatus, null, kind, null, false,
+            canRecheck && (kind == ModelResourceKind.Template || kind == ModelResourceKind.Vision && _embeddedVision)) };
+        var paths = relevant.Select(record => record.ResourcePath).Where(path => path is not null).Select(path => path!)
+            .Concat(_referencedResources.Where(reference => reference.Kind == kind).Select(reference => reference.Path));
+        foreach (var group in paths.GroupBy(path => System.IO.Path.GetFullPath(System.IO.Path.Combine(_root, path)), StringComparer.OrdinalIgnoreCase)
                      .OrderBy(group => group.Key, StringComparer.OrdinalIgnoreCase))
         {
-            var valid = group.Where(record => ModelResourceCatalog.IsCurrent(record, _root)).ToArray();
+            var registered = relevant.Where(record => ModelResourceManagement.SamePath(record.ResourcePath, group.First(), _root)).ToArray();
+            var valid = registered.Where(record => ModelResourceCatalog.IsCurrent(record, _root)).ToArray();
             var status = !File.Exists(group.Key) ? AppLanguageManager.Choose("文件缺失", "File missing")
-                : valid.Length == 0 ? AppLanguageManager.Choose("验证依据已失效，需重新添加并检测", "Validation is stale; add and check again") : VerifiedStatus(kind);
-            if (kind == ModelResourceKind.Vision && valid.Length > 0)
-                status += AppLanguageManager.Choose(" · 适用模板：", " · Templates: ") + string.Join(" / ", valid.Select(record =>
-                    record.Evidence.ChatTemplateRelativePath is { } path ? System.IO.Path.GetFileName(path) : AppLanguageManager.Choose("内置", "Built-in")).Distinct());
-            result.Add(new(System.IO.Path.GetFileName(group.Key), status, group.Key, kind, group.First().ResourcePath, allowed));
+                : registered.Length == 0 ? AppLanguageManager.Choose("配置中引用，尚未登记验证", "Referenced by a configuration; not registered or verified")
+                : valid.Length == 0 && registered.Any(record => record.ValidationRejected) ? AppLanguageManager.Choose("重新检测未通过，请重新检测", "Recheck failed; check again")
+                : valid.Length == 0 ? AppLanguageManager.Choose("验证依据已失效，请重新检测", "Validation is stale; recheck this resource") : VerifiedStatus(kind);
+            result.Add(new(System.IO.Path.GetFileName(group.Key), status, group.Key, kind, group.First(), allowed,
+                canRecheck && File.Exists(group.Key), registered.Length > 0));
         }
         return result;
     }
@@ -269,10 +313,10 @@ public partial class ModelResourcesWindow : Window
         _ => AppLanguageManager.Choose("已通过 GGUF 元数据识别", "Recognized from GGUF metadata"),
     };
 
-    private async Task RunAsync(Func<Task> operation)
+    private async Task RunAsync(Func<Task> operation, bool metadataOnly = false)
     {
         if (_working) return;
-        if (!_canMutate()) { RefreshResources(); return; }
+        if (!(metadataOnly ? _canEditMetadata() : _canMutate())) { RefreshResources(); return; }
         _working = true;
         RefreshResources();
         try { await operation(); }
@@ -285,6 +329,12 @@ public partial class ModelResourcesWindow : Window
     private async void AddTemplate_Click(object sender, RoutedEventArgs e) => await PerformAsync(ModelResourceAction.AddTemplate);
     private async void LoadMtp_Click(object sender, RoutedEventArgs e) => await PerformAsync(ModelResourceAction.LoadMtp);
     private async void LoadVision_Click(object sender, RoutedEventArgs e) => await PerformAsync(ModelResourceAction.LoadVision);
+
+    private async void Recheck_Click(object sender, RoutedEventArgs e)
+    {
+        if (_recheck is null || sender is not Button { Tag: ResourceRow { CanRecheck: true } row }) return;
+        await RunAsync(async () => ResultText.Text = await _recheck(row.Kind, row.Path));
+    }
 
     private async void Remove_Click(object sender, RoutedEventArgs e)
     {

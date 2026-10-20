@@ -355,6 +355,87 @@ internal sealed class TomlRootDocument
 
     public override string ToString() => _text;
 
+    // Dynamic fields are tracked as individual values, preserving sibling fields,
+    // table formatting and comments. Never replace an entire user table to edit a leaf.
+    public string? GetCustomValue(string key)
+    {
+        var entry = FindCustomAssignment(key);
+        if (entry is null)
+        {
+            EnsureCustomInsertionSafe(key);
+            return null;
+        }
+        var span = entry.Value.Item.Value!.Span;
+        return _text.Substring(span.Offset, span.Length);
+    }
+
+    public TomlRootDocument SetCustomValue(string key, string? value)
+    {
+        if (value is not null) ValidateCustomValue(key, value);
+        var entry = FindCustomAssignment(key);
+        if (entry is not null)
+        {
+            var item = entry.Value.Item;
+            if (value is null && entry.Value.Inline)
+                throw new InvalidDataException("无法安全移除内联表字段 / Cannot safely remove an inline-table field.");
+            var span = value is null ? item.Span : item.Value!.Span;
+            return new TomlRootDocument(_text[..span.Offset] + (value ?? "") + _text[(span.Offset + span.Length)..]);
+        }
+        EnsureCustomInsertionSafe(key);
+        if (value is null) return this;
+        var target = ParseManagedKey(key);
+        var table = _syntax.Tables.OfType<TableSyntax>()
+            .Where(t => IsPrefix(GetKeyPath(t.Name), target) && GetKeyPath(t.Name).Length < target.Length)
+            .OrderByDescending(t => GetKeyPath(t.Name).Length).FirstOrDefault();
+        if (table is null) return SetRawAssignment(key, key + " = " + value);
+        var relative = string.Join('.', target.Skip(GetKeyPath(table.Name).Length));
+        var end = table.Span.Offset + table.Span.Length;
+        return new TomlRootDocument(_text[..end] + DetectLineEnding() + relative + " = " + value
+            + DetectLineEnding() + _text[end..]);
+    }
+
+    public static void ValidateCustomValue(string key, string value)
+    {
+        var text = key + " = " + value;
+        ValidateReplacementAssignment(ParseManagedKey(key), text);
+        var item = ParseValidated(text).KeyValues.Single();
+        var span = item.Value!.Span;
+        if (!string.Equals(text.Substring(span.Offset, span.Length), value.Trim(), StringComparison.Ordinal))
+            throw new InvalidDataException("自定参数只能填写 TOML 值，不能附加注释或其他内容 / Enter only a TOML literal, without comments or extra content.");
+    }
+
+    private (KeyValueSyntax Item, bool Inline)? FindCustomAssignment(string key)
+    {
+        var target = ParseManagedKey(key);
+        foreach (var table in _syntax.Tables)
+            if (table is TableArraySyntax && PathsOverlapAsDefinition(GetKeyPath(table.Name), target))
+                throw new InvalidDataException("自定参数不支持数组表路径 / Array-table paths are not supported.");
+        foreach (var item in _syntax.KeyValues)
+            if (Search(item, [], false) is { } found) return found;
+        foreach (var table in _syntax.Tables)
+            foreach (var item in table.Items)
+                if (Search(item, GetKeyPath(table.Name), false) is { } found) return found;
+        return null;
+
+        (KeyValueSyntax, bool)? Search(KeyValueSyntax item, string[] parent, bool inline)
+        {
+            var path = parent.Concat(GetKeyPath(item.Key)).ToArray();
+            if (PathsEqual(path, target)) return (item, inline);
+            if (IsPrefix(path, target) && item.Value is InlineTableSyntax map)
+                foreach (var child in map.Items)
+                    if (child.KeyValue is { } nested && Search(nested, path, true) is { } result) return result;
+            return null;
+        }
+    }
+
+    private void EnsureCustomInsertionSafe(string key)
+    {
+        // A sealed inline-table/scalar ancestor or an existing descendant cannot
+        // be safely converted into another shape. Fail before touching config.toml.
+        if (ContainsDefinition(key))
+            throw new InvalidDataException("自定参数与现有 TOML 结构冲突；请使用兼容的字段路径 / Custom field conflicts with the existing TOML structure.");
+    }
+
     private KeyValueSyntax? FindSingleAssignment(string key)
     {
         var target = ParseManagedKey(key);

@@ -7,6 +7,15 @@ public static class VisionValidationFingerprint
 {
     public static string Compute(ModelProfile profile, string runtimeRoot)
     {
+        var root = Path.GetFullPath(runtimeRoot);
+        var projector = profile.VisionSource == VisionSourceKind.External && !string.IsNullOrWhiteSpace(profile.VisionProjectorRelativePath)
+            ? FileSignature(Path.Combine(root, profile.VisionProjectorRelativePath)) : "built-in";
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(string.Join("|", "metadata-v2",
+            FileSignature(Path.Combine(root, profile.ModelRelativePath)), projector, profile.VisionSource))));
+    }
+
+    public static string ComputeLegacy(ModelProfile profile, string runtimeRoot)
+    {
         ArgumentNullException.ThrowIfNull(profile);
         var root = Path.GetFullPath(runtimeRoot);
         var model = FileSignature(Path.Combine(root, profile.ModelRelativePath));
@@ -31,10 +40,8 @@ public static class VisionValidationFingerprint
         profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified
         && profile.VisionValidatedAtUtc is not null
         && !string.IsNullOrWhiteSpace(profile.VisionValidationSignature)
-        && string.Equals(
-            profile.VisionValidationSignature,
-            Compute(profile, runtimeRoot),
-            StringComparison.OrdinalIgnoreCase);
+        && (string.Equals(profile.VisionValidationSignature, Compute(profile, runtimeRoot), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(profile.VisionValidationSignature, ComputeLegacy(profile, runtimeRoot), StringComparison.OrdinalIgnoreCase));
 
     public static bool HasUsableSource(ModelProfile profile) =>
         profile.VisionCapabilityStatus == VisionCapabilityStatus.Verified

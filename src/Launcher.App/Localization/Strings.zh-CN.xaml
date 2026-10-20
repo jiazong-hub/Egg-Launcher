@@ -2,6 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
     <sys:String x:Key="LanguageCode">ZH</sys:String>
+    <sys:String x:Key="AcceptanceRate">接受率</sys:String>
+    <sys:String x:Key="AcceptanceUnavailableTip">最近一次推理请求的草稿接受率。启用 MTP 且收到 llama.cpp 有效统计后显示；未收到统计时显示 –。</sys:String>
     <sys:String x:Key="SwitchLanguageToolTip">切换到英文；右键可恢复跟随系统</sys:String>
     <sys:String x:Key="FollowSystemLanguage">跟随 Windows 显示语言</sys:String>
     <sys:String x:Key="SystemLanguageToolTip">正在跟随 Windows 显示语言（{0}）；单击可手动切换，右键可管理语言</sys:String>
@@ -113,6 +115,20 @@
     <sys:String x:Key="LocalDataDirectory">本地数据目录</sys:String>
     <sys:String x:Key="LocalDataBody">模型与 Runtime 数据位于用户自行选择的 llama.cpp 目录。删除应用文件不会自动删除这些数据。</sys:String>
     <sys:String x:Key="ChangelogTab">更新日志</sys:String>
+    <sys:String x:Key="ReleaseNote099Title">0.9.9 · 2026-10-20</sys:String>
+    <sys:String x:Key="ReleaseNote099Item1">• 扩展 Batch Size、Micro Batch 选项，支持自定义输入。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item2">• 增加五种 n-gram 推测解码策略，支持与 MTP 联合使用。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item3">• 补齐 MTP、MoE、缓存及高级运行参数。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item4">• 增加实验性“自定参数”选项卡，分别支持 llama.cpp 与 Codex 参数。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item5">• 完善参数查重、格式检查及 Codex 配置恢复。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item6">• 增加模板、外置 MTP、视觉模块的重新检测入口。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item7">• 优化能力检测与验证记录复用，减少无关参数造成的验证失效。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item8">• 梳理保存与启动的检查边界，修复不合理拦截。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item9">• 上下文、安全余量、工具结果历史上限统一采用整数 K 输入。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item10">• 仪表盘增加最近一次草稿接受率显示。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item11">• 补齐运行参数的命令名称、简短介绍及中英文悬浮提示。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item12">• 优化模型类型对应的参数显示、按钮布局及界面间距。</sys:String>
+    <sys:String x:Key="ReleaseNote099Item13">• 补齐新增功能的简易与详细诊断日志。</sys:String>
     <sys:String x:Key="ReleaseNote098Title">0.9.8 · 2026-10-18</sys:String>
     <sys:String x:Key="ReleaseNote098Item1">• 增加多配置文件支持</sys:String>
     <sys:String x:Key="ReleaseNote098Item2">• 梳理模型管理与运行参数</sys:String>
@@ -219,15 +235,15 @@
     <sys:String x:Key="CodexStreamIdleTimeout">Codex SSE 空闲等待时间（分钟）</sys:String>
     <sys:String x:Key="CodexStreamIdleTimeoutDefault">沿用 Codex 默认</sys:String>
     <sys:String x:Key="CodexStreamIdleTimeoutTip">适用于本地回答和上下文压缩，切回在线模式使用原有配置（沿用默认通常为5分钟）。</sys:String>
-    <sys:String x:Key="CompactionReserve">压缩安全余量</sys:String>
-    <sys:String x:Key="CompactionReserveTip">可输入整数 tokens 或 K（1K=1,024）。至少 1,024，严格小于 Context。Codex 在下一次推理前保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。</sys:String>
+    <sys:String x:Key="CompactionReserve">压缩安全余量（K）</sys:String>
+    <sys:String x:Key="CompactionReserveTip">直接输入正整数，单位为 K（1K=1,024 tokens）。严格小于 Context。Codex 在下一次推理前保留的空闲上下文。压缩线 = Context - 安全余量；它不是一次回答的输出 token 上限。</sys:String>
     <sys:String x:Key="GpuLayersTip">Auto 交给 llama.cpp 决定；All 尝试把全部可卸载层放入 GPU；0 使用 CPU。</sys:String>
     <sys:String x:Key="GpuLayersCustomTip">输入非负整数 GPU 卸载层数。</sys:String>
     <sys:String x:Key="FlashAttentionTip">支持时可减少注意力计算的显存带宽开销；不确定时使用 Auto。</sys:String>
     <sys:String x:Key="KvCacheTip">量化 KV Cache 可节省显存，但可能影响质量或兼容性；请按模型和硬件自行选择。</sys:String>
     <sys:String x:Key="VCacheTip">Flash Attention 对部分 V Cache 类型有要求；请按模型和硬件自行选择。</sys:String>
-    <sys:String x:Key="BatchSizeTip">提示词批处理大小。Default 使用 llama.cpp 默认值。</sys:String>
-    <sys:String x:Key="MicroBatchTip">每次实际计算的微批大小，不应大于 Batch Size。</sys:String>
+    <sys:String x:Key="BatchSizeTip">提示词批处理大小。可选择预设或输入正整数；Default 或留空使用 llama.cpp 默认值。</sys:String>
+    <sys:String x:Key="MicroBatchTip">每次实际计算的微批大小。可选择预设或输入正整数；Default 或留空使用 llama.cpp 默认值。两项均明确设置时，不应大于 Batch Size。</sys:String>
     <sys:String x:Key="ParallelSlots">并发槽位</sys:String>
     <sys:String x:Key="ParallelSlotsTip">并发越高，KV Cache 占用越大；-1 由 llama.cpp 自动决定。</sys:String>
     <sys:String x:Key="IdleReleaseVram">空闲释放显存</sys:String>
@@ -253,7 +269,7 @@
     <sys:String x:Key="ExposeReasoningEffortTip">只提供当前模板与 Responses 路径已验证的真实档位；不增加或映射档位。</sys:String>
     <sys:String x:Key="ReverseReasoningOrder">反转档位显示顺序</sys:String>
     <sys:String x:Key="ReverseReasoningOrderTip">如果 Codex 中的思考档位顺序与预期相反，可开启此项。保存后生效；仅反转排列，不改变档位值。</sys:String>
-    <sys:String x:Key="MtpParameters">MTP 推测解码</sys:String>
+    <sys:String x:Key="MtpParameters">推测解码</sys:String>
     <sys:String x:Key="VisionParameters">视觉模块</sys:String>
     <sys:String x:Key="EnableVision">启用视觉输入</sys:String>
     <sys:String x:Key="EnableVisionTip">仅在 llama.cpp 已通过真实图片请求验证后可启用。</sys:String>
@@ -281,7 +297,7 @@
     <sys:String x:Key="MtpBackendSampling">后端采样</sys:String>
     <sys:String x:Key="MtpBackendSamplingTip">默认不覆盖 llama.cpp；只在排查兼容性或针对特定后端调优时修改。</sys:String>
     <sys:String x:Key="MtpExternalResources">外部 MTP 资源参数</sys:String>
-    <sys:String x:Key="MtpGpuLayersTip">外部 MTP 模型的 GPU 卸载层数。留空由 llama.cpp 自动决定。</sys:String>
+    <sys:String x:Key="MtpGpuLayersTip">外部 MTP 模型的 GPU 卸载层数。支持非负整数、auto、all；留空沿用默认值。</sys:String>
     <sys:String x:Key="MtpDeviceTip">外部 MTP 模型使用的计算设备。留空跟随 llama.cpp 默认设备。</sys:String>
     <sys:String x:Key="MtpCacheTip">外部 MTP 模型的 KV Cache 类型。留空使用 llama.cpp 默认值。</sys:String>
     <sys:String x:Key="MtpThreadsTip">外部 MTP 模型的 CPU 线程数。留空由 llama.cpp 决定。</sys:String>
@@ -326,8 +342,8 @@
     <sys:String x:Key="ContextCheckpoints">上下文检查点</sys:String>
     <sys:String x:Key="ContextCheckpointsTip">对应 llama.cpp --ctx-checkpoints：留空使用 Runtime 默认值；0 关闭检查点，可能降低长前缀恢复效率并增加预填充时间。此项不改变 Codex 的上下文压缩。</sys:String>
     <sys:String x:Key="LongConversationSettings">长对话与上下文</sys:String>
-    <sys:String x:Key="ToolOutputHistoryLimit">工具结果历史上限</sys:String>
-    <sys:String x:Key="ToolOutputHistoryLimitTip">可输入整数 tokens 或 K（1K=1,024）。对应 Codex tool_output_token_limit，只限制单个工具返回结果写入历史的预算，不限制整轮命令数量或模型生成命令参数。默认沿用现有 Codex 设置；如设置具体值，必须小于压缩安全余量。</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimit">工具结果历史上限（K）</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimitTip">直接输入正整数，单位为 K（1K=1,024 tokens）。对应 Codex tool_output_token_limit，只限制单个工具返回结果写入历史的预算，不限制整轮命令数量或模型生成命令参数。默认沿用现有 Codex 设置；如设置具体值，必须小于压缩安全余量。</sys:String>
     <sys:String x:Key="KeepInitialTokens">保留开头 token（--keep）</sys:String>
     <sys:String x:Key="KeepInitialTokensTip">留空时不写入 --keep，沿用 llama.cpp 默认值。设置前请先填写明确的 Context 数值。填写非负整数后，llama.cpp 在上下文滚动时保留开头的这些 token；较大的值会减少可滚动空间，必须小于 Context。</sys:String>
     <sys:String x:Key="ContextShiftEnabled">上下文滚动（开启 / 关闭）</sys:String>
@@ -432,4 +448,121 @@
     <sys:String x:Key="CardDisplayNameTip">仅修改界面显示名称，不改变模型身份、文件名或配置绑定。</sys:String>
     <sys:String x:Key="SaveCardDisplayName">保存名称</sys:String>
     <sys:String x:Key="SaveCardDisplayNameTip">保存显示名称，不修改已有配置文件。</sys:String>
+    <sys:String x:Key="CustomParametersTitle">自定参数</sys:String>
+    <sys:String x:Key="CustomParametersHint">实验性：按接收者填写参数。保存不会立即修改运行中的服务。与固定参数重复或格式不正确时，必须修正后才能保存、应用或另存。实际效果取决于接收程序及其版本。</sys:String>
+    <sys:String x:Key="AdditionalCacheParameters">上下文与缓存</sys:String>
+    <!-- Parameter hover help: command/configuration key followed by a short purpose. -->
+    <sys:String x:Key="ParameterHelp_ContextSizeComboBox" xml:space="preserve">llama.cpp: --ctx-size (-c); Codex: model_context_window&#10;以 K 为单位设置上下文容量，包含输入、历史和生成内容；按模型能力与硬件容量选择。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomContextSizeTextBox" xml:space="preserve">llama.cpp: --ctx-size (-c); Codex: model_context_window&#10;直接输入正整数，单位为 K，例如 96 表示 96K（1K=1,024 tokens）；不超过模型上限。</sys:String>
+    <sys:String x:Key="ParameterHelp_CompactionSafetyReserveComboBox" xml:space="preserve">Codex: model_auto_compact_token_limit = Context - reserve&#10;直接输入正整数，单位为 K。为后续处理预留上下文；启动器用 Context 减去安全余量计算压缩触发线，不是单次回答上限。</sys:String>
+    <sys:String x:Key="ParameterHelp_ToolOutputTokenLimitComboBox" xml:space="preserve">Codex: tool_output_token_limit&#10;直接输入正整数，单位为 K。限制单个工具返回结果写入对话历史的 token 预算，不限制整轮工具数量；继承项沿用 Codex 设置。</sys:String>
+    <sys:String x:Key="ParameterHelp_CodexStreamIdleTimeoutComboBox" xml:space="preserve">Codex: model_providers.chatgpt_local_launcher.stream_idle_timeout_ms&#10;设置本地响应流无新数据时的最长等待时间，适用于回答和压缩；界面按分钟填写，写入时转换为毫秒。</sys:String>
+    <sys:String x:Key="ParameterHelp_ContextShiftCheckBox" xml:space="preserve">llama.cpp: --context-shift / --no-context-shift&#10;上下文满时丢弃较早内容以继续生成，可能遗忘先前信息；不执行 Codex 的摘要压缩。</sys:String>
+    <sys:String x:Key="ParameterHelp_GpuLayersComboBox" xml:space="preserve">llama.cpp: --n-gpu-layers&#10;选择卸载到 GPU 的模型层数。Auto 由运行库决定，All 尝试卸载全部可用层，0 使用 CPU。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomGpuLayersTextBox" xml:space="preserve">llama.cpp: --n-gpu-layers&#10;输入自定义 GPU 卸载层数，须为非负整数。</sys:String>
+    <sys:String x:Key="ParameterHelp_FlashAttentionComboBox" xml:space="preserve">llama.cpp: --flash-attn&#10;选择是否使用 Flash Attention；受支持时可减少注意力计算的内存开销。Auto 交给运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_CacheTypeKComboBox" xml:space="preserve">llama.cpp: --cache-type-k&#10;设置 K 缓存的数据类型；量化可节省显存或内存，也可能影响质量与兼容性。</sys:String>
+    <sys:String x:Key="ParameterHelp_CacheTypeVComboBox" xml:space="preserve">llama.cpp: --cache-type-v&#10;设置 V 缓存的数据类型；可用类型还受 Flash Attention 和后端支持限制。</sys:String>
+    <sys:String x:Key="ParameterHelp_BatchSizeComboBox" xml:space="preserve">llama.cpp: --batch-size (-b)&#10;设置提示词处理的逻辑批量上限；可选择预设或输入正整数，Default 或留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MicroBatchSizeComboBox" xml:space="preserve">llama.cpp: --ubatch-size (-ub)&#10;设置一次实际计算的物理批量；影响计算时的内存占用，两项显式设置时不得大于 Batch Size。</sys:String>
+    <sys:String x:Key="ParameterHelp_ParallelComboBox" xml:space="preserve">llama.cpp: --parallel&#10;设置并行处理的请求槽位数；更多槽位通常需要更多 KV 缓存，-1 由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_IdleSleepSecondsComboBox" xml:space="preserve">llama.cpp: --sleep-idle-seconds&#10;空闲达到指定秒数后卸载模型和 KV 缓存；下次请求重新加载，-1 禁用休眠。</sys:String>
+    <sys:String x:Key="ParameterHelp_MoePlacementComboBox" xml:space="preserve">llama.cpp: --cpu-moe / --n-cpu-moe&#10;选择将全部或前 N 层 MoE 专家放在 CPU，减少显存需求但可能降低速度；默认不覆盖运行库。</sys:String>
+    <sys:String x:Key="ParameterHelp_CpuMoeLayersTextBox" xml:space="preserve">llama.cpp: --n-cpu-moe&#10;设置前多少层的 MoE 专家放在 CPU；仅在选择前 N 层 CPU 时生效。</sys:String>
+    <sys:String x:Key="ParameterHelp_MoeLoadModeComboBox" xml:space="preserve">llama.cpp: --load-mode&#10;选择模型权重的读取方式，例如 mmap 文件映射或 mlock 内存锁定；默认由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_MoeFitComboBox" xml:space="preserve">llama.cpp: --fit&#10;允许运行库调整加载设置以适配可用内存或显存；特殊模型是否适用以模型说明为准。</sys:String>
+    <sys:String x:Key="ParameterHelp_JinjaCheckBox" xml:space="preserve">llama.cpp: --jinja / --no-jinja&#10;选择是否使用 Jinja 聊天模板处理对话和工具格式；模板本身不等于思考、视觉或 MTP 能力证明。</sys:String>
+    <sys:String x:Key="ParameterHelp_TemplateResourceComboBox" xml:space="preserve">llama.cpp: --chat-template-file&#10;选择本套配置使用的聊天模板；选择内置模板时不传外部文件路径。</sys:String>
+    <sys:String x:Key="ParameterHelp_ThinkingEnabledCheckBox" xml:space="preserve">llama.cpp: --reasoning on/off; off: --reasoning-budget 0&#10;显式开启或关闭已验证的思考模式；沿用模板默认时不写入这些开关。</sys:String>
+    <sys:String x:Key="ParameterHelp_InheritThinkingButton" xml:space="preserve">启动器: ThinkingEnabled (inherit)&#10;取消显式思考开关，恢复使用模板自身的默认行为。</sys:String>
+    <sys:String x:Key="ParameterHelp_ShowThinkingProcessCheckBox" xml:space="preserve">Codex: show_raw_agent_reasoning&#10;控制是否显示思考内容，不改变模型是否思考；仅在思考功能实际启用时应用。</sys:String>
+    <sys:String x:Key="ParameterHelp_ReasoningEffortCheckBox" xml:space="preserve">Codex Catalog: supported_reasoning_levels&#10;把已验证的真实思考档位提供给 Codex 选择，不新增或映射档位。</sys:String>
+    <sys:String x:Key="ParameterHelp_ReverseReasoningOrderCheckBox" xml:space="preserve">启动器: Catalog supported_reasoning_levels order&#10;仅反转 Codex 中的思考档位排列，不改变档位值或模型能力。</sys:String>
+    <sys:String x:Key="ParameterHelp_PreferredReasoningLevelComboBox" xml:space="preserve">Codex: model_reasoning_effort; Catalog: default_reasoning_level&#10;选择默认思考档位；沿用默认时由已验证的模板默认及现有选择规则决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionEnableCheckBox" xml:space="preserve">llama.cpp: --no-mmproj (off); --mmproj (external source)&#10;启用所选视觉来源；现有登记基于元数据识别，实际图片兼容性由正式加载和使用确认。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionResourceComboBox" xml:space="preserve">llama.cpp: --mmproj&#10;选择已登记的视觉来源；外置来源传递 mmproj 路径，内置来源不指定外部文件。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionOffloadComboBox" xml:space="preserve">llama.cpp: --mmproj-offload / --no-mmproj-offload&#10;选择是否把视觉投影器计算卸载到 GPU；关闭可降低显存需求但增加 CPU 工作。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionDeviceTextBox" xml:space="preserve">llama.cpp: --mmproj-device&#10;指定视觉投影器使用的设备；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionImageMinTokensTextBox" xml:space="preserve">llama.cpp: --image-min-tokens&#10;设置单张图片的最小 token 预算；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionImageMaxTokensTextBox" xml:space="preserve">llama.cpp: --image-max-tokens&#10;设置单张图片的最大 token 预算；更高预算可能增加上下文与内存消耗。</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionBatchMaxTokensTextBox" xml:space="preserve">llama.cpp: --mtmd-batch-max-tokens&#10;设置多模态处理的批量 token 上限；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpEnableCheckBox" xml:space="preserve">llama.cpp: --spec-type draft-mtp&#10;使用 MTP 提前生成草稿，再由主模型验证；可与已选择的 n-gram 策略组合，速度取决于模型和运行库。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpResourceComboBox" xml:space="preserve">llama.cpp: --spec-draft-model (external source)&#10;选择内置 MTP 或已验证的外置 MTP；内置来源不传外部辅助文件。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpNMaxTextBox" xml:space="preserve">llama.cpp: --spec-draft-n-max&#10;设置每轮最多生成的草稿 token 数；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpNMinTextBox" xml:space="preserve">llama.cpp: --spec-draft-n-min&#10;设置一段草稿被采用所需的最小长度；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpPMinTextBox" xml:space="preserve">llama.cpp: --spec-draft-p-min&#10;草稿最低概率阈值，范围 0～1；提高后更早停止低置信度草稿。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpPSplitTextBox" xml:space="preserve">llama.cpp: --spec-draft-p-split&#10;设置草稿分支的概率阈值，范围 0～1；实际分支行为取决于运行库。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpBackendSamplingComboBox" xml:space="preserve">llama.cpp: --spec-draft-backend-sampling / --no-spec-draft-backend-sampling&#10;选择是否在模型后端执行受支持的草稿采样；默认沿用运行库行为。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpGpuLayersTextBox" xml:space="preserve">llama.cpp: --spec-draft-ngl&#10;设置外置 MTP 的 GPU 卸载层数，支持非负整数、auto、all；留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpDeviceTextBox" xml:space="preserve">llama.cpp: --spec-draft-device&#10;指定外置 MTP 使用的设备；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpCacheTypeKComboBox" xml:space="preserve">llama.cpp: --spec-draft-type-k&#10;设置外置 MTP 的 K 缓存数据类型；量化可能减少内存占用，也可能影响兼容性。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpCacheTypeVComboBox" xml:space="preserve">llama.cpp: --spec-draft-type-v&#10;设置外置 MTP 的 V 缓存数据类型；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpThreadsTextBox" xml:space="preserve">llama.cpp: --spec-draft-threads&#10;设置外置 MTP 生成草稿时的 CPU 线程数；留空由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpBatchThreadsTextBox" xml:space="preserve">llama.cpp: --spec-draft-threads-batch&#10;设置外置 MTP 批处理阶段的 CPU 线程数；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-draft-n-ubatch" xml:space="preserve">llama.cpp: --spec-draft-n-ubatch&#10;设置草稿模型一次实际计算的物理批量；0 继承主模型物理批量，留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-draft-sampling" xml:space="preserve">llama.cpp: --spec-draft-sampling&#10;选择草稿采样方式：greedy 选择最高概率项，probabilistic 按概率采样；默认沿用运行库。</sys:String>
+    <sys:String x:Key="ParameterHelp_moe-cache-mib" xml:space="preserve">llama.cpp: --moe-cache-mib&#10;使用显存缓存放在 CPU 的 MoE 专家，单位 MiB；0 关闭缓存，留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_DeviceTextBox" xml:space="preserve">llama.cpp: --device&#10;指定主模型使用的计算设备；可按运行库格式填写多设备列表，留空使用默认设备。</sys:String>
+    <sys:String x:Key="ParameterHelp_KvOffloadComboBox" xml:space="preserve">llama.cpp: --kv-offload / --no-kv-offload&#10;选择是否把 KV 缓存卸载到 GPU；关闭通常可减少显存占用，但可能降低速度。</sys:String>
+    <sys:String x:Key="ParameterHelp_ThreadsTextBox" xml:space="preserve">llama.cpp: --threads&#10;设置主模型生成阶段的 CPU 线程数；留空由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_ThreadsBatchTextBox" xml:space="preserve">llama.cpp: --threads-batch&#10;设置提示词批处理阶段的 CPU 线程数；留空沿用运行库默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_DenseLoadModeComboBox" xml:space="preserve">llama.cpp: --load-mode&#10;选择模型权重的读取方式，例如文件映射、内存锁定或受支持的直接读取；默认由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_LazyModeComboBox" xml:space="preserve">llama.cpp: --lazy-mode&#10;按需读取受支持的 Tensor，减少预先读取；开启时依赖 mmap，性能受存储速度影响。</sys:String>
+    <sys:String x:Key="ParameterHelp_DenseFitComboBox" xml:space="preserve">llama.cpp: --fit&#10;允许运行库调整加载设置以适配可用内存或显存；默认不覆盖运行库行为。</sys:String>
+    <sys:String x:Key="ParameterHelp_FitTargetTextBox" xml:space="preserve">llama.cpp: --fit-target&#10;设置自动适配时希望保留的设备内存余量，单位 MiB；多设备可按格式分别填写。</sys:String>
+    <sys:String x:Key="ParameterHelp_FitContextTextBox" xml:space="preserve">llama.cpp: --fit-ctx&#10;设置自动适配允许缩减到的最低上下文容量；留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_CpuFfnLayersTextBox" xml:space="preserve">llama.cpp: --n-cpu-ffn&#10;把前 N 层稠密 FFN 放在 CPU，减少 GPU 负担；留空不覆盖默认放置。</sys:String>
+    <sys:String x:Key="ParameterHelp_SplitModeComboBox" xml:space="preserve">llama.cpp: --split-mode&#10;选择多 GPU 间拆分模型或计算的方式；可用模式和效果取决于后端。</sys:String>
+    <sys:String x:Key="ParameterHelp_TensorSplitTextBox" xml:space="preserve">llama.cpp: --tensor-split&#10;设置各 GPU 的分配比例，例如 3,1；留空由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_MainGpuTextBox" xml:space="preserve">llama.cpp: --main-gpu&#10;指定主 GPU 的设备索引；实际作用取决于拆分模式，留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_NumaComboBox" xml:space="preserve">llama.cpp: --numa&#10;调整 NUMA 系统的线程和内存访问策略；普通桌面平台保持默认即可。</sys:String>
+    <sys:String x:Key="ParameterHelp_SwaFullComboBox" xml:space="preserve">llama.cpp: --swa-full&#10;为滑动窗口注意力使用完整大小的缓存；可能增加相关模型的 KV 内存占用。</sys:String>
+    <sys:String x:Key="ParameterHelp_RepackComboBox" xml:space="preserve">llama.cpp: --repack / --no-repack&#10;选择是否把权重重排为后端更适合计算的布局；关闭可能影响速度。</sys:String>
+    <sys:String x:Key="ParameterHelp_OpOffloadComboBox" xml:space="preserve">llama.cpp: --op-offload / --no-op-offload&#10;选择是否把受支持的主机 Tensor 操作卸载到设备执行；默认由运行库决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_NoHostComboBox" xml:space="preserve">llama.cpp: --no-host&#10;绕过主机缓冲区；属于后端相关选项，不确定时保持默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeScalingComboBox" xml:space="preserve">llama.cpp: --rope-scaling&#10;选择位置编码的缩放方式，用于适配上下文长度；错误设置可能影响输出质量。</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeScaleTextBox" xml:space="preserve">llama.cpp: --rope-scale&#10;设置 RoPE 上下文缩放倍率；需与模型支持相匹配，留空使用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeFreqBaseTextBox" xml:space="preserve">llama.cpp: --rope-freq-base&#10;设置 RoPE 位置编码的基础频率；通常沿用模型元数据。</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeFreqScaleTextBox" xml:space="preserve">llama.cpp: --rope-freq-scale&#10;设置 RoPE 位置编码的频率缩放系数；通常沿用模型元数据。</sys:String>
+    <sys:String x:Key="ParameterHelp_CtxCheckpointsTextBox" xml:space="preserve">llama.cpp: --ctx-checkpoints&#10;设置上下文检查点数量，以便复用长前缀处理结果；0 关闭，留空沿用默认，不改变 Codex 压缩。</sys:String>
+    <sys:String x:Key="ParameterHelp_KeepTokensTextBox" xml:space="preserve">llama.cpp: --keep&#10;设置上下文滚动时保留的开头 token 数；必须小于明确设置的 Context，留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_cache-ram" xml:space="preserve">llama.cpp: --cache-ram&#10;设置 RAM 中提示词状态缓存的容量，单位 MiB；-1 不限容量，0 关闭，留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_cache-prompt" xml:space="preserve">llama.cpp: --cache-prompt / --no-cache-prompt&#10;选择是否复用已处理的提示词前缀，减少重复预填充；默认沿用运行库行为。</sys:String>
+    <sys:String x:Key="ParameterHelp_cache-idle-slots" xml:space="preserve">llama.cpp: --cache-idle-slots / --no-cache-idle-slots&#10;选择是否缓存空闲槽的提示词状态，供后续请求复用；会占用缓存容量。</sys:String>
+    <sys:String x:Key="ParameterHelp_kv-unified" xml:space="preserve">llama.cpp: --kv-unified / --no-kv-unified&#10;选择是否让多个请求槽使用统一 KV 缓存；内存分配与兼容性取决于运行库。</sys:String>
+    <sys:String x:Key="ParameterHelp_checkpoint-min-step" xml:space="preserve">llama.cpp: --checkpoint-min-step&#10;设置创建相邻检查点的最小 token 间隔，控制保存频率；留空沿用默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_backend-sampling" xml:space="preserve">llama.cpp: --backend-sampling&#10;在模型后端执行受支持的主模型采样；实际支持与效果取决于采样器和设备。</sys:String>
+    <sys:String x:Key="ParameterHelp_YarnArgumentsTextBox" xml:space="preserve">llama.cpp: --yarn-orig-ctx, --yarn-ext-factor, --yarn-attn-factor, --yarn-beta-slow, --yarn-beta-fast&#10;调整 YaRN 长上下文缩放；按 orig-ctx=32768;ext-factor=1 等格式填写，留空保持默认。</sys:String>
+    <sys:String x:Key="ParameterHelp_OverrideTensorTextBox" xml:space="preserve">llama.cpp: --override-tensor&#10;按 Tensor 名称规则指定其放置位置或缓冲区类型；错误规则可能导致加载失败。</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxNetworkCheckBox" xml:space="preserve">Codex: permissions.egg_launcher_active.network&#10;控制 Codex 执行命令时是否允许联网；第三态沿用原设置，不影响浏览器或连接器。</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxCompatibilityCheckBox" xml:space="preserve">Codex: shell_environment_policy.set + developer_instructions&#10;传递系统代理并提供兼容请求辅助工具；需允许命令联网，保存后重启客户端生效。</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxPath" xml:space="preserve">Codex: permissions.egg_launcher_active.filesystem&#10;填写向 Codex 命令开放的绝对目录路径；只读或读写权限由旁边开关决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxWrite" xml:space="preserve">Codex: permissions.egg_launcher_active.filesystem (read / write)&#10;未勾选时只允许读取此目录；勾选后允许读取和写入。</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxGradle" xml:space="preserve">Codex: shell_environment_policy.set.GRADLE_USER_HOME&#10;把此目录同时设为 Gradle 用户目录；需要该目录的写入权限。</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxGradleReplace" xml:space="preserve">启动器: GRADLE_USER_HOME replacement rule&#10;允许本地模式替换已有 Gradle 用户目录设置；切回在线模式仍沿用原恢复规则。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomLlamaName" xml:space="preserve">llama.cpp: --option&#10;填写一个实际命令名，例如 --cache-ram；不得与固定参数或其他自定行重复。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomLlamaValue" xml:space="preserve">llama.cpp: option value&#10;填写一个参数值，无需外层引号；不支持多值命令，禁用字符与格式仍按原规则检查。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomNoValue" xml:space="preserve">llama.cpp: --option (without a value)&#10;勾选后只传递命令名；用于不需要参数值的开关。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomCodexName" xml:space="preserve">Codex: configuration key&#10;填写配置键或点分路径，不带 --；不得覆盖启动器固定管理的设置。</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomCodexValue" xml:space="preserve">Codex: TOML value&#10;填写完整 TOML 值，字符串需要引号，例如 "value"；类型由填写内容决定。</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-enabled" xml:space="preserve">llama.cpp: --spec-type&#10;启用所选 n-gram 策略，利用已有文本的重复模式生成草稿；无需额外模型，可与 MTP 组合。</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-simple" xml:space="preserve">llama.cpp: --spec-type ngram-simple&#10;搜索历史中匹配的片段，复用后续文本作为草稿；开销较小，依赖文本重复。</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-map-k" xml:space="preserve">llama.cpp: --spec-type ngram-map-k&#10;记录匹配片段及其后续文本的命中次数，达到门槛后生成草稿。</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-map-k4v" xml:space="preserve">llama.cpp: --spec-type ngram-map-k4v&#10;实验性：每个匹配片段记录最多四种后续候选，优先使用高频候选生成草稿。</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-mod" xml:space="preserve">llama.cpp: --spec-type ngram-mod&#10;使用滚动哈希记录片段后的 token，连续查找并形成可变长度草稿。</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-cache" xml:space="preserve">llama.cpp: --spec-type ngram-cache&#10;根据 n-gram 统计概率生成草稿，可选用与模型分词器匹配的统计缓存。</sys:String>
+    <sys:String x:Key="ParameterHelp_lookup-cache-static" xml:space="preserve">llama.cpp: --lookup-cache-static&#10;选择预先准备的 n-gram 统计缓存；必须匹配模型分词器，不是 JSON 或 GGUF，文件可不选。</sys:String>
+    <sys:String x:Key="ParameterHelp_lookup-cache-dynamic" xml:space="preserve">llama.cpp: --lookup-cache-dynamic&#10;选择运行库使用的动态统计缓存；是否写回由运行库决定，启动器不会创建或覆盖文件。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-simple-size-n" xml:space="preserve">llama.cpp: --spec-ngram-simple-size-n&#10;设置用于查找重复片段的连续 token 数；较长匹配通常更严格。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-simple-size-m" xml:space="preserve">llama.cpp: --spec-ngram-simple-size-m&#10;设置匹配成功后取用的草稿长度；较长草稿不保证更快。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-simple-min-hits" xml:space="preserve">llama.cpp: --spec-ngram-simple-min-hits&#10;设置最小命中次数；部分运行库仅解析此项，实际作用以运行库实现为准。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k-size-n" xml:space="preserve">llama.cpp: --spec-ngram-map-k-size-n&#10;设置用于查找重复片段的连续 token 数；较长匹配通常更严格。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k-size-m" xml:space="preserve">llama.cpp: --spec-ngram-map-k-size-m&#10;设置匹配成功后取用的草稿长度；较长草稿不保证更快。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k-min-hits" xml:space="preserve">llama.cpp: --spec-ngram-map-k-min-hits&#10;设置允许生成草稿的最小命中次数；较高门槛减少低频匹配。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k4v-size-n" xml:space="preserve">llama.cpp: --spec-ngram-map-k4v-size-n&#10;设置用于查找重复片段的连续 token 数；较长匹配通常更严格。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k4v-size-m" xml:space="preserve">llama.cpp: --spec-ngram-map-k4v-size-m&#10;设置匹配成功后取用的草稿长度；较长草稿不保证更快。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k4v-min-hits" xml:space="preserve">llama.cpp: --spec-ngram-map-k4v-min-hits&#10;设置允许生成草稿的最小命中次数；较高门槛减少低频匹配。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-mod-n-match" xml:space="preserve">llama.cpp: --spec-ngram-mod-n-match&#10;设置滚动哈希查找使用的匹配 token 长度。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-mod-n-min" xml:space="preserve">llama.cpp: --spec-ngram-mod-n-min&#10;设置采用草稿所需的最小 token 长度，不得大于最大草稿长度。</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-mod-n-max" xml:space="preserve">llama.cpp: --spec-ngram-mod-n-max&#10;设置单轮草稿的最大 token 长度，不得小于最小草稿长度。</sys:String>
 </ResourceDictionary>

@@ -18,6 +18,7 @@ public partial class MainWindow
         _diagnostics.RunAsync("context_shift_validation", ModelDiagnosticFields(profile), async operation =>
         {
             await operation.StageAsync("native_context_shift_probe");
+            operation.SetDetail("validationScope", "model;runtime;loading;memory;enabled_mtp;raw_completion");
             var result = await DetectContextShiftCoreAsync(profile, cancellationToken);
             operation.Set("supported", result.Supported);
             if (result.Supported != true) await operation.CompleteAsync("unavailable", "context_shift_not_confirmed");
@@ -39,7 +40,8 @@ public partial class MainWindow
         Directory.CreateDirectory(directory);
         var preset = Path.Combine(directory, $".context-shift-validation-{Guid.NewGuid():N}.ini");
         var apiKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-        var validating = profile with { ContextShiftEnabled = true, IdleSleepSeconds = -1 };
+        var validating = ContextShiftProbeProfile.Create(profile);
+        var basis = ContextShiftCapabilityCache.Fingerprint(profile, root);
         // The idle timeout does not affect memory capabilities; all context, backend and MTP settings are preserved.
         try
         {
@@ -59,8 +61,11 @@ public partial class MainWindow
                 WorkingDirectory = root,
                 LogDirectory = _paths.LogsDirectory,
                 ContextShiftRequested = true,
-                ContextShiftDisabledObserver = reason => ContextShiftCapabilityCache.Write(profile, root,
-                    new ContextShiftCapabilityResult(false, reason, DateTimeOffset.UtcNow)),
+                ContextShiftDisabledObserver = reason =>
+                {
+                    if (basis == ContextShiftCapabilityCache.Fingerprint(profile, root))
+                        ContextShiftCapabilityCache.Write(profile, root, new ContextShiftCapabilityResult(false, reason, DateTimeOffset.UtcNow));
+                },
                 Options = new LlamaRouterOptions
                 {
                     Host = IPAddress.Loopback.ToString(),
@@ -114,6 +119,8 @@ public partial class MainWindow
                         "已验证：llama.cpp 在当前配置下实际执行了上下文滚动。", "Verified: llama.cpp performed context shifting with this configuration."), DateTimeOffset.UtcNow)
                     : new ContextShiftCapabilityResult(null, AppLanguageManager.Choose(
                         "未取得实际滚动证据，保持关闭；可重新检测。", "No actual shifting evidence was obtained. Remains off; detection can be retried."), DateTimeOffset.UtcNow);
+            if (basis != ContextShiftCapabilityCache.Fingerprint(profile, root))
+                throw new InvalidOperationException(AppLanguageManager.Choose("检测依据发生变化，未更新滚动验证记录。", "Detection inputs changed; shift verification was not updated."));
             if (result.Supported is not null) ContextShiftCapabilityCache.Write(profile, root, result);
             return result;
         }

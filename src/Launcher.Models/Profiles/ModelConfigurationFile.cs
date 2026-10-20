@@ -131,7 +131,7 @@ public static class ModelConfigurationFile
                 throw new InvalidDataException($"配置参数缺少必要字段 / Missing configuration field: {field}");
         var document = JsonSerializer.Deserialize<ModelConfigurationDocument>(bytes, Options)
             ?? throw new InvalidDataException("配置文件为空 / Empty configuration.");
-        if (document.FormatVersion != 1 || document.Parameters is null)
+        if (document.FormatVersion is not (1 or 2) || document.Parameters is null)
             throw new InvalidDataException("不支持的配置格式 / Unsupported configuration format.");
         if (document.ModelId != model.Id
             || !string.Equals(document.ModelRelativePath, model.ModelRelativePath, StringComparison.OrdinalIgnoreCase))
@@ -144,6 +144,11 @@ public static class ModelConfigurationFile
                     ? "此配置未指定类型，请为当前类型保存新配置。 / Save a new configuration for the current type."
                     : $"请改回 {document.Parameters.ModelType} 后载入。 / Switch back to {document.Parameters.ModelType} to load it."));
         var result = Bind(inspectReferences ? model with { ModelType = document.Parameters.ModelType } : model, document.Parameters);
+        if (result.CustomParameters?.Llama is null || result.CustomParameters.Codex is null
+            || result.CustomParameters.Llama.Concat(result.CustomParameters.Codex).Any(r => r is null || r.Name is null || r.Value is null))
+            throw new InvalidDataException("自定参数结构无效 / Invalid custom parameter structure.");
+        var ngramErrors = NgramOptions.Validate(result.Ngram, root, checkFiles: false);
+        if (ngramErrors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, ngramErrors));
         // Loading must allow repairing missing/stale resources in the editor. Preserve requested
         // switches, but validate paths and parameter structure without trusting stored proof flags.
         var structural = result with
@@ -154,6 +159,7 @@ public static class ModelConfigurationFile
             VisionEnabled = false,
             VisionCapabilityStatus = VisionCapabilityStatus.Unknown,
             MtpEnabled = false,
+            Ngram = result.Ngram with { Enabled = false },
             MtpCapabilityStatus = MtpCapabilityStatus.Unknown,
             ThinkingEnabled = null,
             ShowThinkingProcess = false,
@@ -187,14 +193,24 @@ public static class ModelConfigurationFile
         bool requireExisting, string? expectedDigest, bool preserveUnavailableTemplate)
     {
         path = ValidatePath(path, model, root);
+        var customErrors = CustomParameterRules.Validate(model.CustomParameters, model.ExtraArguments.Keys);
+        if (customErrors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, customErrors));
         var errors = ModelProfileValidator.Validate(preserveUnavailableTemplate
-            ? model with { ChatTemplateRelativePath = null, DefaultParameters = null } : model, root);
+            ? model with { ChatTemplateRelativePath = null, DefaultParameters = null } : model, root,
+            requireRuntimeEvidence: false);
         if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
         if (requireExisting && !File.Exists(path)) throw new FileNotFoundException("当前配置已不存在，请重新载入或另存 / Reload or save as a new configuration.", path);
         if (expectedDigest is not null && Digest(path) != expectedDigest)
             throw new IOException("配置已被外部修改，请重新载入或另存 / Configuration changed outside the editor.");
         var clean = model with { ConfigurationInitialized = false, PreferredConfigurationPath = null, ConfigurationError = null, ResourceCatalogInitialized = false };
-        var document = new ModelConfigurationDocument { ModelId = model.Id, ModelRelativePath = model.ModelRelativePath, Parameters = clean };
+        // Older launchers reject format 2 instead of silently dropping a user's n-gram choices.
+        var document = new ModelConfigurationDocument
+        {
+            FormatVersion = NgramOptions.HasIntent(clean.Ngram) || clean.RuntimeParameters.HasIntent || clean.CustomParameters.HasIntent ? 2 : 1,
+            ModelId = model.Id,
+            ModelRelativePath = model.ModelRelativePath,
+            Parameters = clean,
+        };
         await WriteAtomicallyAsync(path, JsonSerializer.Serialize(document, Options), token).ConfigureAwait(false);
     }
 

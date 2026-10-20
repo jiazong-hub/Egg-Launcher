@@ -85,7 +85,7 @@ public sealed class LlamaRuntimeVersionTests
         var path = typeof(LlamaRuntimeVersionReader).Assembly.Location;
         var runner = new StubRunner(new(1, "", "", false)) { Failure = new IOException("must not be logged") };
         var result = await new LlamaRuntimeVersionReader(runner).ReadAsync(path);
-        Assert.StartsWith("0.9.8", result.Version);
+        Assert.StartsWith("0.9.9", result.Version);
         Assert.Equal("product_version", result.Source);
         Assert.Equal("query_failed", result.QueryResult);
     }

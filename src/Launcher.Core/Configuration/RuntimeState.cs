@@ -35,4 +35,6 @@ public sealed record RuntimeState
     public string? LastError { get; init; }
 
     public string? ContextShiftDisabledReason { get; init; }
+
+    public DraftAcceptanceSnapshot? LatestDraftAcceptance { get; init; }
 }

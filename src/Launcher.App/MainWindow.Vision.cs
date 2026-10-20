@@ -98,8 +98,10 @@ public partial class MainWindow
                 throw new InvalidOperationException(AppLanguageManager.Choose("识别期间模型被启动，因此没有保存视觉关联。", "The model was started during recognition, so the vision association was not saved."));
             }
 
-            var recognized = model with
+            var recognized = Launcher.Scripts.Templates.TemplateValidationProfile.Create(model) with
             {
+                ChatTemplateRelativePath = null,
+                Jinja = false,
                 VisionEnabled = false,
                 VisionSource = source,
                 VisionCapabilityStatus = VisionCapabilityStatus.Verified,

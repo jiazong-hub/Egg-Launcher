@@ -18,6 +18,10 @@ public partial class MainWindow
         ? !_busy && CanRunModelResourceDetection() && CanEditProfile(model, forceClientRefresh: true)
         : Dispatcher.Invoke(() => CanMutateModelResources(model));
 
+    private bool CanEditModelMetadata(ModelProfile model) => Dispatcher.CheckAccess()
+        ? !_busy && CanEditProfile(model, forceClientRefresh: true)
+        : Dispatcher.Invoke(() => CanEditModelMetadata(model));
+
     private async void ModelResourcesButton_Click(object sender, RoutedEventArgs e)
     {
         if (ManagedModelsList.SelectedItem is ModelListItem { Profile: not null } selected)
@@ -54,7 +58,7 @@ public partial class MainWindow
                 }, DetectEmbeddedMtp(model, root), DetectBuiltInVision(model, root),
                 async type =>
                 {
-                    var updated = await _profileStore.UpdateModelTypeAsync(root, model, type, () => CanMutateModelResources(model), _lifetime.Token);
+                    var updated = await _profileStore.UpdateModelTypeAsync(root, model, type, () => CanEditModelMetadata(model), _lifetime.Token);
                     try { model = await ModelConfigurationFile.ReadAsync(updated.PreferredConfigurationPath ?? "", updated, root, _lifetime.Token); }
                     catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException)
                     { model = updated with { ConfigurationError = ex.Message }; }
@@ -62,7 +66,7 @@ public partial class MainWindow
                 },
                 async name =>
                 {
-                    var updated = await _profileStore.UpdateDisplayNameAsync(root, model, name, () => CanMutateModelResources(model), _lifetime.Token);
+                    var updated = await _profileStore.UpdateDisplayNameAsync(root, model, name, () => CanEditModelMetadata(model), _lifetime.Token);
                     try { model = await ModelConfigurationFile.ReadAsync(updated.PreferredConfigurationPath ?? "", updated, root, _lifetime.Token); }
                     catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException or ArgumentException)
                     { model = updated with { ConfigurationError = ex.Message }; }
@@ -71,7 +75,7 @@ public partial class MainWindow
                     ManagedModelsList.SelectedItem = ManagedModelsList.Items.Cast<ModelListItem>().FirstOrDefault(item => item.Profile?.Id == model.Id);
                     RefreshEggUiState();
                     return model;
-                }, _diagnostics)
+                }, _diagnostics, (kind, path) => RecheckModelResourceAsync(model, kind, path), () => CanEditModelMetadata(model))
             { Owner = this };
             _resourceWindow.ShowDialog();
         }

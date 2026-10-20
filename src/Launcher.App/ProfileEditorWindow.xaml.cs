@@ -26,21 +26,21 @@ public partial class ProfileEditorWindow : Window
 
     private static readonly IReadOnlyList<Choice<int>> CompactionSafetyReserveChoices =
     [
-        new("1K", 1024),
-        new("2K", 2048),
-        new("4K", 4096),
-        new("8K", 8192),
-        new("12K", 12288),
-        new("16K", 16384),
-        new("24K", 24576),
-        new("32K", 32768),
+        new("1", 1024),
+        new("2", 2048),
+        new("4", 4096),
+        new("8", 8192),
+        new("12", 12288),
+        new("16", 16384),
+        new("24", 24576),
+        new("32", 32768),
     ];
 
     private readonly IReadOnlyList<Choice<int>> ToolOutputTokenLimitChoices =
     [
         new(AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"), 0),
-        new("1K", 1024), new("2K", 2048), new("4K", 4096),
-        new("8K", 8192), new("12K", 12288), new("16K", 16384), new("24K", 24576),
+        new("1", 1024), new("2", 2048), new("4", 4096),
+        new("8", 8192), new("12", 12288), new("16", 16384), new("24", 24576),
     ];
 
     private readonly IReadOnlyList<Choice<string>> GpuLayerChoices =
@@ -147,6 +147,9 @@ public partial class ProfileEditorWindow : Window
         new("512", 512),
         new("1,024", 1024),
         new("2,048", 2048),
+        new("4,096", 4096),
+        new("8,192", 8192),
+        new("16,384", 16384),
     ];
 
     private static readonly IReadOnlyList<Choice<int>> MicroBatchChoices =
@@ -156,6 +159,10 @@ public partial class ProfileEditorWindow : Window
         new("128", 128),
         new("256", 256),
         new("512", 512),
+        new("1,024", 1024),
+        new("2,048", 2048),
+        new("4,096", 4096),
+        new("8,192", 8192),
     ];
 
     private readonly IReadOnlyList<Choice<int>> IdleSleepChoices =
@@ -237,6 +244,8 @@ public partial class ProfileEditorWindow : Window
         UiMotion.AttachWindowEntrance(this);
         InitializeAdvancedChoices();
         InitializeMtpChoices();
+        InitializeNgramControls();
+        InitializeAdditionalParameterControls();
         VisionOffloadComboBox.ItemsSource = DefaultOnOffChoices;
         SourceInitialized += (_, _) =>
             AdaptiveWindowSizing.FitDialog(this, 820, 720, 640, 480);
@@ -349,7 +358,9 @@ public partial class ProfileEditorWindow : Window
         for (var ancestor = source as FrameworkElement; ancestor is not null;
              ancestor = ancestor.Parent as FrameworkElement
                  ?? System.Windows.Media.VisualTreeHelper.GetParent(ancestor) as FrameworkElement)
-            if (ReferenceEquals(ancestor, SandboxSettingsTab)) return;
+            if (ReferenceEquals(ancestor, SandboxSettingsTab) || ReferenceEquals(ancestor, CustomParametersTab)
+                || ReferenceEquals(ancestor, TemplateSettingsTab) || ReferenceEquals(ancestor, ThinkingSettingsTab)
+                || ReferenceEquals(ancestor, VisionSettingsTab) || ReferenceEquals(ancestor, NgramRoot)) return;
         if (source is System.Windows.Controls.Primitives.ToggleButton && source is not WpfCheckBox) return;
         var element = source as FrameworkElement;
         while (element?.TemplatedParent is FrameworkElement owner) element = owner;
@@ -358,6 +369,11 @@ public partial class ProfileEditorWindow : Window
         if (element is null || element.Name is "ContextShiftCheckBox" or "ProfileEditorTabs"
             or "CompactionSafetyReserveComboBox" or "ToolOutputTokenLimitComboBox" or "CodexStreamIdleTimeoutComboBox"
             or "ThinkingEnabledCheckBox" or "ShowThinkingProcessCheckBox" or "ReasoningEffortCheckBox" or "ReverseReasoningOrderCheckBox" or "PreferredReasoningLevelComboBox") return;
+        if (element.Name == "IdleSleepSecondsComboBox") return;
+        if (element.Name.StartsWith("Mtp", StringComparison.Ordinal) && element.Name != "MtpEnableCheckBox" && MtpEnableCheckBox.IsChecked != true) return;
+        if (_runtimeInputs.Any(pair => ReferenceEquals(pair.Value, source)
+            && (pair.Key is "cache-ram" or "cache-prompt" or "cache-idle-slots" or "backend-sampling"
+                || pair.Key.StartsWith("spec-draft-", StringComparison.Ordinal) && MtpEnableCheckBox.IsChecked != true))) return;
         // Capability evidence can expire without changing the user's requested switch.
         _shiftCapability = null;
         UpdateContextShiftUiState();
@@ -382,10 +398,7 @@ public partial class ProfileEditorWindow : Window
         _changingContextShift = true;
         ContextShiftCheckBox.IsChecked = false;
         _changingContextShift = false;
-        _probeProfile = null;
-        CompleteSave(false, captureForProbe: true);
-        if (_probeProfile is null) return;
-        var candidate = _probeProfile with { ContextShiftEnabled = true };
+        if (!TryBuildContextShiftCandidate(out var candidate)) return;
         _shiftCapability = force ? null : ContextShiftCapabilityCache.Read(candidate, _runtimeRoot);
         if (_shiftCapability?.Supported is not null)
         {
@@ -463,20 +476,6 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
-        if (!captureForProbe && contextShiftEnabled && _runtimeSupportsContextShift != true)
-        {
-            var errorKey = _runtimeSupportsContextShift is null
-                ? "ContextShiftUnknownSaveError"
-                : "ContextShiftUnsupportedSaveError";
-            MessageBox.Show(
-                this,
-                AppLanguageManager.Text(errorKey),
-                AppLanguageManager.Text("ContextShiftErrorTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-            return;
-        }
-
         if (!TryGetConversationLimits(out var reserve, out var toolLimit, out var limitsError))
         {
             MessageBox.Show(this, limitsError, AppLanguageManager.Choose("长对话参数无效", "Invalid Conversation Limits"), MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -507,6 +506,12 @@ public partial class ProfileEditorWindow : Window
             return;
         }
 
+        if (!TryGetBatchSizes(out var batchSize, out var microBatchSize, out var batchError))
+        {
+            MessageBox.Show(this, batchError, AppLanguageManager.Choose("批处理参数无效", "Invalid Batch Parameters"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         if (!TryBuildAdvancedArguments(out var extraArguments, out var advancedError))
         {
             MessageBox.Show(this, advancedError, AppLanguageManager.Choose("高级参数无效", "Invalid Advanced Parameter"), MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -522,6 +527,17 @@ public partial class ProfileEditorWindow : Window
         if (!TryBuildMtpSettings(out var mtp, out var mtpError))
         {
             MessageBox.Show(this, mtpError, AppLanguageManager.Choose("MTP 参数无效", "Invalid MTP Parameters"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        if (!TryBuildAdditionalParameters(out var runtimeParameters, out var runtimeError))
+        {
+            MessageBox.Show(this, runtimeError, AppLanguageManager.Choose("参数无效", "Invalid parameters"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        if (!TryBuildNgramSettings(out var ngram, out var ngramError))
+        {
+            MessageBox.Show(this, ngramError, AppLanguageManager.Choose("n-gram 参数无效", "Invalid n-gram Parameters"), MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -573,12 +589,12 @@ public partial class ProfileEditorWindow : Window
             CacheTypeK = SelectedValue<string>(CacheTypeKComboBox),
             CacheTypeV = SelectedValue<string>(CacheTypeVComboBox),
             Parallel = SelectedValue<int>(ParallelComboBox),
-            BatchSize = NullWhenZero(SelectedValue<int>(BatchSizeComboBox)),
-            MicroBatchSize = NullWhenZero(SelectedValue<int>(MicroBatchSizeComboBox)),
+            BatchSize = batchSize,
+            MicroBatchSize = microBatchSize,
             IdleSleepSeconds = SelectedValue<int>(IdleSleepSecondsComboBox),
             Jinja = JinjaCheckBox.IsChecked == true,
             ChatTemplateRelativePath = NullWhenWhiteSpace(ChatTemplatePathTextBox.Text),
-            ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsChecked == true && _reasoningProfile.ReasoningResponsesVerified,
+            ExposeReasoningEffortInChatGpt = ReasoningEffortCheckBox.IsChecked == true,
             ReverseReasoningLevelDisplayOrder = ReverseReasoningOrderCheckBox.IsChecked == true,
             ThinkingEnabled = _reasoningProfile.ThinkingEnabled,
             ShowThinkingProcess = ShowThinkingProcessCheckBox.IsChecked == true,
@@ -598,6 +614,9 @@ public partial class ProfileEditorWindow : Window
             ReasoningCapabilityCheckedAtUtc = _reasoningProfile.ReasoningCapabilityCheckedAtUtc,
             ContextShiftEnabled = contextShiftEnabled,
             MtpEnabled = mtp.Enabled,
+            Ngram = ngram,
+            RuntimeParameters = runtimeParameters,
+            CustomParameters = ReadCustomParameters(),
             MtpSource = mtp.Source,
             MtpCapabilityStatus = mtp.CapabilityStatus,
             MtpDraftModelRelativePath = mtp.DraftModelRelativePath,
@@ -625,7 +644,7 @@ public partial class ProfileEditorWindow : Window
         };
         updated = Launcher.Scripts.Templates.ModelResourceCatalog.Resolve(updated, _runtimeRoot);
         updated = EnsureCurrentReasoningValidation(updated);
-        var errors = ModelProfileValidator.Validate(updated, _runtimeRoot);
+        var errors = ModelProfileValidator.Validate(updated, _runtimeRoot, requireRuntimeEvidence: false);
         if (errors.Count > 0)
         {
             MessageBox.Show(
@@ -680,7 +699,7 @@ public partial class ProfileEditorWindow : Window
         else
         {
             ContextSizeComboBox.SelectedValue = CustomContextSizeChoice;
-            CustomContextSizeTextBox.Text = profile.ContextSize.ToString("N0", CultureInfo.CurrentCulture);
+            CustomContextSizeTextBox.Text = FormatKInput(profile.ContextSize);
         }
 
         ContextLimitTextBlock.Text = _modelContextLimit is int contextLimit
@@ -694,13 +713,13 @@ public partial class ProfileEditorWindow : Window
             CompactionSafetyReserveComboBox,
             CompactionSafetyReserveChoices,
             profile.CompactionSafetyReserve,
-            profile.CompactionSafetyReserve.ToString("N0"));
+            FormatKInput(profile.CompactionSafetyReserve));
         PopulateChoices(
             ToolOutputTokenLimitComboBox,
             ToolOutputTokenLimitChoices,
             profile.ToolOutputTokenLimit ?? 0,
-            profile.ToolOutputTokenLimit?.ToString("N0") ?? AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"));
-        CompactionSafetyReserveComboBox.Text = FormatContextSize(profile.CompactionSafetyReserve);
+            profile.ToolOutputTokenLimit is int limit ? FormatKInput(limit) : AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"));
+        CompactionSafetyReserveComboBox.Text = FormatKInput(profile.CompactionSafetyReserve);
         var timeoutChoices = new List<Choice<int>>
         {
             new(AppLanguageManager.Text("CodexStreamIdleTimeoutDefault"), 0),
@@ -714,7 +733,7 @@ public partial class ProfileEditorWindow : Window
         CodexStreamIdleTimeoutComboBox.Text = profile.CodexStreamIdleTimeoutMinutes?.ToString(CultureInfo.CurrentCulture)
             ?? AppLanguageManager.Text("CodexStreamIdleTimeoutDefault");
         ToolOutputTokenLimitComboBox.Text = profile.ToolOutputTokenLimit is int storedLimit
-            ? FormatContextSize(storedLimit) : AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
+            ? FormatKInput(storedLimit) : AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
         _choiceContext = _choiceReserve = null;
         _shiftCapability = ContextShiftCapabilityCache.Read(profile, _runtimeRoot);
         _probeProfile = profile;
@@ -738,12 +757,8 @@ public partial class ProfileEditorWindow : Window
         PopulateChoices(CacheTypeKComboBox, CacheTypeChoices, profile.CacheTypeK, profile.CacheTypeK);
         PopulateChoices(CacheTypeVComboBox, CacheTypeChoices, profile.CacheTypeV, profile.CacheTypeV);
         PopulateChoices(ParallelComboBox, ParallelChoices, profile.Parallel, profile.Parallel.ToString());
-        PopulateChoices(BatchSizeComboBox, BatchChoices, profile.BatchSize ?? 0, profile.BatchSize?.ToString("N0") ?? "Default");
-        PopulateChoices(
-            MicroBatchSizeComboBox,
-            MicroBatchChoices,
-            profile.MicroBatchSize ?? 0,
-            profile.MicroBatchSize?.ToString("N0") ?? "Default");
+        PopulateBatchChoices(BatchSizeComboBox, BatchChoices, profile.BatchSize);
+        PopulateBatchChoices(MicroBatchSizeComboBox, MicroBatchChoices, profile.MicroBatchSize);
         PopulateChoices(
             IdleSleepSecondsComboBox,
             IdleSleepChoices,
@@ -756,6 +771,8 @@ public partial class ProfileEditorWindow : Window
         PopulateReasoningCapability(profile);
         PopulateVision(profile);
         PopulateMtp(profile);
+        PopulateNgram(profile.Ngram);
+        PopulateAdditionalParameters(profile);
         PopulateAdvanced(profile);
         if (populateSandbox)
         {
@@ -807,7 +824,7 @@ public partial class ProfileEditorWindow : Window
             Margin = new Thickness(0, 0, 8, 0),
             Padding = new Thickness(10, 0, 10, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
-            ToolTip = AppLanguageManager.Choose("输入或选择要开放给此模型的绝对路径。", "Enter or browse to an absolute path for this model."),
+            ToolTip = AppLanguageManager.Text("ParameterHelp_SandboxPath"),
         };
         pathTextBox.TextChanged += (_, _) => MarkSandboxSettingsEdited();
         row.Children.Add(pathTextBox);
@@ -818,7 +835,7 @@ public partial class ProfileEditorWindow : Window
             IsChecked = permission?.AllowWrite == true,
             Margin = new Thickness(0, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = AppLanguageManager.Choose("未勾选时为只读；勾选后允许读取和写入。", "Unchecked grants read-only access; checked grants read and write access."),
+            ToolTip = AppLanguageManager.Text("ParameterHelp_SandboxWrite"),
         };
         allowWriteCheckBox.Checked += (_, _) => MarkSandboxSettingsEdited();
         allowWriteCheckBox.Unchecked += (_, _) => MarkSandboxSettingsEdited();
@@ -848,17 +865,23 @@ public partial class ProfileEditorWindow : Window
         };
         var gradleCheckBox = new WpfCheckBox
         {
+            ToolTip = AppLanguageManager.Text("ParameterHelp_SandboxGradle"),
             Content = AppLanguageManager.Choose("同时设为 Gradle 用户目录", "Also use as Gradle user home"),
             IsChecked = permission?.UseAsGradleUserHome == true,
             IsEnabled = allowWriteCheckBox.IsChecked == true,
         };
         var replaceGradleCheckBox = new WpfCheckBox
         {
+            ToolTip = AppLanguageManager.Text("ParameterHelp_SandboxGradleReplace"),
             Content = AppLanguageManager.Choose("允许替换已有 Gradle 用户目录（仅本地模式）", "Allow replacing existing Gradle user home (Local mode only)"),
             IsChecked = permission?.ReplaceExistingGradleUserHome == true,
             IsEnabled = gradleCheckBox.IsChecked == true,
             Margin = new Thickness(0, 6, 0, 0),
         };
+        ToolTipService.SetShowOnDisabled(pathTextBox, true);
+        ToolTipService.SetShowOnDisabled(allowWriteCheckBox, true);
+        ToolTipService.SetShowOnDisabled(gradleCheckBox, true);
+        ToolTipService.SetShowOnDisabled(replaceGradleCheckBox, true);
         var isGradleDirectory = permission?.IsGradleDirectory == true || permission?.UseAsGradleUserHome == true;
         gradleCheckBox.Checked += (_, _) => { replaceGradleCheckBox.IsEnabled = true; MarkSandboxSettingsEdited(); };
         gradleCheckBox.Unchecked += (_, _) => { replaceGradleCheckBox.IsChecked = false; replaceGradleCheckBox.IsEnabled = false; MarkSandboxSettingsEdited(); };
@@ -1022,6 +1045,10 @@ public partial class ProfileEditorWindow : Window
 
     private void ApplyRuntimeCapabilities(IReadOnlySet<string>? capabilities)
     {
+        _ngramRuntimeCapabilities = capabilities;
+        _additionalRuntimeCapabilities = capabilities;
+        UpdateAdditionalCapabilities();
+        UpdateNgramUiState();
         if (capabilities is null)
         {
             _runtimeSupportsMtp = null;
@@ -1073,7 +1100,7 @@ public partial class ProfileEditorWindow : Window
             }
 
             control.IsEnabled = false;
-            control.ToolTip = AppLanguageManager.Choose(
+            control.ToolTip = control.ToolTip + Environment.NewLine + AppLanguageManager.Choose(
                 $"当前 llama.cpp Runtime 不支持 --{option}。",
                 $"The current llama.cpp Runtime does not support --{option}.");
         }
@@ -1099,7 +1126,7 @@ public partial class ProfileEditorWindow : Window
             }
 
             control.IsEnabled = false;
-            control.ToolTip = AppLanguageManager.Choose(
+            control.ToolTip = control.ToolTip + Environment.NewLine + AppLanguageManager.Choose(
                 $"当前 llama.cpp Runtime 不支持 --{option}。",
                 $"The current llama.cpp Runtime does not support --{option}.");
         }
@@ -1117,7 +1144,7 @@ public partial class ProfileEditorWindow : Window
             if (!capabilities.Contains(option))
             {
                 control.IsEnabled = false;
-                control.ToolTip = AppLanguageManager.Choose(
+                control.ToolTip = control.ToolTip + Environment.NewLine + AppLanguageManager.Choose(
                     $"当前 llama.cpp Runtime 不支持 --{option}。",
                     $"The current llama.cpp Runtime does not support --{option}.");
             }
@@ -1177,14 +1204,6 @@ public partial class ProfileEditorWindow : Window
     private bool TryBuildVisionSettings(out VisionEditorSettings settings, out string error)
     {
         var enabled = VisionEnableCheckBox.IsChecked == true;
-        if (enabled && (_runtimeSupportsVision == false
-                        || _originalProfile.VisionCapabilityStatus != VisionCapabilityStatus.Verified))
-        {
-            settings = default!;
-            error = AppLanguageManager.Choose("视觉模块必须先在本地模型管理中通过 GGUF 元数据识别并建立关联。", "Vision must first be recognized from GGUF metadata and associated in Local Model Management.");
-            return false;
-        }
-
         if (!TryParseOptionalInteger(VisionImageMinTokensTextBox.Text, false, out var minimum)
             || !TryParseOptionalInteger(VisionImageMaxTokensTextBox.Text, false, out var maximum)
             || !TryParseOptionalInteger(VisionBatchMaxTokensTextBox.Text, false, out var batch))
@@ -1374,40 +1393,9 @@ public partial class ProfileEditorWindow : Window
         var source = _originalProfile.MtpSource;
         var draftPath = NullWhenWhiteSpace(MtpDraftModelPathTextBox.Text);
 
-        if (enabled && _runtimeSupportsMtp == false)
-        {
-            settings = default!;
-            error = AppLanguageManager.Choose(
-                "当前 llama.cpp Runtime 不支持原生 MTP，请先关闭 MTP 或更新 Runtime。",
-                "The current llama.cpp Runtime does not support native MTP. Disable MTP or update the Runtime.");
-            return false;
-        }
-
-        if (enabled && source == MtpSourceKind.External && _runtimeSupportsExternalMtp == false)
-        {
-            settings = default!;
-            error = AppLanguageManager.Choose(
-                "当前 llama.cpp Runtime 不支持加载外部 MTP 模型。",
-                "The current llama.cpp Runtime does not support loading an external MTP model.");
-            return false;
-        }
-
-        if (enabled
-            && source == MtpSourceKind.Embedded
-            && !_hasEmbeddedMtpCandidate
-            && _originalProfile.MtpCapabilityStatus != MtpCapabilityStatus.Verified)
-        {
-            settings = default!;
-            error = AppLanguageManager.Choose(
-                "没有在主 GGUF 中检测到内置 NextN/MTP 层；请选择匹配的外部 MTP GGUF。",
-                "No embedded NextN/MTP layers were detected in the main GGUF. Choose a matching external MTP GGUF.");
-            return false;
-        }
-
         if (enabled
             && source == MtpSourceKind.External
-            && (string.IsNullOrWhiteSpace(draftPath)
-                || _originalProfile.MtpCapabilityStatus != MtpCapabilityStatus.Verified))
+            && string.IsNullOrWhiteSpace(draftPath))
         {
             settings = default!;
             error = AppLanguageManager.Choose(
@@ -1447,13 +1435,14 @@ public partial class ProfileEditorWindow : Window
 
         var gpuLayers = NullWhenWhiteSpace(MtpGpuLayersTextBox.Text);
         if (gpuLayers is not null
+            && gpuLayers is not ("auto" or "all")
             && (!int.TryParse(gpuLayers, NumberStyles.None, CultureInfo.InvariantCulture, out var layerCount)
                 || layerCount < 0))
         {
             settings = default!;
             error = AppLanguageManager.Choose(
-                "外部 MTP GPU Offload 必须是非负整数，或留空使用自动值。",
-                "External MTP GPU Offload must be a non-negative integer, or blank for automatic placement.");
+                "外部 MTP GPU Offload 可填写非负整数、auto、all，或留空。",
+                "External MTP GPU Offload accepts a non-negative integer, auto, all, or blank.");
             return false;
         }
 
@@ -1560,11 +1549,11 @@ public partial class ProfileEditorWindow : Window
             return true;
         }
 
-        if (!TryParseContextSize(CustomContextSizeTextBox.Text, out contextSize))
+        if (!TryParseContextSize(CustomContextSizeTextBox.Text, out contextSize, _originalProfile.ContextSize))
         {
             error = AppLanguageManager.Choose(
-                "请输入正整数 token 数，或使用 K 后缀，例如 98,304 或 96K。",
-                "Enter a positive token count or use a K suffix, such as 98,304 or 96K.");
+                "请直接输入正整数，单位为 K，例如输入 96 表示 96K（1K=1,024 tokens）。",
+                "Enter a positive whole number in K, for example 96 for 96K (1K=1,024 tokens).");
             return false;
         }
 
@@ -1598,7 +1587,7 @@ public partial class ProfileEditorWindow : Window
         var hasContextSize = ContextSizeComboBox.SelectedValue is int selectedValue
             && selectedValue != CustomContextSizeChoice
                 ? (selectedValue > 0, selectedValue)
-                : TryParseContextSize(CustomContextSizeTextBox?.Text, out var customValue)
+                : TryParseContextSize(CustomContextSizeTextBox?.Text, out var customValue, _originalProfile.ContextSize)
                     ? (true, customValue)
                     : (false, 0);
         ContextRiskTextBlock.Visibility = hasContextSize.Item1
@@ -1620,10 +1609,10 @@ public partial class ProfileEditorWindow : Window
                 hasContext = false;
                 contextError = AppLanguageManager.Choose("请设置明确的 Context，才能校验长对话参数关系。", "Set an explicit Context to validate the conversation limits.");
             }
-            var hasReserve = TryParseContextSize(CompactionSafetyReserveComboBox.Text, out var reserve);
+            var hasReserve = TryParseContextSize(CompactionSafetyReserveComboBox.Text, out var reserve, _originalProfile.CompactionSafetyReserve);
             var toolText = ToolOutputTokenLimitComboBox.Text.Trim();
             var inherit = toolText == AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
-            var hasTool = TryParseContextSize(toolText, out var tool);
+            var hasTool = TryParseContextSize(toolText, out var tool, _originalProfile.ToolOutputTokenLimit ?? 0);
 
             if (hasContext && _choiceContext != context)
             {
@@ -1641,19 +1630,22 @@ public partial class ProfileEditorWindow : Window
             var errors = new List<string>();
             var warnings = new List<string>();
             if (!hasContext) errors.Add(contextError);
-            if (!hasReserve) errors.Add(AppLanguageManager.Choose("请输入有效的安全余量：整数 tokens 或 K。", "Enter a valid reserve in integer tokens or K."));
-            if (!inherit && !hasTool) errors.Add(AppLanguageManager.Choose("请输入有效的工具结果上限：整数 tokens 或 K。", "Enter a valid tool limit in integer tokens or K."));
+            if (!hasReserve) errors.Add(AppLanguageManager.Choose("安全余量请直接输入正整数，单位为 K。", "Enter a positive whole number for the reserve in K."));
+            if (!inherit && !hasTool) errors.Add(AppLanguageManager.Choose("工具结果上限请直接输入正整数，单位为 K。", "Enter a positive whole number for the tool limit in K."));
             if (hasContext && hasReserve)
                 errors.AddRange(LongConversationLimits.Validate(context, reserve, !inherit && hasTool ? tool : null));
 
+            var minimumReserveK = (long)Math.Ceiling(LongConversationLimits.MinimumReserve(context) / 1024m);
+            var maximumReserveK = LongConversationLimits.MaximumReserve(context) / 1024;
+            var maximumToolK = (reserve - 1) / 1024;
             ReserveRangeTextBlock.Text = hasContext
-                ? LongConversationLimits.MinimumReserve(context) <= LongConversationLimits.MaximumReserve(context)
-                    ? AppLanguageManager.Choose($"范围：{LongConversationLimits.MinimumReserve(context):N0}～{LongConversationLimits.MaximumReserve(context):N0} tokens", $"Range: {LongConversationLimits.MinimumReserve(context):N0}–{LongConversationLimits.MaximumReserve(context):N0} tokens")
+                ? minimumReserveK <= maximumReserveK
+                    ? AppLanguageManager.Choose($"范围：{minimumReserveK:N0}～{maximumReserveK:N0} K", $"Range: {minimumReserveK:N0}–{maximumReserveK:N0} K")
                     : AppLanguageManager.Choose("当前上下文没有可用的安全余量范围。", "No valid reserve range for this context.")
                 : AppLanguageManager.Choose("请先输入有效 Context。", "Enter a valid Context first.");
-            ToolRangeTextBlock.Text = hasReserve && reserve > LongConversationLimits.MinimumTokens
-                ? AppLanguageManager.Choose($"显式值范围：1,024～{reserve - 1:N0} tokens", $"Explicit range: 1,024–{reserve - 1:N0} tokens")
-                : AppLanguageManager.Choose("当前余量没有可用的显式工具上限；至少需要 1,025 tokens 余量。", "No valid explicit tool limit; the reserve must be at least 1,025 tokens.");
+            ToolRangeTextBlock.Text = hasReserve && maximumToolK >= 1
+                ? AppLanguageManager.Choose($"显式值范围：1～{maximumToolK:N0} K", $"Explicit range: 1–{maximumToolK:N0} K")
+                : AppLanguageManager.Choose("当前余量没有可用的整数 K 工具上限。", "No valid whole-K tool limit for this reserve.");
             var reserveInvalid = !hasReserve || (hasContext
                 && (reserve < LongConversationLimits.MinimumReserve(context) || reserve > LongConversationLimits.MaximumReserve(context)));
             var toolInvalid = !inherit && (!hasTool || tool < LongConversationLimits.MinimumTokens || !hasReserve || tool >= reserve);
@@ -1678,8 +1670,8 @@ public partial class ProfileEditorWindow : Window
                 warnings.Add(AppLanguageManager.Choose("安全余量超过上下文的一半，可能增加压缩频率。", "The reserve exceeds half the context and may increase compaction frequency."));
             ConversationValidationTextBlock.Text = string.Join(Environment.NewLine, errors.Concat(warnings));
             ConversationValidationTextBlock.Visibility = Visibility.Visible;
-            CompactionSafetyReserveComboBox.ToolTip = ReserveRangeTextBlock.Text;
-            ToolOutputTokenLimitComboBox.ToolTip = ToolRangeTextBlock.Text;
+            CompactionSafetyReserveComboBox.ToolTip = AppLanguageManager.Text("ParameterHelp_CompactionSafetyReserveComboBox") + Environment.NewLine + ReserveRangeTextBlock.Text;
+            ToolOutputTokenLimitComboBox.ToolTip = AppLanguageManager.Text("ParameterHelp_ToolOutputTokenLimitComboBox") + Environment.NewLine + ToolRangeTextBlock.Text;
             SaveProfileButton.IsEnabled = SaveModelDefaultButton.IsEnabled = errors.Count == 0 && _contextShiftCancellation is null;
         }
         finally { _updatingConversationLimits = false; }
@@ -1697,8 +1689,9 @@ public partial class ProfileEditorWindow : Window
         for (long value = 1024 * 1024; value <= maximum; value *= 2)
             if (value >= minimum) values.Add((int)value);
         if (TryParseContextSize(text, out var current) && current >= minimum && current <= maximum) values.Add(current);
-        if (values.Count == 0 && minimum <= maximum) values.Add(minimum);
-        var choices = values.Select(value => new Choice<int>(FormatContextSize(value), value)).ToList();
+        var firstWholeK = (long)Math.Ceiling(minimum / 1024m) * 1024;
+        if (values.Count == 0 && firstWholeK <= maximum) values.Add((int)firstWholeK);
+        var choices = values.Select(value => new Choice<int>(FormatKInput(value), value)).ToList();
         if (inherit) choices.Insert(0, new Choice<int>(AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting"), 0));
         combo.ItemsSource = choices;
         combo.Text = text;
@@ -1764,7 +1757,7 @@ public partial class ProfileEditorWindow : Window
             new(AppLanguageManager.Choose("自动（模型默认）", "Auto (Model Default)"), 0),
         };
         choices.AddRange(values.Select(value => new Choice<int>(
-            FormatContextSize(value)
+            FormatKInput(value)
             + (modelContextLimit == value
                 ? AppLanguageManager.Choose("（模型上限）", " (Model Limit)")
                 : string.Empty),
@@ -1773,7 +1766,7 @@ public partial class ProfileEditorWindow : Window
         return choices;
     }
 
-    private static bool TryParseContextSize(string? text, out int value)
+    private static bool TryParseContextSize(string? text, out int value, int existingTokens = 0)
     {
         value = 0;
         if (string.IsNullOrWhiteSpace(text))
@@ -1781,35 +1774,69 @@ public partial class ProfileEditorWindow : Window
             return false;
         }
 
-        var normalized = text.Trim().Replace(",", string.Empty, StringComparison.Ordinal);
-        if (normalized.EndsWith('K') || normalized.EndsWith('k'))
+        var normalized = text.Trim();
+        // Preserve an unchanged legacy value exactly; newly entered values use whole K.
+        if (existingTokens > 0 && existingTokens % 1024 != 0 && normalized == FormatKInput(existingTokens))
         {
-            var number = normalized[..^1];
-            if (!decimal.TryParse(number, NumberStyles.Number, CultureInfo.InvariantCulture, out var kibibytes))
-            {
-                return false;
-            }
-
-            if (kibibytes <= 0 || kibibytes > int.MaxValue / 1024m) return false;
-
-            var tokenCount = kibibytes * 1024;
-            if (tokenCount != decimal.Truncate(tokenCount) || tokenCount is <= 0 or > int.MaxValue)
-            {
-                return false;
-            }
-
-            value = decimal.ToInt32(tokenCount);
+            value = existingTokens;
             return true;
         }
 
-        return int.TryParse(normalized, NumberStyles.None, CultureInfo.InvariantCulture, out value)
-            && value > 0;
+        if (!int.TryParse(normalized, NumberStyles.None, CultureInfo.InvariantCulture, out var wholeK)
+            || wholeK <= 0 || wholeK > int.MaxValue / 1024) return false;
+        value = wholeK * 1024;
+        return true;
     }
+
+    private static string FormatKInput(int value) =>
+        (value / 1024m).ToString("0.##########", CultureInfo.InvariantCulture);
 
     private static string FormatContextSize(int value) =>
         value % 1024 == 0
             ? $"{value / 1024:N0}K"
             : $"{value:N0}";
+
+    private static void PopulateBatchChoices(ComboBox comboBox, IReadOnlyList<Choice<int>> standardChoices, int? value)
+    {
+        var choices = standardChoices.ToList();
+        var label = value?.ToString("N0", CultureInfo.InvariantCulture) ?? "Default";
+        if (value is { } number && !choices.Any(choice => choice.Value == number))
+            choices.Add(new Choice<int>(label, number));
+        comboBox.ItemsSource = choices;
+        comboBox.SelectedValue = value ?? 0;
+        comboBox.Text = label;
+    }
+
+    private bool TryGetBatchSizes(out int? batchSize, out int? microBatchSize, out string error)
+    {
+        error = string.Empty;
+        var batchValid = TryParseBatchSize(BatchSizeComboBox.Text, out batchSize);
+        var microBatchValid = TryParseBatchSize(MicroBatchSizeComboBox.Text, out microBatchSize);
+        if (!batchValid || !microBatchValid)
+        {
+            error = AppLanguageManager.Choose(
+                "Batch Size 和 Micro Batch 请输入正整数（可使用千位逗号），或选择 Default／留空以沿用 llama.cpp 默认值。",
+                "Enter positive integers for Batch Size and Micro Batch (thousands separators are allowed), or choose Default / leave blank to use llama.cpp defaults.");
+            return false;
+        }
+        if (batchSize is not null && microBatchSize is not null && microBatchSize > batchSize)
+        {
+            error = AppLanguageManager.Choose("Micro Batch 不应大于 Batch Size。", "Micro Batch must not exceed Batch Size.");
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryParseBatchSize(string? text, out int? value)
+    {
+        value = null;
+        var trimmed = text?.Trim() ?? string.Empty;
+        if (trimmed.Length == 0 || trimmed.Equals("Default", StringComparison.OrdinalIgnoreCase)) return true;
+        if (trimmed.Contains(',') && !System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"\A[0-9]{1,3}(,[0-9]{3})+\z")) return false;
+        if (!int.TryParse(trimmed.Replace(",", string.Empty), NumberStyles.None, CultureInfo.InvariantCulture, out var number) || number <= 0) return false;
+        value = number;
+        return true;
+    }
 
     private static void PopulateChoices<T>(
         System.Windows.Controls.ComboBox comboBox,
@@ -1834,8 +1861,6 @@ public partial class ProfileEditorWindow : Window
             : throw new InvalidOperationException(AppLanguageManager.Choose(
                 "请选择一个有效参数值。",
                 "Select a valid parameter value."));
-
-    private static int? NullWhenZero(int value) => value == 0 ? null : value;
 
     private bool TryGetGpuLayers(out string gpuLayers, out string error)
     {
@@ -1902,6 +1927,7 @@ public partial class ProfileEditorWindow : Window
         out string error)
     {
         var extra = (_originalProfile.ExtraArguments ?? new Dictionary<string, string?>())
+            .Where(pair => ManagedAdvancedArgumentKeys.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
             .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         foreach (var key in ManagedAdvancedArgumentKeys)
         {
@@ -1923,25 +1949,6 @@ public partial class ProfileEditorWindow : Window
                 ("--keep", KeepTokensTextBox.Text, true)))
         {
             arguments = extra;
-            return false;
-        }
-
-        if (_runtimeSupportsContextCheckpoints == false
-            && !string.IsNullOrWhiteSpace(CtxCheckpointsTextBox.Text))
-        {
-            arguments = extra;
-            error = AppLanguageManager.Choose(
-                "当前 llama.cpp Runtime 不支持 --ctx-checkpoints；清空此项后才能保存。",
-                "The current llama.cpp Runtime does not support --ctx-checkpoints. Clear this field before saving.");
-            return false;
-        }
-
-        if (!string.IsNullOrWhiteSpace(KeepTokensTextBox.Text) && _runtimeSupportsKeep != true)
-        {
-            arguments = extra;
-            error = AppLanguageManager.Choose(
-                "无法确认当前 llama.cpp Runtime 支持 --keep；清空此项后才能保存。",
-                "Support for --keep cannot be confirmed in the current llama.cpp Runtime. Clear this field before saving.");
             return false;
         }
 
@@ -1991,18 +1998,16 @@ public partial class ProfileEditorWindow : Window
     {
         if (_runtimeSupportsContextCheckpoints == false)
         {
-            // Keep an existing value editable so the user can remove it after changing
-            // to a Runtime that does not expose this option. A non-empty value is rejected
-            // during save below.
+            // Existing intent stays editable; runtime support is checked at startup.
             CtxCheckpointsTextBox.IsEnabled = !string.IsNullOrWhiteSpace(CtxCheckpointsTextBox.Text);
-            CtxCheckpointsTextBox.ToolTip = AppLanguageManager.Choose(
-                "当前 llama.cpp Runtime 不支持 --ctx-checkpoints；清空此项后才能保存。",
-                "The current llama.cpp Runtime does not support --ctx-checkpoints. Clear this field before saving.");
+            CtxCheckpointsTextBox.ToolTip = AppLanguageManager.Text("ParameterHelp_CtxCheckpointsTextBox") + Environment.NewLine + AppLanguageManager.Choose(
+                "当前运行库未报告支持 --ctx-checkpoints；可保存，启动时会检查。",
+                "The runtime does not report --ctx-checkpoints support. Settings can be saved; startup checks support.");
             return;
         }
 
         CtxCheckpointsTextBox.IsEnabled = true;
-        CtxCheckpointsTextBox.SetResourceReference(FrameworkElement.ToolTipProperty, "ContextCheckpointsTip");
+        CtxCheckpointsTextBox.SetResourceReference(FrameworkElement.ToolTipProperty, "ParameterHelp_CtxCheckpointsTextBox");
     }
 
     private void UpdateKeepUiState()
@@ -2031,13 +2036,13 @@ public partial class ProfileEditorWindow : Window
         toolLimit = null;
         var toolText = ToolOutputTokenLimitComboBox?.Text?.Trim() ?? string.Empty;
         var inherit = toolText == AppLanguageManager.Choose("沿用 Codex 设置", "Inherit Codex setting");
-        if (!TryParseContextSize(CompactionSafetyReserveComboBox?.Text, out reserve) || reserve < 1024
-            || (!inherit && (!TryParseContextSize(toolText, out var tool) || tool < 1024 || tool >= reserve)))
+        if (!TryParseContextSize(CompactionSafetyReserveComboBox?.Text, out reserve, _originalProfile.CompactionSafetyReserve) || reserve < 1024
+            || (!inherit && (!TryParseContextSize(toolText, out var tool, _originalProfile.ToolOutputTokenLimit ?? 0) || tool < 1024 || tool >= reserve)))
         {
-            error = AppLanguageManager.Choose("安全余量至少为 1,024 tokens；工具上限至少为 1,024 tokens 且严格小于安全余量。输入整数 tokens 或整数 K（1K=1,024）。", "Reserve must be at least 1,024 tokens. A tool limit must be at least 1,024 and smaller than the reserve. Enter integer tokens or integer K (1K=1,024).");
+            error = AppLanguageManager.Choose("安全余量和工具上限请直接输入正整数，单位为 K（1K=1,024 tokens）；工具上限必须小于安全余量。", "Enter positive whole numbers in K for the reserve and tool limit (1K=1,024 tokens). The tool limit must be smaller than the reserve.");
             return false;
         }
-        if (!inherit) { TryParseContextSize(toolText, out var parsedTool); toolLimit = parsedTool; }
+        if (!inherit) { TryParseContextSize(toolText, out var parsedTool, _originalProfile.ToolOutputTokenLimit ?? 0); toolLimit = parsedTool; }
         if (!TryGetSelectedContextSize(out var context, out error)) return false;
         if (context <= 0)
         {

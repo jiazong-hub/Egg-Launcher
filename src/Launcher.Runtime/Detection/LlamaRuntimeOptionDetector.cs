@@ -35,9 +35,7 @@ public static partial class LlamaRuntimeOptionDetector
             await process.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
             var output = await standardOutput.ConfigureAwait(false) + Environment.NewLine
                 + await standardError.ConfigureAwait(false);
-            return OptionRegex().Matches(output)
-                .Select(match => match.Groups["name"].Value)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return ParseHelp(output);
         }
         catch (Exception exception) when (exception is InvalidOperationException
                                           or IOException
@@ -56,6 +54,23 @@ public static partial class LlamaRuntimeOptionDetector
             if (cancellationToken.IsCancellationRequested) cancellationToken.ThrowIfCancellationRequested();
             return null;
         }
+    }
+
+    /// <summary>Option names plus explicit enum/default evidence; an option name alone is not proof of a strategy.</summary>
+    public static IReadOnlySet<string> ParseHelp(string output)
+    {
+        var result = OptionRegex().Matches(output)
+            .Select(match => match.Groups["name"].Value)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var typeBlock = Regex.Match(output, @"(?m)^.*--spec-type[^\r\n]*(?:\r?\n(?![^\r\n]*--)[^\r\n]*)*").Value;
+        foreach (Match match in Regex.Matches(typeBlock, @"(?<![a-z0-9-])(draft-mtp|ngram-simple|ngram-map-k4v|ngram-map-k|ngram-mod|ngram-cache)(?![a-z0-9-])"))
+            result.Add("spec-type:" + match.Value);
+        foreach (Match block in Regex.Matches(output, @"(?m)^[^\r\n]*--(?<key>spec-ngram-[a-z0-9-]+)[^\r\n]*(?:\r?\n(?![^\r\n]*--)[^\r\n]*)*"))
+        {
+            var value = Regex.Match(block.Value, @"default:\s*(?<number>[0-9]+)");
+            if (value.Success) result.Add($"option-default:{block.Groups["key"].Value}:{value.Groups["number"].Value}");
+        }
+        return result;
     }
 
     [GeneratedRegex("--(?<name>[a-z][a-z0-9-]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]

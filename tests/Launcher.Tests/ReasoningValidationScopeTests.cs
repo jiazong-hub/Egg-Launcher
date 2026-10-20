@@ -38,6 +38,10 @@ public sealed class ReasoningValidationScopeTests
     [InlineData("keep")]
     [InlineData("cpu-moe")]
     [InlineData("n-cpu-moe")]
+    [InlineData("rope-scaling")]
+    [InlineData("yarn-ext-factor")]
+    [InlineData("swa-full")]
+    [InlineData("unknown-future-option")]
     public void IndependentArgumentEditsPreserveProofAndPreferences(string key)
     {
         using var f = new Fixture();
@@ -59,11 +63,7 @@ public sealed class ReasoningValidationScopeTests
     [InlineData("reasoning-effort")]
     [InlineData("reasoning-budget")]
     [InlineData("chat-template-kwargs")]
-    [InlineData("rope-scaling")]
-    [InlineData("yarn-ext-factor")]
-    [InlineData("swa-full")]
-    [InlineData("unknown-future-option")]
-    public void RelatedAndUnknownArgumentsStillRequireVerification(string key)
+    public void ReasoningOverridesStillRequireVerification(string key)
     {
         using var f = new Fixture();
         var changed = f.Profile with { ExtraArguments = new Dictionary<string, string?> { [key] = "changed" } };

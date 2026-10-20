@@ -105,6 +105,12 @@ public sealed record ModelProfile
     /// <summary>Whether native llama.cpp multi-token prediction is enabled for this model.</summary>
     public bool MtpEnabled { get; init; }
 
+    public NgramSettings Ngram { get; init; } = new();
+
+    public RuntimeParameterSettings RuntimeParameters { get; init; } = new();
+
+    public CustomParameterSettings CustomParameters { get; init; } = new();
+
     /// <summary>Whether MTP heads are embedded in the main GGUF or supplied by a companion GGUF.</summary>
     public MtpSourceKind MtpSource { get; init; } = MtpSourceKind.Embedded;
 

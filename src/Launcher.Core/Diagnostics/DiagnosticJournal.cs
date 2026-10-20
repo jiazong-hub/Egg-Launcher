@@ -108,6 +108,10 @@ public sealed class DiagnosticOperation : IAsyncDisposable
     }
 
     public void Set(string name, object? value) => _properties[name] = value;
+    public void SetDetail(string name, object? value)
+    {
+        if (_journal.Detailed) _properties[name] = value;
+    }
     public async Task StageAsync(string stage)
     {
         Stage = stage;

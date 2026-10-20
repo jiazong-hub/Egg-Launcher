@@ -835,6 +835,7 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
                     UpdatedAtUtc = _timeProvider.GetUtcNow(),
                     ContextShiftDisabledReason = state.Phase == RuntimePhase.Running
                         ? _processManager.ContextShiftDisabledReason : null,
+                    LatestDraftAcceptance = CurrentDraftAcceptance(state),
                 };
                 await File.WriteAllTextAsync(
                     temporaryPath,
@@ -913,13 +914,22 @@ public sealed class LocalRouterSupervisor : IAsyncDisposable
     {
         if (_lastPublishedRuntimeState is null
             || _lastRuntimeStateWriteAtUtc is null
-            || _timeProvider.GetUtcNow() - _lastRuntimeStateWriteAtUtc < RuntimeStateHeartbeatInterval)
+            || (_timeProvider.GetUtcNow() - _lastRuntimeStateWriteAtUtc < RuntimeStateHeartbeatInterval
+                && _lastPublishedRuntimeState.LatestDraftAcceptance == CurrentDraftAcceptance(_lastPublishedRuntimeState)))
         {
             return Task.CompletedTask;
         }
 
         return TryWriteRuntimeStateAsync(_lastPublishedRuntimeState);
     }
+
+    private DraftAcceptanceSnapshot? CurrentDraftAcceptance(RuntimeState state) =>
+        state.SelectedMode == ProviderMode.Local && state.Phase == RuntimePhase.Running
+        && _runningProfile is { MtpEnabled: true } && _runningProfile.Id == state.SelectedModelId
+        && state.RouterProcessId is not null && state.RouterProcessId == _processManager.OwnedProcessId
+        && _processManager.LatestDraftAcceptance is { IsValid: true } value
+            ? value with { IncludesNgram = _runningProfile.Ngram.Enabled }
+            : null;
 
     private async Task StopRouterComponentsAsync(CancellationToken cancellationToken)
     {

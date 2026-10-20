@@ -170,7 +170,7 @@ public sealed class ChatGptConfigTransactionService
                     "Codex 配置中的 sandbox_workspace_write 含有嵌套字段，无法完整移入模型权限配置；为避免丢失现有规则，已停止切换。");
             }
 
-            var originalAssignments = CaptureAssignments(originalDocument);
+            var originalAssignments = CaptureAssignments(originalDocument, request.CustomParameters.Select(r => r.Name));
 
             var localDocument = BuildLocalDocument(originalDocument, request, originalAssignments, dataPaths.Root);
             var localText = localDocument.ToString();
@@ -207,7 +207,7 @@ public sealed class ChatGptConfigTransactionService
                 OriginalConfigSha256 = ComputeSha256(originalBytes),
                 BackupPath = backupPath,
                 OriginalAssignments = originalAssignments,
-                AppliedAssignments = CaptureAssignments(localDocument),
+                AppliedAssignments = CaptureAssignments(localDocument, request.CustomParameters.Select(r => r.Name)),
                 OriginalLauncherSettings = request.OriginalLauncherSettings,
                 TargetLauncherSettings = request.TargetLauncherSettings,
                 SettingsCommitted = request.TargetLauncherSettings is null,
@@ -417,12 +417,13 @@ public sealed class ChatGptConfigTransactionService
             var currentDocument = new TomlRootDocument(currentState.Text);
             EnsureAssignmentsStillOwned(currentDocument, snapshot.AppliedAssignments);
             snapshot = await CompletePermissionBaselineAsync(snapshot, cancellationToken).ConfigureAwait(false);
+            snapshot = await CompleteCustomBaselineAsync(snapshot, currentDocument, request.CustomParameters, cancellationToken).ConfigureAwait(false);
             var updatedDocument = BuildLocalDocument(currentDocument, request, snapshot.OriginalAssignments, Path.GetDirectoryName(Path.GetFullPath(recoveryPath))!);
             var prepared = snapshot with
             {
                 Stage = ConfigTransactionStage.LocalUpdatePrepared,
-                PreviousAppliedAssignments = snapshot.AppliedAssignments,
-                AppliedAssignments = CaptureAssignments(updatedDocument),
+                PreviousAppliedAssignments = CaptureAssignments(currentDocument, CustomKeys(snapshot.OriginalAssignments)),
+                AppliedAssignments = CaptureAssignments(updatedDocument, CustomKeys(snapshot.OriginalAssignments)),
                 OriginalLauncherSettings = request.OriginalLauncherSettings,
                 TargetLauncherSettings = request.TargetLauncherSettings,
                 SettingsCommitted = request.TargetLauncherSettings is null,
@@ -444,7 +445,10 @@ public sealed class ChatGptConfigTransactionService
             }
             catch
             {
-                await TryResetPreparedUpdateAsync(recoveryPath, snapshot).ConfigureAwait(false);
+                await TryResetPreparedUpdateAsync(recoveryPath, snapshot with
+                {
+                    AppliedAssignments = prepared.PreviousAppliedAssignments!,
+                }).ConfigureAwait(false);
                 throw;
             }
         }
@@ -490,7 +494,7 @@ public sealed class ChatGptConfigTransactionService
             {
                 Stage = ConfigTransactionStage.LocalUpdatePrepared,
                 PreviousAppliedAssignments = snapshot.AppliedAssignments,
-                AppliedAssignments = CaptureAssignments(updatedDocument),
+                AppliedAssignments = CaptureAssignments(updatedDocument, CustomKeys(snapshot.OriginalAssignments)),
                 OriginalLauncherSettings = originalLauncherSettings,
                 TargetLauncherSettings = targetLauncherSettings,
                 SettingsCommitted = false,
@@ -1103,8 +1107,36 @@ public sealed class ChatGptConfigTransactionService
         }
     }
 
-    private static IReadOnlyDictionary<string, string?> CaptureAssignments(TomlRootDocument document) =>
-        ManagedKeys.ToDictionary(key => key, document.GetDefinition, StringComparer.Ordinal);
+    private const string CustomPrefix = "custom:";
+
+    private static IEnumerable<string> CustomKeys(IReadOnlyDictionary<string, string?> assignments) =>
+        assignments.Keys.Where(k => k.StartsWith(CustomPrefix, StringComparison.Ordinal)).Select(k => k[CustomPrefix.Length..]);
+
+    private static IReadOnlyDictionary<string, string?> CaptureAssignments(TomlRootDocument document, IEnumerable<string>? customKeys = null)
+    {
+        var result = ManagedKeys.ToDictionary(key => key, document.GetDefinition, StringComparer.Ordinal);
+        foreach (var key in customKeys ?? []) result[CustomPrefix + key] = document.GetCustomValue(key);
+        return result;
+    }
+
+    private static async Task<ManagedConfigSnapshot> CompleteCustomBaselineAsync(ManagedConfigSnapshot snapshot,
+        TomlRootDocument current, IReadOnlyList<Launcher.Models.Profiles.CustomParameter> rows, CancellationToken token)
+    {
+        var existing = CustomKeys(snapshot.OriginalAssignments).ToArray();
+        if (rows.All(r => existing.Contains(r.Name, StringComparer.Ordinal))) return snapshot;
+        var baseline = new TomlRootDocument(DecodeUtf8Config(await VerifyOriginalBackupAsync(snapshot, token).ConfigureAwait(false)));
+        var originals = new Dictionary<string, string?>(snapshot.OriginalAssignments, StringComparer.Ordinal);
+        foreach (var row in rows.Where(r => !existing.Contains(r.Name, StringComparer.Ordinal)))
+        {
+            if (existing.Any(k => Launcher.Models.Profiles.CustomParameterRules.Overlaps(k, row.Name)))
+                throw new ChatGptConfigConflictException("自定参数路径结构发生变化，请先切回在线模式 / Switch to Online before changing a custom field's path structure.");
+            var value = baseline.GetCustomValue(row.Name);
+            if (!string.Equals(value, current.GetCustomValue(row.Name), StringComparison.Ordinal))
+                throw new ChatGptConfigConflictException("新自定字段已被外部修改，已停止覆盖 / The new custom field was externally modified.");
+            originals.Add(CustomPrefix + row.Name, value);
+        }
+        return snapshot with { OriginalAssignments = originals };
+    }
 
     // The provider deliberately keeps the existing OpenAI authentication manager so
     // Desktop retains its signed-in account shell and shared project history. Its
@@ -1153,7 +1185,13 @@ public sealed class ChatGptConfigTransactionService
 
         localDocument = ApplyModelSandboxSettings(localDocument, request.SandboxSettings, originalAssignments);
         localDocument = ApplyNetworkCompatibility(localDocument, request.SandboxSettings, originalAssignments);
-        return ApplyGradleUserHome(localDocument, request.SandboxSettings, originalAssignments, diagnosticRoot);
+        localDocument = ApplyGradleUserHome(localDocument, request.SandboxSettings, originalAssignments, diagnosticRoot);
+        // Clear previous Local-only values against the original Online baseline, then apply this configuration.
+        foreach (var key in CustomKeys(originalAssignments))
+            localDocument = localDocument.SetCustomValue(key, originalAssignments[CustomPrefix + key]);
+        foreach (var row in request.CustomParameters)
+            localDocument = localDocument.SetCustomValue(row.Name, row.Value);
+        return localDocument;
     }
 
     private static TomlRootDocument ApplyGradleUserHome(TomlRootDocument document,
@@ -1480,6 +1518,8 @@ public sealed class ChatGptConfigTransactionService
             document = document.SetRawDefinition(key, assignment);
         }
 
+        foreach (var key in CustomKeys(assignments))
+            document = document.SetCustomValue(key, assignments[CustomPrefix + key]);
         return document;
     }
 
@@ -1503,7 +1543,9 @@ public sealed class ChatGptConfigTransactionService
             {
                 expectedAssignments.TryGetValue(key, out var expected);
                 return string.Equals(currentDocument.GetDefinition(key), expected, StringComparison.Ordinal);
-            });
+            })
+            && CustomKeys(expectedAssignments).All(key => string.Equals(currentDocument.GetCustomValue(key),
+                expectedAssignments[CustomPrefix + key], StringComparison.Ordinal));
 
     private static async Task<ManagedConfigSnapshot> LoadSnapshotAsync(
         string recoveryPath,
@@ -1694,6 +1736,11 @@ public sealed class ChatGptConfigTransactionService
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModelSlug);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.ModelCatalogPath);
         var sandboxErrors = ModelSandboxSettingsValidator.Validate(request.SandboxSettings);
+        // Reject reserved namespaces even for externally edited JSON; do not permit a custom value to bypass ownership.
+        // Syntax is already checked by the lossless writer as part of its existing write protection.
+        if (request.CustomParameters is null || request.CustomParameters.Any(r => r is null || string.IsNullOrWhiteSpace(r.Name)
+            || Launcher.Models.Profiles.CustomParameterRules.FixedCodex.Any(k => Launcher.Models.Profiles.CustomParameterRules.Overlaps(k, r.Name))))
+            throw new ArgumentException("自定 Codex 参数不能覆盖启动器管理字段 / Custom Codex fields cannot override managed fields.");
         _ = CodexStreamIdleTimeout.ToMilliseconds(request.CodexStreamIdleTimeoutMinutes);
         if (request.DefaultReasoningEffort is { } effort && !CodexReasoningLevels.IsRecognized(effort))
             throw new ArgumentException("The default reasoning effort is not recognized by Codex.", nameof(request));

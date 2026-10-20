@@ -4,7 +4,7 @@
 >
 > A Windows x64 launcher for switching between OpenAI and local llama.cpp modes in ChatGPT Desktop.
 
-**[下载 v0.9.8（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.8/Egg-Launcher-0.9.8-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.8) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.8/Egg-Launcher-0.9.8-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
+**[下载 v0.9.9（Windows x64）](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.9/Egg-Launcher-0.9.9-Setup-win-x64.exe)** · [发布说明与全部文件](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.9) · [SHA-256 校验文件](https://github.com/jiazong-hub/Egg-Launcher/releases/download/v0.9.9/Egg-Launcher-0.9.9-Setup-win-x64.exe.sha256) · [用户指南](docs/user-guide.md)
 
 ![Egg Launcher 双模式工作示意图](docs/images/egg-launcher-overview.svg)
 
@@ -12,10 +12,10 @@
 
 ## 当前发布状态
 
-- **0.9.8 发布日期为 2026-10-18。** 增加多配置文件、模型管理、启动配置快捷选择和全局认证开关，完善诊断日志及界面。见[发布说明](docs/release-notes-0.9.8.md)、[发布检查](docs/release-checks-0.9.8.md)和[实现说明](docs/development-0.9.8.md)。
-- 用户已确认最新 0.9.8 测试包运行稳定，并授权发布。源码门禁为 654 项自动化测试，另有 505 项界面回归与 17 项视觉界面检查；最终发布包另行执行构建、依赖审计、签名及哈希校验。
-- Windows 10 下 CUDA、Vulkan、CPU 后端已有用户稳定性实测反馈；0.9.7 的全新安装、覆盖升级、卸载恢复及思考、工具执行已实测通过。上述历史结论不扩展为 0.9.8 的全部硬件及故障矩阵均已独立验收。Windows 11、ROCm 尚未测试。
-- 安装包沿用作者自签名证书，不属于 Windows 公共信任证书，首次运行可能出现安全提示。请核对[签名策略与证书指纹](docs/signing-policy.md)。[0.9.7](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.7)保留供回退。
+- **0.9.9 发布日期为 2026-10-20。** 增加五种 n-gram 策略及 MTP 组合、实验性自定参数、资源重新检测和最近一次草稿接受率；补齐运行参数、整数 K 输入及参数说明。见[发布说明](docs/release-notes-0.9.9.md)、[发布检查](docs/release-checks-0.9.9.md)和[实现说明](docs/development-0.9.9.md)。
+- 用户确认最新 0.9.9 测试包较稳定，并授权发布。全套自动化测试为 894 项；另有整数 K 输入、参数提示与接受率界面隔离检查。正式包从提交后源码重新执行发布门禁，具体结果以[发布检查](docs/release-checks-0.9.9.md)和包内 `BUILD-INFO.txt` 为准。
+- Windows 10 下 CUDA、Vulkan、CPU 后端已有用户稳定性反馈；0.9.7 安装、升级、卸载恢复及思考、工具执行有历史实测。上述结论不等于 0.9.9 已通过全部安装故障与硬件矩阵。Windows 11、ROCm 尚未测试。
+- 安装包沿用作者自签名证书，不属于 Windows 公共信任证书，首次运行可能出现安全提示。请核对[签名策略与证书指纹](docs/signing-policy.md)。[0.9.8](https://github.com/jiazong-hub/Egg-Launcher/releases/tag/v0.9.8)保留供回退。
 
 ## 主要功能与边界
 
@@ -32,15 +32,21 @@
 - OpenAI 与 Local 模式互斥，切换前须关闭客户端。Local 模型 A 可直接切到 B。切回在线或卸载时独立恢复官方受管配置，不依赖当前 JSON 是否存在。
 - 两种模式共享项目和历史，可跨模式查阅；不承诺在另一 Provider 下继续原任务，继续开发时在目标模式创建新任务。认证开关不会迁移会话文件或改变此边界。
 - Codex 负责 token 监控、摘要和历史重建；llama.cpp 管理硬 Context 与原生滚动。启动器只设置 `Context - 安全余量` 作为本地压缩线，不限制单次输出，也不把本地压缩值应用到在线模式。
+- 上下文、压缩安全余量和工具结果历史上限统一直接输入整数 K（1K=1,024 tokens）；JSON 和传给引擎的实际数值仍为 tokens，旧配置不静默取整。
+- 推测解码支持五种 n-gram 策略与 MTP 组合；具体支持及性能由运行库与模型决定。扩展固定参数按 Dense/MoE 和已启用功能生成，不保证启用后一定提速。
+- 实验性自定参数区分 llama.cpp 参数与 Codex TOML 键值。保存、应用、另存拒绝固定参数覆盖、重复命令和已知别名冲突；Codex 自定项通过既有配置事务应用和恢复。
+- 模板、MTP 与视觉资源支持原路径重新检测；检测排除无关配置，登记不因启动器升级、时间或无关参数自动失效。视觉仍是元数据识别，不扩大为图片推理验证。
+- 仪表盘显示速度、接受率、上下文。接受率只搬运最近一次 llama 原生请求统计，无新结果时保留；无数据、未启用 MTP、停止服务或切回在线显示短横线。MTP+n-gram 的整体接受率不会标作 MTP 独立接受率。
 - 简易日志记录关键结果、拦截和错误；详细日志增加阶段、耗时及异常栈。配置、资源、启动、认证与恢复均纳入现有日志机制，不逐次记录悬停或参数输入；日志失败不影响业务。
 - 支持明暗主题、中英文、托盘与后台 Agent。公开模型搜索及下载仍为实验性功能；模型主文件使用 llama.cpp 原生下载，辅助文件使用受控独立下载流程。
 
 ## 使用与发布资料
 
 - [用户功能说明](docs/user-guide.md)
-- [0.9.8 发布说明](docs/release-notes-0.9.8.md)
-- [0.9.8 发布检查](docs/release-checks-0.9.8.md)
-- [0.9.8 实现与历史检查](docs/development-0.9.8.md)
+- [0.9.9 发布说明](docs/release-notes-0.9.9.md)
+- [0.9.9 发布检查](docs/release-checks-0.9.9.md)
+- [0.9.9 实现与历史检查](docs/development-0.9.9.md)
+- [0.9.8 发布说明（历史）](docs/release-notes-0.9.8.md)
 - [真机验收清单](docs/manual-acceptance-checklist.md)
 - [变更记录](CHANGELOG.md)
 - [0.9.7 发布检查（历史）](docs/release-checks-0.9.7.md)

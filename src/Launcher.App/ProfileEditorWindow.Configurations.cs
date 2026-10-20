@@ -131,9 +131,22 @@ public partial class ProfileEditorWindow
             await EnsureRegisteredTypeAsync();
             if (!_canEditConfiguration(_registration)) throw new InvalidOperationException(AppLanguageManager.Choose("模型正在运行，不能保存参数。", "The model is running; parameters cannot be saved."));
             if (IsConfigurationDetectionRunning) { await operation.CompleteAsync("blocked", "detection_running"); return false; }
+            await operation.StageAsync("validate_edit_parameters");
+            operation.SetDetail("validationScope", "structure;ranges;dependencies;path;model_binding;custom_conflicts;startup_checks_deferred");
             _probeProfile = null;
             CompleteSave(false, captureForProbe: true);
             if (_probeProfile is not { } candidate) { await operation.CompleteAsync("blocked", "parameters_rejected"); return false; }
+            await operation.StageAsync("validate_custom_parameters");
+            var customErrors = ValidateCustomParametersForSave(candidate);
+            if (customErrors.Count > 0)
+            {
+                operation.Set("validationErrors", customErrors);
+                await operation.CompleteAsync("blocked", "custom_parameters_rejected");
+                MessageBox.Show(this, string.Join(Environment.NewLine, customErrors), AppLanguageManager.Choose("自定参数无效", "Invalid custom parameters"), MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+            operation.Set("llamaCustomNames", candidate.CustomParameters.Llama.Select(r => r.Name).ToArray());
+            operation.Set("codexCustomNames", candidate.CustomParameters.Codex.Select(r => r.Name).ToArray());
             var path = _configurationPath;
             if (saveAs || path is null)
             {
@@ -361,7 +374,7 @@ public partial class ProfileEditorWindow
         }
         combo.ItemsSource = choices;
         combo.SelectedItem = selected;
-        combo.ToolTip = selectedPath;
+        combo.ToolTip = AppLanguageManager.Text("ParameterHelp_" + combo.Name) + Environment.NewLine + selectedPath;
     }
 
     private void TemplateResource_Changed(object sender, SelectionChangedEventArgs e)

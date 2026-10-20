@@ -17,6 +17,7 @@ public partial class MainWindow
         _diagnostics.RunAsync("reasoning_validation", ModelDiagnosticFields(profile), async operation =>
         {
             await operation.StageAsync("native_reasoning_and_template_check");
+            operation.SetDetail("validationScope", "model;active_template;native_reasoning;responses;client");
             var result = await DetectEditorReasoningCoreAsync(profile, cancellationToken);
             operation.Set("capabilityStatus", result.ReasoningCapabilityStatus.ToString());
             operation.Set("supportsThinkingSwitch", result.SupportsThinkingSwitch);
@@ -51,6 +52,11 @@ public partial class MainWindow
         if (!CanEditProfile(profile, forceClientRefresh: true) || signature != ComputeReasoningCapabilitySignature(profile, root))
             throw new InvalidOperationException(AppLanguageManager.Choose("检测期间模型、模板或运行时发生变化，请重新检测。", "The model, template or runtime changed during detection; retry."));
         var verified = capability.Status == LlamaReasoningCapabilityStatus.Verified && capability.SupportedLevels.Count > 0;
+        if (Launcher.Scripts.Templates.ReasoningValidationState.Check(profile, root).State == Launcher.Scripts.Templates.ReasoningValidationStateKind.Current
+            && (profile.SupportsThinkingSwitch == true && capability.SupportsThinkingSwitch != true
+                || profile.ReasoningCapabilityStatus == ReasoningCapabilityStatus.Verified && !verified
+                || profile.ReasoningResponsesVerified && !capability.ResponsesVerified))
+            throw new InvalidOperationException(AppLanguageManager.Choose("未取得新的有效思考检测证据，保留原验证记录。", "No new conclusive reasoning evidence was obtained. Previous verification is retained."));
         var result = profile with
         {
             ReasoningCapabilityStatus = verified ? ReasoningCapabilityStatus.Verified : ReasoningCapabilityStatus.Unknown,
@@ -61,10 +67,10 @@ public partial class MainWindow
             ReasoningClientExecutablePath = compatibility.ExecutablePath,
             SupportsThinkingSwitch = canConfigureThinking ? capability.SupportsThinkingSwitch : null,
             DefaultThinkingEnabled = capability.DefaultThinkingEnabled,
-            ThinkingEnabled = canConfigureThinking && capability.SupportsThinkingSwitch == true ? profile.ThinkingEnabled : null,
+            ThinkingEnabled = profile.ThinkingEnabled,
             ReasoningLevelAliases = capability.Aliases,
             ReasoningValidationDetails = capability.Details + "\n" + compatibility.Detail + (canConfigureThinking ? "" : "\n当前运行时缺少思考启动参数，不能开放思考开关。"),
-            ExposeReasoningEffortInChatGpt = verified && capability.ResponsesVerified && compatibility.Compatible == true && profile.ExposeReasoningEffortInChatGpt,
+            ExposeReasoningEffortInChatGpt = profile.ExposeReasoningEffortInChatGpt,
             ReasoningCapabilitySignature = signature,
             ReasoningCapabilityCheckedAtUtc = DateTimeOffset.UtcNow,
         };
@@ -85,18 +91,7 @@ public partial class MainWindow
         bool canRecordPrompts,
         CancellationToken cancellationToken)
     {
-        var isolatedProfile = profile with
-        {
-            ExposeReasoningEffortInChatGpt = false,
-            MtpEnabled = false,
-            VisionEnabled = false,
-            ThinkingEnabled = null,
-            ContextSize = 4096,
-            CompactionSafetyReserve = 2048,
-            ToolOutputTokenLimit = 1024,
-            Parallel = 1,
-            ContextShiftEnabled = false,
-        };
+        var isolatedProfile = Launcher.Scripts.Templates.TemplateValidationProfile.Create(profile);
         var scriptsDirectory = Path.Combine(runtimeRoot, "scripts");
         Directory.CreateDirectory(scriptsDirectory);
         var presetPath = Path.Combine(scriptsDirectory, $".reasoning-validation-{Guid.NewGuid():N}.ini");

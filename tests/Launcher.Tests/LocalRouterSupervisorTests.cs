@@ -891,6 +891,67 @@ public sealed class LocalRouterSupervisorTests
         public bool IsRunning() => false;
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AcceptanceSnapshot_PublishesOnChangeWithoutChangingTheHeartbeat_AndClearsOnRestartOrOnline(bool mtp, bool ngram)
+    {
+        var root = CreateTemporaryDirectory();
+        try
+        {
+            var paths = LauncherDataPaths.ForCurrentUser(Path.Combine(root, "data"));
+            var runtimeRoot = Path.Combine(root, "llama.cpp");
+            Directory.CreateDirectory(runtimeRoot);
+            Directory.CreateDirectory(paths.GeneratedDirectory);
+            await File.WriteAllTextAsync(Path.Combine(runtimeRoot, "llama-server.exe"), string.Empty);
+            await RegisterModelAsync(runtimeRoot, "local-coder");
+            var time = new ManualTimeProvider(DateTimeOffset.UtcNow);
+            var store = new MutableSettingsStore(new LauncherSettings { SelectedMode = ProviderMode.Local, SelectedModelId = "local-coder", LlamaRoot = runtimeRoot, RouterPort = 18080 });
+            var manager = new FakeProcessManager();
+            await using var supervisor = new LocalRouterSupervisor(store, manager, new FakeSafetyProxy(), new FakeRouterControlClient(), paths,
+                time, clientDetector: new StoppedClientDetector(), runtimeVersionProcessRunner: new VersionProcessRunner(false));
+            await supervisor.ReconcileAsync();
+            var firstText = await File.ReadAllTextAsync(paths.RuntimeStateFile);
+            Assert.Null(JsonSerializer.Deserialize<RuntimeState>(firstText)!.LatestDraftAcceptance);
+            // Isolate the projection of an already running profile; no hardware capability probe is needed.
+            var field = typeof(LocalRouterSupervisor).GetField("_runningProfile", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            var running = (ModelProfile)field.GetValue(supervisor)!;
+            field.SetValue(supervisor, running with { MtpEnabled = mtp, Ngram = new() { Enabled = ngram, Types = ngram ? ["ngram-simple"] : [] } });
+            manager.LatestDraftAcceptance = new(0.8, 80, 100, DateTimeOffset.UtcNow);
+            time.Advance(TimeSpan.FromSeconds(1));
+            await supervisor.ReconcileAsync();
+            var updatedText = await File.ReadAllTextAsync(paths.RuntimeStateFile);
+            var state = JsonSerializer.Deserialize<RuntimeState>(updatedText)!;
+            if (mtp)
+            {
+                Assert.Equal(0.8, state.LatestDraftAcceptance!.Rate);
+                Assert.Equal(ngram, state.LatestDraftAcceptance.IncludesNgram);
+                Assert.NotEqual(firstText, updatedText);
+            }
+            else
+            {
+                Assert.Null(state.LatestDraftAcceptance);
+                Assert.Equal(firstText, updatedText);
+            }
+            await supervisor.ReconcileAsync();
+            Assert.Equal(updatedText, await File.ReadAllTextAsync(paths.RuntimeStateFile));
+            manager.SimulateUnexpectedExit();
+            await supervisor.ReconcileAsync();
+            Assert.Null(JsonSerializer.Deserialize<RuntimeState>(await File.ReadAllTextAsync(paths.RuntimeStateFile))!.LatestDraftAcceptance);
+            await RegisterModelAsync(runtimeRoot, "other-model");
+            store.Settings = store.Settings with { SelectedModelId = "other-model" };
+            await supervisor.ReconcileAsync();
+            var switched = JsonSerializer.Deserialize<RuntimeState>(await File.ReadAllTextAsync(paths.RuntimeStateFile))!;
+            Assert.Equal("other-model", switched.SelectedModelId);
+            Assert.Null(switched.LatestDraftAcceptance);
+            store.Settings = store.Settings with { SelectedMode = ProviderMode.OpenAI };
+            await supervisor.ReconcileAsync();
+            Assert.Null(JsonSerializer.Deserialize<RuntimeState>(await File.ReadAllTextAsync(paths.RuntimeStateFile))!.LatestDraftAcceptance);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private static async Task RegisterModelAsync(string root, string id)
     {
         var relative = id + ".gguf";
@@ -939,6 +1000,8 @@ public sealed class LocalRouterSupervisorTests
 
     private sealed class FakeProcessManager : ILlamaRouterProcessManager
     {
+        public DraftAcceptanceSnapshot? LatestDraftAcceptance { get; set; }
+
         public int? OwnedProcessId { get; private set; }
 
         public int StartCount { get; private set; }
@@ -958,6 +1021,7 @@ public sealed class LocalRouterSupervisorTests
             CancellationToken cancellationToken = default)
         {
             StartCount++;
+            LatestDraftAcceptance = null;
             LastRequest = request;
             if (PortBindingFailuresRemaining > 0)
             {
@@ -984,6 +1048,7 @@ public sealed class LocalRouterSupervisorTests
 
         public Task StopAsync(CancellationToken cancellationToken = default)
         {
+            LatestDraftAcceptance = null;
             if (OwnedProcessId is not null)
             {
                 StopCount++;

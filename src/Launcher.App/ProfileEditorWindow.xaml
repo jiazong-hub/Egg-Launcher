@@ -396,14 +396,14 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <StackPanel>
-                                    <TextBlock FontWeight="SemiBold" Text="Context" />
+                                    <TextBlock FontWeight="SemiBold" Text="Context (K)" />
                                     <ComboBox x:Name="ContextSizeComboBox" Margin="0,5,0,12"
                                               DisplayMemberPath="Label" SelectedValuePath="Value"
                                               SelectionChanged="ContextSizeComboBox_SelectionChanged"
-                                              ToolTip="{DynamicResource ContextSelectionTip}" />
+                                              ToolTip="{DynamicResource ParameterHelp_ContextSizeComboBox}" ToolTipService.ShowOnDisabled="True" />
                                     <TextBox x:Name="CustomContextSizeTextBox" Margin="0,-6,0,10"
                                              Visibility="Collapsed" TextChanged="CustomContextSizeTextBox_TextChanged"
-                                             ToolTip="{DynamicResource CustomContextTip}" />
+                                             ToolTip="{DynamicResource ParameterHelp_CustomContextSizeTextBox}" ToolTipService.ShowOnDisabled="True" />
                                     <TextBlock x:Name="ContextLimitTextBlock" Margin="0,-4,0,12"
                                                Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap" />
                                     <TextBlock x:Name="ContextRiskTextBlock" Margin="0,-4,0,12"
@@ -415,14 +415,14 @@
                                     <ComboBox x:Name="CompactionSafetyReserveComboBox" IsEditable="True" IsTextSearchEnabled="False" Margin="0,5,0,12"
                                               DisplayMemberPath="Label" SelectedValuePath="Value"
                                               SelectionChanged="CompactionSafetyReserveComboBox_SelectionChanged"
-                                              ToolTip="{DynamicResource CompactionReserveTip}" />
+                                              ToolTip="{DynamicResource ParameterHelp_CompactionSafetyReserveComboBox}" ToolTipService.ShowOnDisabled="True" />
                                     <TextBlock x:Name="ReserveRangeTextBlock" Margin="0,-6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
                                 </StackPanel>
                                 <StackPanel Grid.Row="1">
                                     <TextBlock FontWeight="SemiBold" Text="{DynamicResource ToolOutputHistoryLimit}" />
                                     <ComboBox x:Name="ToolOutputTokenLimitComboBox" IsEditable="True" IsTextSearchEnabled="False" Margin="0,5,0,12"
                                               DisplayMemberPath="Label" SelectedValuePath="Value"
-                                              ToolTip="{DynamicResource ToolOutputHistoryLimitTip}" />
+                                              ToolTip="{DynamicResource ParameterHelp_ToolOutputTokenLimitComboBox}" ToolTipService.ShowOnDisabled="True" />
                                     <TextBlock x:Name="ToolRangeTextBlock" Margin="0,-6,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}" />
                                 </StackPanel>
                                 <TextBlock x:Name="AutoCompactThresholdTextBlock" Grid.Row="1" Grid.Column="2"
@@ -447,16 +447,16 @@
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource CodexStreamIdleTimeout}" />
                             <ComboBox x:Name="CodexStreamIdleTimeoutComboBox" IsEditable="True" IsTextSearchEnabled="False"
                                       DisplayMemberPath="Label" SelectedValuePath="Value" Margin="0,5,0,8"
-                                      ToolTip="{DynamicResource CodexStreamIdleTimeoutTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_CodexStreamIdleTimeoutComboBox}" ToolTipService.ShowOnDisabled="True" />
                             <TextBlock Margin="0,0,0,12" TextWrapping="Wrap" Foreground="{DynamicResource MutedBrush}"
                                        Text="{DynamicResource CodexStreamIdleTimeoutTip}" />
                             <CheckBox FontSize="12" x:Name="ContextShiftCheckBox"
                                       Style="{StaticResource StartupToggleStyle}"
                                       FontWeight="SemiBold"
                                       Content="{DynamicResource ContextShiftEnabled}"
-                                      ToolTip="{DynamicResource ContextShiftTip}"
+                                      ToolTip="{DynamicResource ParameterHelp_ContextShiftCheckBox}"
                                       Checked="ContextShiftCheckBox_Changed"
-                                      Unchecked="ContextShiftCheckBox_Changed" />
+                                      Unchecked="ContextShiftCheckBox_Changed" ToolTipService.ShowOnDisabled="True" />
                             <TextBlock Margin="0,7,64,0" Foreground="{DynamicResource SecondaryBrush}"
                                        TextWrapping="Wrap" Text="{DynamicResource ContextShiftTip}" />
                             <Button x:Name="ContextShiftDetectButton" Content="{DynamicResource ContextShiftRedetect}" Margin="0,8,0,0" HorizontalAlignment="Left" Click="ContextShiftDetectButton_Click" />
@@ -482,58 +482,59 @@
                             <ComboBox x:Name="GpuLayersComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
                                       SelectionChanged="GpuLayersComboBox_SelectionChanged"
-                                      ToolTip="{DynamicResource GpuLayersTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_GpuLayersComboBox}" ToolTipService.ShowOnDisabled="True" />
                             <TextBox x:Name="CustomGpuLayersTextBox" Margin="0,-6,0,10" Visibility="Collapsed"
-                                     ToolTip="{DynamicResource GpuLayersCustomTip}" />
+                                     ToolTip="{DynamicResource ParameterHelp_CustomGpuLayersTextBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="Flash Attention" />
                             <ComboBox x:Name="FlashAttentionComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource FlashAttentionTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_FlashAttentionComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="1">
                             <TextBlock FontWeight="SemiBold" Text="K Cache" />
                             <ComboBox x:Name="CacheTypeKComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource KvCacheTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_CacheTypeKComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="V Cache" />
                             <ComboBox x:Name="CacheTypeVComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource VCacheTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_CacheTypeVComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="2">
                             <TextBlock FontWeight="SemiBold" Text="Batch Size" />
-                            <ComboBox x:Name="BatchSizeComboBox" Margin="0,5,0,12"
+                            <ComboBox x:Name="BatchSizeComboBox" IsEditable="True" IsTextSearchEnabled="False" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource BatchSizeTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_BatchSizeComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Row="2" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="Micro Batch" />
-                            <ComboBox x:Name="MicroBatchSizeComboBox" Margin="0,5,0,12"
+                            <ComboBox x:Name="MicroBatchSizeComboBox" IsEditable="True" IsTextSearchEnabled="False" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource MicroBatchTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_MicroBatchSizeComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
 
                         <StackPanel Grid.Row="3">
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource ParallelSlots}" />
                             <ComboBox x:Name="ParallelComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource ParallelSlotsTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_ParallelComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Row="3" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource IdleReleaseVram}" />
                             <ComboBox x:Name="IdleSleepSecondsComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource IdleReleaseVramTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_IdleSleepSecondsComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                     </Grid>
 
-                    <Grid x:Name="MoeBasicPanel" Margin="0,18,0,0" Visibility="Collapsed">
+                    <local:ProfileParameterPanel x:Name="MoeAdditionalRoot" />
+                    <Grid x:Name="MoeBasicPanel" Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/><ColumnDefinition Width="20"/><ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
@@ -543,24 +544,24 @@
                             <ComboBox x:Name="MoePlacementComboBox" Margin="0,5,0,12"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
                                       SelectionChanged="MoePlacementComboBox_SelectionChanged"
-                                      ToolTip="{DynamicResource ExpertPlacementTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_MoePlacementComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuExpertLayers}" />
                             <TextBox x:Name="CpuMoeLayersTextBox" Margin="0,5,0,12"
-                                     ToolTip="{DynamicResource CpuExpertLayersTip}" />
+                                     ToolTip="{DynamicResource ParameterHelp_CpuMoeLayersTextBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Row="1">
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource LoadMode}" />
                             <ComboBox x:Name="MoeLoadModeComboBox" Margin="0,5,0,0"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource LoadModeTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_MoeLoadModeComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                         <StackPanel Grid.Row="1" Grid.Column="2">
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource AutoMemoryFit}" />
                             <ComboBox x:Name="MoeFitComboBox" Margin="0,5,0,0"
                                       DisplayMemberPath="Label" SelectedValuePath="Value"
-                                      ToolTip="{DynamicResource AutoMemoryFitTip}" />
+                                      ToolTip="{DynamicResource ParameterHelp_MoeFitComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                     </Grid>
 
@@ -569,7 +570,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{DynamicResource TemplateSettings}">
+            <TabItem x:Name="TemplateSettingsTab" Header="{DynamicResource TemplateSettings}">
                 <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
                               Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
                               HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
@@ -578,9 +579,9 @@
                             MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <StackPanel>
                             <CheckBox x:Name="JinjaCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}" Content="{DynamicResource EnableJinja}"
-                                      Checked="TemplatePath_Changed" Unchecked="TemplatePath_Changed" />
+                                      Checked="TemplatePath_Changed" Unchecked="TemplatePath_Changed" ToolTip="{DynamicResource ParameterHelp_JinjaCheckBox}" ToolTipService.ShowOnDisabled="True" />
                             <TextBlock Margin="0,18,0,5" Text="{DynamicResource ChatTemplateFile}" FontWeight="SemiBold" />
-                            <ComboBox x:Name="TemplateResourceComboBox" DisplayMemberPath="Label" SelectionChanged="TemplateResource_Changed" />
+                            <ComboBox x:Name="TemplateResourceComboBox" DisplayMemberPath="Label" SelectionChanged="TemplateResource_Changed" ToolTip="{DynamicResource ParameterHelp_TemplateResourceComboBox}" ToolTipService.ShowOnDisabled="True" />
                             <TextBox x:Name="ChatTemplatePathTextBox" Visibility="Collapsed" TextChanged="TemplatePath_Changed" />
                             <TextBlock x:Name="TemplateStatusText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryBrush}" />
                         </StackPanel>
@@ -588,7 +589,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{DynamicResource ThinkingSettings}">
+            <TabItem x:Name="ThinkingSettingsTab" Header="{DynamicResource ThinkingSettings}">
                 <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
                               Margin="0,16,0,0" Padding="0,0,12,0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                               HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
@@ -612,35 +613,35 @@
                             <Border BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,20" />
                             <TextBlock Text="{DynamicResource EnableThinking}" FontSize="16" FontWeight="Bold" Margin="0,0,0,14" />
                             <CheckBox x:Name="ThinkingEnabledCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
-                                      Content="{DynamicResource EnableThinking}" Checked="ThinkingEnabled_Changed" Unchecked="ThinkingEnabled_Changed" />
+                                      Content="{DynamicResource EnableThinking}" Checked="ThinkingEnabled_Changed" Unchecked="ThinkingEnabled_Changed" ToolTip="{DynamicResource ParameterHelp_ThinkingEnabledCheckBox}" ToolTipService.ShowOnDisabled="True" />
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,18">
                                 <TextBlock x:Name="ThinkingStateTextBlock" Foreground="{DynamicResource SecondaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                                <Button x:Name="InheritThinkingButton" Content="{DynamicResource InheritThinking}" Click="InheritThinking_Click" Margin="12,0,0,0" Padding="8,4" />
+                                <Button x:Name="InheritThinkingButton" Content="{DynamicResource InheritThinking}" Click="InheritThinking_Click" Margin="12,0,0,0" Padding="8,4" ToolTip="{DynamicResource ParameterHelp_InheritThinkingButton}" ToolTipService.ShowOnDisabled="True" />
                             </StackPanel>
                             <CheckBox x:Name="ShowThinkingProcessCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
-                                      Content="{DynamicResource ShowThinkingProcess}" Checked="ShowThinkingProcess_Changed" Unchecked="ShowThinkingProcess_Changed" />
+                                      Content="{DynamicResource ShowThinkingProcess}" Checked="ShowThinkingProcess_Changed" Unchecked="ShowThinkingProcess_Changed" ToolTip="{DynamicResource ParameterHelp_ShowThinkingProcessCheckBox}" ToolTipService.ShowOnDisabled="True" />
                             <TextBlock Text="{DynamicResource ShowThinkingProcessTip}" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,18" />
                             <Border BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" Margin="0,20,0,20" />
                             <TextBlock Text="{DynamicResource ThinkingEffortSection}" FontSize="16" FontWeight="Bold" Margin="0,0,0,14" />
                             <local:ConfirmableCheckBox x:Name="ReasoningEffortCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}"
-                                      Content="{DynamicResource ExposeReasoningEffort}" ToolTip="{DynamicResource ExposeReasoningEffortTip}"
-                                      ToggleRequested="ReasoningEffort_ToggleRequested" Checked="ReasoningEffort_Changed" Unchecked="ReasoningEffort_Changed" />
+                                      Content="{DynamicResource ExposeReasoningEffort}" ToolTip="{DynamicResource ParameterHelp_ReasoningEffortCheckBox}"
+                                      ToggleRequested="ReasoningEffort_ToggleRequested" Checked="ReasoningEffort_Changed" Unchecked="ReasoningEffort_Changed" ToolTipService.ShowOnDisabled="True" />
                             <local:ConfirmableCheckBox x:Name="ReverseReasoningOrderCheckBox" FontSize="12" FontWeight="SemiBold" Style="{StaticResource StartupToggleStyle}" Margin="0,14,0,0"
                                       Content="{DynamicResource ReverseReasoningOrder}" ToggleRequested="ReverseReasoningOrder_ToggleRequested"
-                                      Checked="ReverseReasoningOrder_Changed" Unchecked="ReverseReasoningOrder_Changed" />
+                                      Checked="ReverseReasoningOrder_Changed" Unchecked="ReverseReasoningOrder_Changed" ToolTip="{DynamicResource ParameterHelp_ReverseReasoningOrderCheckBox}" ToolTipService.ShowOnDisabled="True" />
                             <TextBlock Text="{DynamicResource ReverseReasoningOrderTip}" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" Margin="0,8,0,0" />
                             <TextBlock Text="{DynamicResource PreferredReasoningLevel}" FontWeight="SemiBold" Margin="0,16,0,6" />
                             <ComboBox x:Name="PreferredReasoningLevelComboBox" IsEditable="False" IsTextSearchEnabled="False"
                                       HorizontalAlignment="Stretch" SelectionChanged="PreferredReasoningLevel_Changed"
                                       PreviewMouseLeftButtonDown="PreferredReasoningLevel_PreviewMouseLeftButtonDown"
                                       PreviewKeyDown="PreferredReasoningLevel_PreviewKeyDown"
-                                      PreviewMouseWheel="PreferredReasoningLevel_PreviewMouseWheel" />
+                                      PreviewMouseWheel="PreferredReasoningLevel_PreviewMouseWheel" ToolTip="{DynamicResource ParameterHelp_PreferredReasoningLevelComboBox}" ToolTipService.ShowOnDisabled="True" />
                         </StackPanel>
                     </Border>
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="{DynamicResource VisionParameters}">
+            <TabItem x:Name="VisionSettingsTab" Header="{DynamicResource VisionParameters}">
                 <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
                               Margin="0,16,0,0" Padding="0,0,12,0"
                               HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
@@ -653,21 +654,21 @@
                         <StackPanel>
                             <TextBlock x:Name="VisionStatusTextBlock" Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                             <CheckBox FontSize="12" x:Name="VisionEnableCheckBox" Style="{StaticResource StartupToggleStyle}" FontWeight="SemiBold"
-                                      Content="{DynamicResource EnableVision}" ToolTip="{DynamicResource EnableVisionTip}"
-                                      Checked="VisionEnableCheckBox_Changed" Unchecked="VisionEnableCheckBox_Changed" />
+                                      Content="{DynamicResource EnableVision}" ToolTip="{DynamicResource ParameterHelp_VisionEnableCheckBox}"
+                                      Checked="VisionEnableCheckBox_Changed" Unchecked="VisionEnableCheckBox_Changed" ToolTipService.ShowOnDisabled="True" />
                             <StackPanel x:Name="VisionSettingsPanel" Margin="0,16,0,0">
                                 <TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionSource}" />
-                                <ComboBox x:Name="VisionResourceComboBox" Margin="0,5,0,12" DisplayMemberPath="Label" SelectionChanged="VisionResource_Changed" />
+                                <ComboBox x:Name="VisionResourceComboBox" Margin="0,5,0,12" DisplayMemberPath="Label" SelectionChanged="VisionResource_Changed" ToolTip="{DynamicResource ParameterHelp_VisionResourceComboBox}" ToolTipService.ShowOnDisabled="True" />
                                 <TextBlock Visibility="Collapsed" x:Name="VisionSourceValueTextBlock" Margin="0,5,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                                 <StackPanel x:Name="VisionExternalProjectorPanel" Visibility="Collapsed">
                                     <TextBox Visibility="Collapsed" x:Name="VisionProjectorPathTextBox" Margin="0,5,0,12" IsReadOnly="True" IsTabStop="False" />
                                 </StackPanel>
                                 <local:ProfileParameterPanel Grid.IsSharedSizeScope="True" Margin="0,0,0,12">
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionProjectorOffload}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="VisionOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionProjectorOffloadTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Device" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionDeviceTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionDeviceTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Image Min Tokens" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionImageMinTokensTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionImageMinTokensTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Image Max Tokens" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionImageMaxTokensTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionImageMaxTokensTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="MTMD Batch Max Tokens" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionBatchMaxTokensTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource VisionBatchMaxTokensTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource VisionProjectorOffload}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="VisionOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="VisionParameter_Changed" ToolTip="{DynamicResource ParameterHelp_VisionOffloadComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Device" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionDeviceTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource ParameterHelp_VisionDeviceTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Image Min Tokens" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionImageMinTokensTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource ParameterHelp_VisionImageMinTokensTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Image Max Tokens" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionImageMaxTokensTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource ParameterHelp_VisionImageMaxTokensTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="MTMD Batch Max Tokens" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="VisionBatchMaxTokensTextBox" TextChanged="VisionParameter_Changed" ToolTip="{DynamicResource ParameterHelp_VisionBatchMaxTokensTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
                                 </local:ProfileParameterPanel>
                             </StackPanel>
                         </StackPanel>
@@ -690,12 +691,12 @@
                                        Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap" />
                             <CheckBox FontSize="12" x:Name="MtpEnableCheckBox" Style="{StaticResource StartupToggleStyle}"
                                       FontWeight="SemiBold" Content="{DynamicResource EnableMtp}"
-                                      ToolTip="{DynamicResource EnableMtpTip}"
-                                      Checked="MtpEnableCheckBox_Changed" Unchecked="MtpEnableCheckBox_Changed" />
+                                      ToolTip="{DynamicResource ParameterHelp_MtpEnableCheckBox}"
+                                      Checked="MtpEnableCheckBox_Changed" Unchecked="MtpEnableCheckBox_Changed" ToolTipService.ShowOnDisabled="True" />
 
                             <StackPanel x:Name="MtpSettingsPanel" Margin="0,16,0,0">
                                 <TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpSource}" />
-                                <ComboBox x:Name="MtpResourceComboBox" Margin="0,5,0,12" DisplayMemberPath="Label" SelectionChanged="MtpResource_Changed" />
+                                <ComboBox x:Name="MtpResourceComboBox" Margin="0,5,0,12" DisplayMemberPath="Label" SelectionChanged="MtpResource_Changed" ToolTip="{DynamicResource ParameterHelp_MtpResourceComboBox}" ToolTipService.ShowOnDisabled="True" />
                                 <TextBlock Visibility="Collapsed" x:Name="MtpSourceValueTextBlock" Margin="0,5,0,12"
                                            Foreground="{DynamicResource SecondaryBrush}"
                                            TextWrapping="Wrap" ToolTip="{DynamicResource MtpSourceTip}" />
@@ -710,27 +711,30 @@
                                 <TextBlock Margin="0,2,0,10" FontWeight="SemiBold"
                                            Text="{DynamicResource MtpCommonParameters}" />
                                 <local:ProfileParameterPanel Grid.IsSharedSizeScope="True" Margin="0,0,0,12">
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="N Max" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpNMaxTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpNMaxTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="P Min" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpPMinTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpPMinTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="N Min" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpNMinTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpNMinTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="P Split" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpPSplitTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpPSplitTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpBackendSampling}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="MtpBackendSamplingComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpBackendSamplingTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="N Max" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpNMaxTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpNMaxTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="P Min" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpPMinTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpPMinTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="N Min" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpNMinTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpNMinTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="P Split" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpPSplitTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpPSplitTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                    <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource MtpBackendSampling}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="MtpBackendSamplingComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpBackendSamplingComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
                                 </local:ProfileParameterPanel>
 
+                                <local:ProfileParameterPanel x:Name="MtpAdditionalRoot" />
                                 <StackPanel x:Name="MtpExternalResourcesPanel" Visibility="Collapsed">
                                     <Border Margin="0,2,0,14" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" />
                                     <TextBlock Margin="0,0,0,10" FontWeight="SemiBold"
                                                Text="{DynamicResource MtpExternalResources}" />
                                     <local:ProfileParameterPanel Grid.IsSharedSizeScope="True" Margin="0,0,0,12">
-                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="GPU Offload" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpGpuLayersTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpGpuLayersTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Device" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpDeviceTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpDeviceTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="K Cache" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="MtpCacheTypeKComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpCacheTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="V Cache" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="MtpCacheTypeVComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpCacheTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Threads" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpThreadsTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpThreadsTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Batch Threads" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpBatchThreadsTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource MtpThreadsTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
+                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="GPU Offload" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpGpuLayersTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpGpuLayersTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Device" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpDeviceTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpDeviceTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="K Cache" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="MtpCacheTypeKComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpCacheTypeKComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="V Cache" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="MtpCacheTypeVComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" SelectionChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpCacheTypeVComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Threads" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpThreadsTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpThreadsTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                        <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Batch Threads" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MtpBatchThreadsTextBox" TextChanged="MtpParameter_Changed" ToolTip="{DynamicResource ParameterHelp_MtpBatchThreadsTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
                                     </local:ProfileParameterPanel>
                                 </StackPanel>
                             </StackPanel>
+                            <Border Margin="0,14,0,18" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" />
+                            <StackPanel x:Name="NgramRoot" />
                         </StackPanel>
                     </Border>
                 </ScrollViewer>
@@ -750,37 +754,42 @@
                             <TextBlock Margin="0,0,0,12" Foreground="{DynamicResource SecondaryBrush}" TextWrapping="Wrap"
                                        Text="{DynamicResource AdvancedParametersHint}" />
                             <local:ProfileParameterPanel Grid.IsSharedSizeScope="True" Margin="0,0,0,12">
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource ComputeDevice}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="DeviceTextBox" ToolTip="{DynamicResource ComputeDeviceTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource KvGpuOffload}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="KvOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource KvGpuOffloadTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuGenerationThreads}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="ThreadsTextBox" ToolTip="{DynamicResource CpuGenerationThreadsTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuBatchThreads}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="ThreadsBatchTextBox" ToolTip="{DynamicResource CpuBatchThreadsTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid x:Name="DenseLoadModePanel" VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource LoadMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="DenseLoadModeComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource DenseLoadModeTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource LazyMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="LazyModeComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource LazyModeTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid x:Name="DenseFitPanel" VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource AutoMemoryFitFull}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="DenseFitComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource DenseFitTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource FitVramReserve}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="FitTargetTextBox" ToolTip="{DynamicResource FitVramReserveTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource FitMinimumContext}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="FitContextTextBox" ToolTip="{DynamicResource FitMinimumContextTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid x:Name="DenseCpuFfnPanel" VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuDenseFfnLayers}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="CpuFfnLayersTextBox" ToolTip="{DynamicResource CpuDenseFfnLayersTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource MultiGpuSplitMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="SplitModeComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource MultiGpuSplitModeTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Tensor Split" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="TensorSplitTextBox" ToolTip="{DynamicResource TensorSplitTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource MainGpu}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MainGpuTextBox" ToolTip="{DynamicResource MainGpuTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource NumaMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="NumaComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource NumaModeTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource SwaFullCache}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="SwaFullComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource SwaFullCacheTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource WeightRepack}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="RepackComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource WeightRepackTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Operation Offload" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="OpOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource OperationOffloadTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource BypassHostBuffer}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="NoHostComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource BypassHostBufferTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource RopeScalingMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="RopeScalingComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource RopeScalingModeTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="RoPE Scale" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="RopeScaleTextBox" ToolTip="{DynamicResource RopeScaleTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Base" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="RopeFreqBaseTextBox" ToolTip="{DynamicResource RopeFrequencyBaseTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Scale" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="RopeFreqScaleTextBox" ToolTip="{DynamicResource RopeFrequencyScaleTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource ContextCheckpoints}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="CtxCheckpointsTextBox" ToolTip="{DynamicResource ContextCheckpointsTip}" Margin="0,5,0,0" Grid.Row="1"/></Grid>
-                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource KeepInitialTokens}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="KeepTokensTextBox" ToolTip="{DynamicResource KeepInitialTokensTip}" TextChanged="KeepTokensTextBox_TextChanged" Margin="0,5,0,0" Grid.Row="1"/><TextBlock x:Name="KeepTokensStatusTextBlock" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"  Margin="0,5,0,0" Grid.Row="2"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource ComputeDevice}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="DeviceTextBox" ToolTip="{DynamicResource ParameterHelp_DeviceTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource KvGpuOffload}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="KvOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_KvOffloadComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuGenerationThreads}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="ThreadsTextBox" ToolTip="{DynamicResource ParameterHelp_ThreadsTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuBatchThreads}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="ThreadsBatchTextBox" ToolTip="{DynamicResource ParameterHelp_ThreadsBatchTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid x:Name="DenseLoadModePanel" VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource LoadMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="DenseLoadModeComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_DenseLoadModeComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource LazyMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="LazyModeComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_LazyModeComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid x:Name="DenseFitPanel" VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource AutoMemoryFitFull}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="DenseFitComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_DenseFitComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource FitVramReserve}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="FitTargetTextBox" ToolTip="{DynamicResource ParameterHelp_FitTargetTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource FitMinimumContext}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="FitContextTextBox" ToolTip="{DynamicResource ParameterHelp_FitContextTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid x:Name="DenseCpuFfnPanel" VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource CpuDenseFfnLayers}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="CpuFfnLayersTextBox" ToolTip="{DynamicResource ParameterHelp_CpuFfnLayersTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource MultiGpuSplitMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="SplitModeComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_SplitModeComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Tensor Split" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="TensorSplitTextBox" ToolTip="{DynamicResource ParameterHelp_TensorSplitTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource MainGpu}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="MainGpuTextBox" ToolTip="{DynamicResource ParameterHelp_MainGpuTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource NumaMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="NumaComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_NumaComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource SwaFullCache}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="SwaFullComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_SwaFullComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource WeightRepack}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="RepackComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_RepackComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="Operation Offload" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="OpOffloadComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_OpOffloadComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource BypassHostBuffer}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="NoHostComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_NoHostComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource RopeScalingMode}" TextWrapping="Wrap" Grid.Row="0"/><ComboBox x:Name="RopeScalingComboBox" DisplayMemberPath="Label" SelectedValuePath="Value" ToolTip="{DynamicResource ParameterHelp_RopeScalingComboBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="RoPE Scale" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="RopeScaleTextBox" ToolTip="{DynamicResource ParameterHelp_RopeScaleTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Base" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="RopeFreqBaseTextBox" ToolTip="{DynamicResource ParameterHelp_RopeFreqBaseTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="RoPE Frequency Scale" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="RopeFreqScaleTextBox" ToolTip="{DynamicResource ParameterHelp_RopeFreqScaleTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource ContextCheckpoints}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="CtxCheckpointsTextBox" ToolTip="{DynamicResource ParameterHelp_CtxCheckpointsTextBox}" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/></Grid>
+                                <Grid VerticalAlignment="Top"><Grid.RowDefinitions><RowDefinition Height="Auto" SharedSizeGroup="ParameterHeaders"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><TextBlock FontWeight="SemiBold" Text="{DynamicResource KeepInitialTokens}" TextWrapping="Wrap" Grid.Row="0"/><TextBox x:Name="KeepTokensTextBox" ToolTip="{DynamicResource ParameterHelp_KeepTokensTextBox}" TextChanged="KeepTokensTextBox_TextChanged" Margin="0,5,0,0" Grid.Row="1" ToolTipService.ShowOnDisabled="True"/><TextBlock x:Name="KeepTokensStatusTextBlock" Foreground="{DynamicResource MutedBrush}" TextWrapping="Wrap"  Margin="0,5,0,0" Grid.Row="2"/></Grid>
                             </local:ProfileParameterPanel>
+                            <local:ProfileParameterPanel x:Name="CheckpointAdditionalRoot" />
+                            <Border Margin="0,8,0,14" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="0,1,0,0" />
+                            <TextBlock FontWeight="SemiBold" Text="{DynamicResource AdditionalCacheParameters}" Margin="0,0,0,12" />
+                            <local:ProfileParameterPanel x:Name="CacheAdditionalRoot" />
+                            <local:ProfileParameterPanel x:Name="ComputeAdditionalRoot" />
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource YarnParameters}"/>
                             <TextBox x:Name="YarnArgumentsTextBox" Margin="0,5,0,12"
-                                     ToolTip="{DynamicResource YarnParametersTip}"/>
+                                     ToolTip="{DynamicResource ParameterHelp_YarnArgumentsTextBox}" ToolTipService.ShowOnDisabled="True"/>
                             <TextBlock FontWeight="SemiBold" Text="{DynamicResource TensorPlacement}"/>
                             <TextBox x:Name="OverrideTensorTextBox" Margin="0,5,0,0" TextWrapping="Wrap"
-                                     ToolTip="{DynamicResource TensorPlacementTip}"/>
+                                     ToolTip="{DynamicResource ParameterHelp_OverrideTensorTextBox}" ToolTipService.ShowOnDisabled="True"/>
                         </StackPanel>
                     </Border>
                 </ScrollViewer>
@@ -804,7 +813,7 @@
                                 <CheckBox x:Name="SandboxNetworkCheckBox" IsThreeState="True" HorizontalAlignment="Right"
                                           Style="{StaticResource StartupToggleStyle}"
                                           Checked="SandboxNetworkToggle_Changed" Unchecked="SandboxNetworkToggle_Changed"
-                                          Indeterminate="SandboxNetworkToggle_Changed" />
+                                          Indeterminate="SandboxNetworkToggle_Changed" ToolTip="{DynamicResource ParameterHelp_SandboxNetworkCheckBox}" ToolTipService.ShowOnDisabled="True" />
                             </Grid>
                             <TextBlock x:Name="SandboxNetworkStateTextBlock" Margin="0,0,0,12" TextWrapping="Wrap"
                                        Foreground="{DynamicResource SecondaryBrush}" />
@@ -812,7 +821,7 @@
                                 <TextBlock VerticalAlignment="Center" Text="{DynamicResource SandboxNetworkCompatibility}" />
                                 <CheckBox x:Name="SandboxCompatibilityCheckBox" HorizontalAlignment="Right"
                                           Style="{StaticResource StartupToggleStyle}"
-                                          Checked="SandboxCompatibility_Changed" Unchecked="SandboxCompatibility_Changed" />
+                                          Checked="SandboxCompatibility_Changed" Unchecked="SandboxCompatibility_Changed" ToolTip="{DynamicResource ParameterHelp_SandboxCompatibilityCheckBox}" ToolTipService.ShowOnDisabled="True" />
                             </Grid>
                             <TextBlock Margin="0,0,0,12" TextWrapping="Wrap" Foreground="{DynamicResource SecondaryBrush}"
                                        Text="{DynamicResource SandboxCompatibilityHint}" />
@@ -836,6 +845,26 @@
                             <Button x:Name="CommonSandboxPathsButton" Margin="8,0,0,0" Padding="12,7"
                                     Click="CommonSandboxPaths_Click" />
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem x:Name="CustomParametersTab" Header="{DynamicResource CustomParametersTitle}">
+                <ScrollViewer FontSize="12" FontWeight="Normal" Width="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType={x:Type TabControl}}}"
+                              Margin="0,16,0,0" Padding="0,0,12,0" VerticalScrollBarVisibility="Visible" HorizontalScrollBarVisibility="Disabled"
+                              HorizontalAlignment="Stretch" VerticalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
+                    <Border Padding="18" CornerRadius="12" Background="{DynamicResource CardBackgroundBrush}"
+                            HorizontalAlignment="Stretch" Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}"
+                            MinHeight="{Binding ViewportHeight, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
+                        <StackPanel>
+                            <TextBlock Text="{DynamicResource CustomParametersHint}" TextWrapping="Wrap" Margin="0,0,0,18" />
+                            <Border BorderThickness="1" BorderBrush="{DynamicResource ControlBorderBrush}" CornerRadius="12" Padding="14" Margin="0,0,0,16">
+                                <StackPanel x:Name="LlamaCustomRoot" />
+                            </Border>
+                            <Border BorderThickness="1" BorderBrush="{DynamicResource ControlBorderBrush}" CornerRadius="12" Padding="14">
+                                <StackPanel x:Name="CodexCustomRoot" />
+                            </Border>
                         </StackPanel>
                     </Border>
                 </ScrollViewer>

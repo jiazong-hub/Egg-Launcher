@@ -204,6 +204,24 @@
                     <StackPanel Width="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType={x:Type ScrollViewer}}}">
                         <Border Margin="0,0,0,14" Style="{StaticResource CardStyle}">
                             <StackPanel>
+                                <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource ReleaseNote099Title}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item1}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item2}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item3}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item4}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item5}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item6}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item7}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item8}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item9}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item10}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item11}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item12}" />
+                                <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote099Item13}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Margin="0,0,0,14" Style="{StaticResource CardStyle}">
+                            <StackPanel>
                                 <TextBlock FontSize="18" FontWeight="SemiBold" Text="{DynamicResource ReleaseNote098Title}" />
                                 <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote098Item1}" />
                                 <TextBlock Style="{StaticResource ReleaseNoteItemStyle}" Text="{DynamicResource ReleaseNote098Item2}" />

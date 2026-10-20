@@ -6,7 +6,7 @@ public enum ReasoningValidationStateKind { Current, Expired, Unreadable }
 
 public sealed record ReasoningValidationCheck(ReasoningValidationStateKind State, string? Signature, string? Reason, IReadOnlyDictionary<string, string>? Basis = null)
 {
-    public ModelProfile ApplyTo(ModelProfile profile) => State == ReasoningValidationStateKind.Current
+    public ModelProfile ApplyTo(ModelProfile profile, bool preserveIntent = false) => State == ReasoningValidationStateKind.Current
         ? profile.ReasoningCapabilitySignature == Signature && profile.ReasoningValidationBasis is not null
             ? profile
             : profile with { ReasoningCapabilitySignature = Signature, ReasoningValidationBasis = Basis }
@@ -17,9 +17,9 @@ public sealed record ReasoningValidationCheck(ReasoningValidationStateKind State
             DefaultReasoningLevel = null,
             SupportsThinkingSwitch = null,
             DefaultThinkingEnabled = null,
-            ThinkingEnabled = null,
+            ThinkingEnabled = preserveIntent ? profile.ThinkingEnabled : null,
             ReasoningResponsesVerified = false,
-            ExposeReasoningEffortInChatGpt = false,
+            ExposeReasoningEffortInChatGpt = preserveIntent && profile.ExposeReasoningEffortInChatGpt,
             ReasoningClientCompatible = null,
             ReasoningClientExecutablePath = null,
             ReasoningLevelAliases = new Dictionary<string, string>(),
@@ -45,6 +45,7 @@ public static class ReasoningValidationState
             var signature = ReasoningValidationFingerprint.Compute(profile, root);
             var basis = ReasoningValidationFingerprint.CaptureBasis(profile, root);
             if (signature == profile.ReasoningCapabilitySignature
+                || ReasoningValidationFingerprint.ComputeVersion5(profile, root) == profile.ReasoningCapabilitySignature
                 || ReasoningValidationFingerprint.ComputeLegacy(profile, root) == profile.ReasoningCapabilitySignature)
                 return new(ReasoningValidationStateKind.Current, signature, null, basis);
             var labels = new Dictionary<string, string>

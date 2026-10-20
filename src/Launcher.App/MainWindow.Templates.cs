@@ -18,14 +18,14 @@ public partial class MainWindow
 {
     private async Task<CodexChatTemplateCompatibilityResult> PrepareChatTemplateAsync(
         ModelProfile profile, string root, CancellationToken cancellationToken, bool explicitCheck = false,
-        string? stagedFileName = null)
+        string? stagedFileName = null, bool allowGeneration = true)
     {
         // Artifact transactions resume on a worker thread after taking file snapshots.
         // This flow reads UI state and owns dialogs, so enter through the UI dispatcher.
         if (!Dispatcher.CheckAccess())
         {
             return await Dispatcher.InvokeAsync(
-                () => PrepareChatTemplateAsync(profile, root, cancellationToken, explicitCheck, stagedFileName),
+                () => PrepareChatTemplateAsync(profile, root, cancellationToken, explicitCheck, stagedFileName, allowGeneration),
                 System.Windows.Threading.DispatcherPriority.Normal,
                 cancellationToken).Task.Unwrap();
         }
@@ -37,7 +37,7 @@ public partial class MainWindow
         var source = await Task.Run(() => CodexChatTemplateCompatibility.ReadEmbeddedChatTemplate(
             Path.Combine(root, profile.ModelRelativePath), cancellationToken), cancellationToken);
         var analysis = ChatTemplateRules.Analyze(source);
-        var generate = string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
+        var generate = allowGeneration && string.IsNullOrWhiteSpace(profile.ChatTemplateRelativePath)
             && analysis.Kind == ChatTemplateMatchKind.Repairable;
         if (!generate && !explicitCheck) return new(profile, false);
 
@@ -74,9 +74,13 @@ public partial class MainWindow
             var signatureBefore = ChatTemplateValidationCache.Signature(profile, root);
             var result = await ValidateChatTemplateWithNativeRouterAsync(checkedProfile, root, cancellationToken, analysis.ToolMarkers);
             if (!result.Passed)
-                throw new InvalidOperationException(AppLanguageManager.Choose(
+            {
+                var message = AppLanguageManager.Choose(
                     (result.Unavailable ? "模板检查未完成：" : "模板检查失败：") + result.Details,
-                    "Template check " + (result.Unavailable ? "unavailable: " : "failed: ") + result.Details));
+                    "Template check " + (result.Unavailable ? "unavailable: " : "failed: ") + result.Details);
+                if (!result.Unavailable) throw new ModelResourceValidationException(message);
+                throw new InvalidOperationException(message);
+            }
             if (GetClientRunningSnapshot(force: true) || !CanEditProfile(profile, forceClientRefresh: true))
                 throw new InvalidOperationException("The client was started during validation; changes were not applied.");
             // Do not commit a result if the underlying source changed during the native check.
@@ -109,18 +113,7 @@ public partial class MainWindow
     private async Task<ChatTemplateRenderResult> ValidateChatTemplateWithNativeRouterAsync(
         ModelProfile profile, string root, CancellationToken cancellationToken, IReadOnlyList<string>? toolMarkers)
     {
-        var validating = profile with
-        {
-            ContextSize = 4096,
-            CompactionSafetyReserve = 2048,
-            ToolOutputTokenLimit = 1024,
-            Parallel = 1,
-            MtpEnabled = false,
-            VisionEnabled = false,
-            ContextShiftEnabled = false,
-            ExposeReasoningEffortInChatGpt = false,
-            IdleSleepSeconds = -1,
-        };
+        var validating = TemplateValidationProfile.Create(profile);
         var preset = Path.Combine(root, "scripts", $".template-validation-{Guid.NewGuid():N}.ini");
         var apiKey = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         try

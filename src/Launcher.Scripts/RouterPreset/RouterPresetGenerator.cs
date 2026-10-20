@@ -75,7 +75,7 @@ public static class RouterPresetGenerator
         foreach (var argument in ModelFeatureArguments.Generate(
                      profile, path => Path.GetFullPath(Path.Combine(runtimeRoot, path))))
         {
-            Append(builder, argument.Key, argument.Value ?? "true");
+            Append(builder, argument.Key.TrimStart('-'), argument.Value ?? "true");
         }
 
         Append(builder, "sleep-idle-seconds", profile.IdleSleepSeconds);

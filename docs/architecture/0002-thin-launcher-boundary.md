@@ -1,6 +1,6 @@
 # 0002：Launcher 保持为 llama.cpp 的薄管理壳
 
-状态：已采用（2026-09-11；v0.9.8 复核于 2026-10-18）
+状态：已采用（2026-09-11；v0.9.9 复核于 2026-10-20）
 
 ## 决策
 
@@ -17,6 +17,8 @@ llama.cpp 是 Local 模式唯一的模型运行时。Launcher 只管理 GGUF Pro
 模型状态、立即加载/释放和缓存删除分别使用 Router 原生 `/models`、`/models/load`、`/models/unload` 与 `DELETE /models`。缓存删除采取双重来源门：llama 必须返回 `can_remove`，Launcher Profile 也必须保存同一下载 ID；V1 迁移 Profile 一律视为用户本地文件。Local 运行期间不执行删除。
 
 运行数据来自 llama 原生 `/metrics`、`/slots` 和 Windows 系统计数器。内部 Router 地址只有在协议版本、Agent/Router PID、实际可执行文件路径、更新时间和 HTTP 回环地址全部校验后才使用。监控不访问 Desktop-facing 管理路由，不记录提示词，也不为了读取指标唤醒休眠模型。Windows 或驱动没有公开的数据标记为不可用。
+
+0.9.9 的接受率来自 llama 原生 Slot timing 日志，只搬运最近一次请求的比率与计数，不生成额外推理、不合并请求或估算缺失指标。n-gram 和 MTP 的策略执行、采样、接受判定及性能均由 llama.cpp 负责；实验性自定参数只按接收者传递。界面整数 K 转换不会改变真实 token 单位或 Codex 原生压缩流程。
 
 模型 Chat Template 属于 llama.cpp 启动配置。若 GGUF 内置模板包含已确认会拒绝 Codex 后续系统消息的严格 Qwen 守卫，Launcher 可以从该 GGUF 自身的模板元数据生成模型专用副本，只放宽该守卫，并通过 `--chat-template-file` 交给 llama.cpp 渲染。该过程不解析、不改写网络请求，也不实现模型推理或工具协议。
 

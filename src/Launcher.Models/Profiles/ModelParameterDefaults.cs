@@ -60,6 +60,12 @@ public sealed record ModelParameterDefaults
 
     public bool MtpEnabled { get; init; }
 
+    public NgramSettings Ngram { get; init; } = new();
+
+    public RuntimeParameterSettings RuntimeParameters { get; init; } = new();
+
+    public CustomParameterSettings CustomParameters { get; init; } = new();
+
     public MtpSourceKind MtpSource { get; init; } = MtpSourceKind.Embedded;
 
     public string? MtpDraftModelRelativePath { get; init; }
@@ -130,6 +136,9 @@ public sealed record ModelParameterDefaults
             ReverseReasoningLevelDisplayOrder = profile.ReverseReasoningLevelDisplayOrder,
             PreferredReasoningLevel = profile.PreferredReasoningLevel,
             MtpEnabled = profile.MtpEnabled,
+            Ngram = profile.Ngram,
+            RuntimeParameters = profile.RuntimeParameters,
+            CustomParameters = profile.CustomParameters,
             MtpSource = profile.MtpSource,
             MtpDraftModelRelativePath = profile.MtpDraftModelRelativePath,
             MtpDraftMaxTokens = profile.MtpDraftMaxTokens,
@@ -185,6 +194,9 @@ public sealed record ModelParameterDefaults
             ReverseReasoningLevelDisplayOrder = ReverseReasoningLevelDisplayOrder,
             PreferredReasoningLevel = PreferredReasoningLevel,
             MtpEnabled = MtpEnabled && IsMtpSourceReady(profile),
+            Ngram = Ngram,
+            RuntimeParameters = RuntimeParameters,
+            CustomParameters = CustomParameters,
             // MTP source association is model metadata, not a tunable default. Preserve the
             // current model's verified/detected source instead of restoring a stale file path.
             MtpSource = profile.MtpSource,

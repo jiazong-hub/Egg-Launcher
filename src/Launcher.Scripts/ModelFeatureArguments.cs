@@ -13,8 +13,21 @@ internal static class ModelFeatureArguments
             Append(arguments, "reasoning", thinking ? "on" : "off");
             if (!thinking) Append(arguments, "reasoning-budget", "0");
         }
+        var types = new List<string>();
+        if (profile.MtpEnabled) types.Add("draft-mtp");
+        if (profile.Ngram.Enabled) types.AddRange(NgramOptions.Types.Where(t => profile.Ngram.Types.Contains(t, StringComparer.Ordinal)));
+        if (types.Count > 0) Append(arguments, "spec-type", string.Join(',', types));
         AppendMtp(arguments, profile, resolvePath);
+        foreach (var argument in NgramOptions.Arguments(profile.Ngram))
+            Append(arguments, argument.Key, argument.Key.StartsWith("lookup-cache-", StringComparison.Ordinal)
+                ? resolvePath(argument.Value!) : argument.Value);
         AppendVision(arguments, profile, resolvePath);
+        arguments.AddRange(profile.RuntimeParameters.Arguments(profile));
+        foreach (var row in profile.CustomParameters.Llama)
+        {
+            CustomParameterRules.EnsureLlamaEmissionSafe(row);
+            Append(arguments, row.Name, row.NoValue ? null : row.Value);
+        }
         return arguments;
     }
 
@@ -25,7 +38,6 @@ internal static class ModelFeatureArguments
             return;
         }
 
-        Append(builder, "spec-type", "draft-mtp");
         if (profile.MtpSource == MtpSourceKind.External)
         {
             var draftPath = resolvePath(profile.MtpDraftModelRelativePath

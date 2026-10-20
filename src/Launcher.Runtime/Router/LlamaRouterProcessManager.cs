@@ -6,6 +6,8 @@ using System.Text;
 using Launcher.Core.Diagnostics;
 using Launcher.Core.Security;
 using Launcher.Runtime.Processes;
+using Launcher.Runtime.Monitoring;
+using Launcher.Core.Configuration;
 
 namespace Launcher.Runtime.Router;
 
@@ -39,6 +41,9 @@ public sealed class LlamaRouterProcessManager(
     public bool ContextShiftObserved => Volatile.Read(ref _contextShiftObserved) == 1;
     public string? ContextShiftDisabledReason { get; private set; }
     private string? _lastDiagnosticRunId;
+    private DraftAcceptanceSnapshot? _latestDraftAcceptance;
+
+    public DraftAcceptanceSnapshot? LatestDraftAcceptance => Volatile.Read(ref _latestDraftAcceptance);
 
     public void SetDetailedDiagnosticsEnabled(bool enabled) =>
         Volatile.Write(ref _detailedDiagnosticsEnabled, enabled ? 1 : 0);
@@ -68,6 +73,8 @@ public sealed class LlamaRouterProcessManager(
             {
                 await StopOwnedProcessCoreAsync(CancellationToken.None).ConfigureAwait(false);
             }
+
+            Volatile.Write(ref _latestDraftAcceptance, null);
 
             var executablePath = Path.GetFullPath(request.ExecutablePath);
             if (!File.Exists(executablePath))
@@ -254,6 +261,7 @@ public sealed class LlamaRouterProcessManager(
 
     private async Task StopOwnedProcessCoreAsync(CancellationToken cancellationToken)
     {
+        Volatile.Write(ref _latestDraftAcceptance, null);
         var process = _process;
         if (process is null)
         {
@@ -298,6 +306,7 @@ public sealed class LlamaRouterProcessManager(
             _standardErrorPump = null;
             _runtimeLease?.Dispose();
             _runtimeLease = null;
+            Volatile.Write(ref _latestDraftAcceptance, null);
         }
     }
 
@@ -335,6 +344,9 @@ public sealed class LlamaRouterProcessManager(
         {
             while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
             {
+                // Telemetry consumes native output independently of diagnostic log filtering.
+                if (DraftAcceptanceParser.TryParse(line, out var acceptance))
+                    Volatile.Write(ref _latestDraftAcceptance, acceptance);
                 var requestedMode = CurrentDiagnosticMode();
                 if (!string.Equals(activeMode, requestedMode, StringComparison.Ordinal))
                 {
@@ -419,8 +431,10 @@ public sealed class LlamaRouterProcessManager(
                     ["message"] = DiagnosticSanitizer.SanitizeText(exception.Message),
                 })).ConfigureAwait(false);
             // Keep draining redirected output so a log failure cannot block or crash llama supervision.
-            while (await reader.ReadLineAsync().ConfigureAwait(false) is not null)
+            while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
             {
+                if (DraftAcceptanceParser.TryParse(line, out var acceptance))
+                    Volatile.Write(ref _latestDraftAcceptance, acceptance);
             }
         }
         finally

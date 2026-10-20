@@ -196,7 +196,11 @@ public sealed class ModelConfigurationFileTests : IDisposable
         proof = proof with { VisionValidationSignature = VisionValidationFingerprint.Compute(proof, _root) };
         await ModelResourceCatalog.RegisterAsync(proof, _root, ModelResourceKind.Vision);
         Assert.Equal(VisionCapabilityStatus.Verified, ModelResourceCatalog.Resolve(proof, _root).VisionCapabilityStatus);
-        Assert.Equal(VisionCapabilityStatus.Unknown, ModelResourceCatalog.Resolve(proof with { ChatTemplateRelativePath = "other.jinja" }, _root).VisionCapabilityStatus);
+        var wrongTemplate = proof with { ChatTemplateRelativePath = "other.jinja" };
+        Assert.Equal(VisionCapabilityStatus.Verified, ModelResourceCatalog.Resolve(wrongTemplate, _root).VisionCapabilityStatus);
+        Assert.NotEmpty(ModelProfileValidator.Validate(wrongTemplate, _root, requireRuntimeEvidence: false));
+        await Assert.ThrowsAsync<InvalidDataException>(() => ModelConfigurationFile.WriteAsync(
+            Path.Combine(ModelConfigurationFile.GetDirectory(Model, _root), "bad-template.json"), wrongTemplate, _root));
     }
 
     [Fact]
@@ -268,7 +272,7 @@ public sealed class ModelConfigurationFileTests : IDisposable
     }
 
     [Fact]
-    public async Task VisionResource_PreservesSeparateTemplateValidationContexts()
+    public async Task VisionResource_SharesMetadataEvidenceAcrossTemplates()
     {
         await File.WriteAllTextAsync(Path.Combine(_root, "vision.gguf"), "vision");
         await File.WriteAllTextAsync(Path.Combine(ChatTemplateFile.GetDirectory(_root), "one.jinja"), "one");
@@ -286,7 +290,7 @@ public sealed class ModelConfigurationFileTests : IDisposable
             proof = proof with { VisionValidationSignature = VisionValidationFingerprint.Compute(proof, _root) };
             await ModelResourceCatalog.RegisterAsync(proof, _root, ModelResourceKind.Vision);
         }
-        Assert.Equal(2, ModelResourceCatalog.Read(Model, _root).Records.Count);
+        Assert.Single(ModelResourceCatalog.Read(Model, _root).Records);
         foreach (var template in new[] { "one.jinja", "two.jinja" })
             Assert.Equal(VisionCapabilityStatus.Verified, ModelResourceCatalog.Resolve(Model with
             { ChatTemplateRelativePath = "scripts/templates/" + template, VisionSource = VisionSourceKind.External, VisionProjectorRelativePath = "vision.gguf" }, _root).VisionCapabilityStatus);

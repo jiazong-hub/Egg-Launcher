@@ -1,10 +1,10 @@
 # Architecture decision 0003: per-model Codex sandbox settings
 
-Status: adopted in v0.9.2; reviewed for v0.9.8 on 2026-10-18. Named Codex permission profiles remain beta.
+Status: adopted in v0.9.2; reviewed for v0.9.9 on 2026-10-20. Named Codex permission profiles remain beta.
 
 ## Decision
 
-Store optional Codex command-sandbox settings in each model-bound parameter JSON, separately from llama.cpp runtime arguments. `SandboxSettings` originated in schema 7; the current embedded ModelProfile schema is 13 and the user configuration format is 1:
+Store optional Codex command-sandbox settings in each model-bound parameter JSON, separately from llama.cpp runtime arguments. `SandboxSettings` originated in schema 7; the embedded ModelProfile schema remains 13. User configuration format is 1, or 2 when n-gram, new runtime parameters or custom parameters carry intent:
 
 - Network access can inherit Codex's existing setting, be disabled, or allow full outbound access.
 - Additional absolute paths can be granted read-only or read/write access.
@@ -19,6 +19,8 @@ When a selected model has saved sandbox settings, Local mode temporarily selects
 The transaction snapshots and owns only these sandbox fields while Local mode is active: `default_permissions`, `sandbox_mode`, `[sandbox_workspace_write]`, and `permissions.egg_launcher_active`. Legacy sandbox fields are removed while the named permission profile is active because Codex does not support combining the two formats. Existing writable roots and an explicitly configured legacy network value are carried into the generated profile. Switching to a model with no saved sandbox settings restores the pre-Local sandbox values; returning to OpenAI restores them as well.
 
 `approval_policy` and `approvals_reviewer` remain outside the ownership set. The launcher does not configure or infer approval behavior.
+
+v0.9.9 Codex custom parameters are distinct from sandbox controls and use the existing configuration transaction. They cannot override fixed/managed keys, including approval controls or the generated permission profile. Values are parsed as complete TOML values. Unused custom keys restore their pre-Local values on model changes, and returning online restores all owned custom keys. Unsupported table shapes or external changes stop overwrite; no second restoration mechanism is introduced.
 
 ## Safety boundaries
 

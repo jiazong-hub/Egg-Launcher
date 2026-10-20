@@ -2,6 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=System.Runtime">
     <sys:String x:Key="LanguageCode">EN</sys:String>
+    <sys:String x:Key="AcceptanceRate">Accept.</sys:String>
+    <sys:String x:Key="AcceptanceUnavailableTip">Draft acceptance for the latest request. Shown after MTP is enabled and llama.cpp reports a valid result; – means no result yet.</sys:String>
     <sys:String x:Key="SwitchLanguageToolTip">Switch to Chinese; right-click to follow Windows</sys:String>
     <sys:String x:Key="FollowSystemLanguage">Follow Windows display language</sys:String>
     <sys:String x:Key="SystemLanguageToolTip">Following the Windows display language ({0}); click to override or right-click to manage language</sys:String>
@@ -113,6 +115,20 @@
     <sys:String x:Key="LocalDataDirectory">Local Data Directory</sys:String>
     <sys:String x:Key="LocalDataBody">Model and Runtime data remain in the llama.cpp directory selected by the user. Removing the application files does not automatically remove that data.</sys:String>
     <sys:String x:Key="ChangelogTab">Changelog</sys:String>
+    <sys:String x:Key="ReleaseNote099Title">0.9.9 · 2026-10-20</sys:String>
+    <sys:String x:Key="ReleaseNote099Item1">• Expand Batch Size and Micro Batch options with custom input.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item2">• Add five n-gram speculative decoding strategies with MTP combination support.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item3">• Add MTP, MoE, cache and advanced runtime parameters.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item4">• Add an experimental Custom Parameters tab with separate llama.cpp and Codex settings.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item5">• Improve duplicate parameter checks, syntax validation and Codex configuration restoration.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item6">• Add recheck actions for templates, external MTP files and vision modules.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item7">• Improve capability checks and validation reuse to prevent invalidation by unrelated settings.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item8">• Clarify save and startup validation boundaries and fix unnecessary blocking.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item9">• Use whole-number K input for context, compaction reserve and tool result history limits.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item10">• Show the latest draft acceptance rate on the dashboard.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item11">• Complete parameter command names, brief descriptions and Chinese/English tooltips.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item12">• Refine model-type-specific parameter visibility, button layout and spacing.</sys:String>
+    <sys:String x:Key="ReleaseNote099Item13">• Expand concise and detailed diagnostic coverage for new features.</sys:String>
     <sys:String x:Key="ReleaseNote098Title">0.9.8 · 2026-10-18</sys:String>
     <sys:String x:Key="ReleaseNote098Item1">• Add multiple configuration files</sys:String>
     <sys:String x:Key="ReleaseNote098Item2">• Separate model management and runtime parameters</sys:String>
@@ -219,15 +235,15 @@
     <sys:String x:Key="CodexStreamIdleTimeout">Codex SSE idle timeout (minutes)</sys:String>
     <sys:String x:Key="CodexStreamIdleTimeoutDefault">Inherit Codex default</sys:String>
     <sys:String x:Key="CodexStreamIdleTimeoutTip">Applies to local responses and context compaction. Switching to online mode uses the original configuration (the inherited default is usually 5 minutes).</sys:String>
-    <sys:String x:Key="CompactionReserve">Compaction Reserve</sys:String>
-    <sys:String x:Key="CompactionReserveTip">Minimum free context reserved before the next inference. Compaction threshold = Context - Reserve. This is not the output token limit for one response.</sys:String>
+    <sys:String x:Key="CompactionReserve">Compaction Reserve (K)</sys:String>
+    <sys:String x:Key="CompactionReserveTip">Enter a positive whole number in K (1K=1,024 tokens). Free context reserved before the next inference. Compaction threshold = Context - Reserve. This is not the output token limit for one response.</sys:String>
     <sys:String x:Key="GpuLayersTip">Auto lets llama.cpp decide; All attempts to offload every eligible layer to the GPU; 0 uses the CPU.</sys:String>
     <sys:String x:Key="GpuLayersCustomTip">Enter a non-negative GPU offload layer count.</sys:String>
     <sys:String x:Key="FlashAttentionTip">Can reduce attention memory bandwidth when supported. Use Auto if unsure.</sys:String>
     <sys:String x:Key="KvCacheTip">Quantized KV Cache can reduce VRAM use but may affect quality or compatibility. Select according to the model and hardware.</sys:String>
     <sys:String x:Key="VCacheTip">Flash Attention has requirements for some V Cache types. Select according to the model and hardware.</sys:String>
-    <sys:String x:Key="BatchSizeTip">Prompt batch size. Default uses the llama.cpp default.</sys:String>
-    <sys:String x:Key="MicroBatchTip">Micro-batch size used for each computation. It must not exceed Batch Size.</sys:String>
+    <sys:String x:Key="BatchSizeTip">Prompt batch size. Select a preset or enter a positive integer. Default or blank uses the llama.cpp default.</sys:String>
+    <sys:String x:Key="MicroBatchTip">Micro-batch size used for each computation. Select a preset or enter a positive integer. Default or blank uses the llama.cpp default. When both sizes are explicit, Micro Batch must not exceed Batch Size.</sys:String>
     <sys:String x:Key="ParallelSlots">Parallel Slots</sys:String>
     <sys:String x:Key="ParallelSlotsTip">Higher concurrency uses more KV Cache. -1 lets llama.cpp decide.</sys:String>
     <sys:String x:Key="IdleReleaseVram">Release VRAM When Idle</sys:String>
@@ -253,7 +269,7 @@
     <sys:String x:Key="ExposeReasoningEffortTip">Expose only verified native levels; never add or map effort values.</sys:String>
     <sys:String x:Key="ReverseReasoningOrder">Reverse effort display order</sys:String>
     <sys:String x:Key="ReverseReasoningOrderTip">Enable if the effort order in Codex is opposite to your expectation. Applies after Save; reverses order only, without changing effort values.</sys:String>
-    <sys:String x:Key="MtpParameters">MTP Decoding</sys:String>
+    <sys:String x:Key="MtpParameters">Speculative decoding</sys:String>
     <sys:String x:Key="VisionParameters">Vision</sys:String>
     <sys:String x:Key="EnableVision">Enable Image Input</sys:String>
     <sys:String x:Key="EnableVisionTip">Available only after llama.cpp passes validation with a real image request.</sys:String>
@@ -281,7 +297,7 @@
     <sys:String x:Key="MtpBackendSampling">Backend Sampling</sys:String>
     <sys:String x:Key="MtpBackendSamplingTip">Default does not override llama.cpp. Change only for compatibility diagnosis or backend-specific tuning.</sys:String>
     <sys:String x:Key="MtpExternalResources">External MTP Resources</sys:String>
-    <sys:String x:Key="MtpGpuLayersTip">GPU offload layers for the external MTP model. Leave blank for llama.cpp automatic placement.</sys:String>
+    <sys:String x:Key="MtpGpuLayersTip">GPU offload layers for the external MTP model: non-negative integer, auto or all. Blank inherits the default.</sys:String>
     <sys:String x:Key="MtpDeviceTip">Compute device for the external MTP model. Leave blank for the llama.cpp default.</sys:String>
     <sys:String x:Key="MtpCacheTip">KV Cache type for the external MTP model. Leave blank for the llama.cpp default.</sys:String>
     <sys:String x:Key="MtpThreadsTip">CPU thread count for the external MTP model. Leave blank for llama.cpp to decide.</sys:String>
@@ -326,8 +342,8 @@
     <sys:String x:Key="ContextCheckpoints">Context Checkpoints</sys:String>
     <sys:String x:Key="ContextCheckpointsTip">llama.cpp --ctx-checkpoints. Leave blank for the Runtime default; 0 disables checkpoints and may reduce long-prefix restore efficiency and increase prefill time. This does not change Codex context compaction.</sys:String>
     <sys:String x:Key="LongConversationSettings">Long Conversations and Context</sys:String>
-    <sys:String x:Key="ToolOutputHistoryLimit">Tool Result History Limit</sys:String>
-    <sys:String x:Key="ToolOutputHistoryLimitTip">Enter integer tokens or K (1K=1,024). Codex tool_output_token_limit limits each tool result added to history, not commands per turn or generated tool arguments. Inherit the existing Codex setting by default; a selected value must be smaller than the compaction reserve.</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimit">Tool Result History Limit (K)</sys:String>
+    <sys:String x:Key="ToolOutputHistoryLimitTip">Enter a positive whole number in K (1K=1,024 tokens). Codex tool_output_token_limit limits each tool result added to history, not commands per turn or generated tool arguments. Inherit the existing Codex setting by default; a selected value must be smaller than the compaction reserve.</sys:String>
     <sys:String x:Key="KeepInitialTokens">Keep Initial Tokens (--keep)</sys:String>
     <sys:String x:Key="KeepInitialTokensTip">Leave blank to omit --keep and use the llama.cpp default. Set an explicit Context size first. Enter a nonnegative integer to retain that many initial tokens during context shifting. Higher values leave less room to shift and must be below Context.</sys:String>
     <sys:String x:Key="ContextShiftEnabled">Context Shifting (On / Off)</sys:String>
@@ -432,4 +448,121 @@
     <sys:String x:Key="CardDisplayNameTip">Changes presentation only, not model identity, filename or configuration bindings.</sys:String>
     <sys:String x:Key="SaveCardDisplayName">Save name</sys:String>
     <sys:String x:Key="SaveCardDisplayNameTip">Save the display name without editing existing configurations.</sys:String>
+    <sys:String x:Key="CustomParametersTitle">Custom parameters</sys:String>
+    <sys:String x:Key="CustomParametersHint">Experimental: enter parameters for the correct receiver. Saving does not modify running services. Resolve duplicate or invalid rows before Save, Apply or Save As. Actual effects depend on the receiver and its version.</sys:String>
+    <sys:String x:Key="AdditionalCacheParameters">Context and cache</sys:String>
+    <!-- Parameter hover help: command/configuration key followed by a short purpose. -->
+    <sys:String x:Key="ParameterHelp_ContextSizeComboBox" xml:space="preserve">llama.cpp: --ctx-size (-c); Codex: model_context_window&#10;Set the context capacity in K for input, history and generated text; choose within model and hardware limits.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomContextSizeTextBox" xml:space="preserve">llama.cpp: --ctx-size (-c); Codex: model_context_window&#10;Enter a positive whole number in K, for example 96 for 96K (1K=1,024 tokens); stay within the model limit.</sys:String>
+    <sys:String x:Key="ParameterHelp_CompactionSafetyReserveComboBox" xml:space="preserve">Codex: model_auto_compact_token_limit = Context - reserve&#10;Enter a positive whole number in K. Reserve context for subsequent processing. The launcher subtracts this reserve from Context to set the compaction threshold, not the per-reply output limit.</sys:String>
+    <sys:String x:Key="ParameterHelp_ToolOutputTokenLimitComboBox" xml:space="preserve">Codex: tool_output_token_limit&#10;Enter a positive whole number in K. Limit the token budget for each tool result added to conversation history, not the number of tools per turn. The inherit option preserves the Codex setting.</sys:String>
+    <sys:String x:Key="ParameterHelp_CodexStreamIdleTimeoutComboBox" xml:space="preserve">Codex: model_providers.chatgpt_local_launcher.stream_idle_timeout_ms&#10;Set how long a Local response stream may remain idle during replies or compaction. Enter minutes; the stored value is converted to milliseconds.</sys:String>
+    <sys:String x:Key="ParameterHelp_ContextShiftCheckBox" xml:space="preserve">llama.cpp: --context-shift / --no-context-shift&#10;Discard earlier context when full to continue generation, potentially forgetting earlier information. This does not perform Codex summary compaction.</sys:String>
+    <sys:String x:Key="ParameterHelp_GpuLayersComboBox" xml:space="preserve">llama.cpp: --n-gpu-layers&#10;Choose model layers to offload to the GPU. Auto delegates to the runtime, All tries all offloadable layers, and 0 uses the CPU.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomGpuLayersTextBox" xml:space="preserve">llama.cpp: --n-gpu-layers&#10;Enter a custom non-negative number of model layers to offload to the GPU.</sys:String>
+    <sys:String x:Key="ParameterHelp_FlashAttentionComboBox" xml:space="preserve">llama.cpp: --flash-attn&#10;Choose whether to use Flash Attention, which can reduce attention memory overhead when supported. Auto delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_CacheTypeKComboBox" xml:space="preserve">llama.cpp: --cache-type-k&#10;Set the K-cache data type. Quantization can save memory but may affect quality and compatibility.</sys:String>
+    <sys:String x:Key="ParameterHelp_CacheTypeVComboBox" xml:space="preserve">llama.cpp: --cache-type-v&#10;Set the V-cache data type. Available types also depend on Flash Attention and backend support.</sys:String>
+    <sys:String x:Key="ParameterHelp_BatchSizeComboBox" xml:space="preserve">llama.cpp: --batch-size (-b)&#10;Set the logical batch limit for prompt processing. Choose a preset or enter a positive integer; Default or blank inherits runtime defaults.</sys:String>
+    <sys:String x:Key="ParameterHelp_MicroBatchSizeComboBox" xml:space="preserve">llama.cpp: --ubatch-size (-ub)&#10;Set the physical batch computed at once, affecting working memory use. When both values are explicit, this must not exceed Batch Size.</sys:String>
+    <sys:String x:Key="ParameterHelp_ParallelComboBox" xml:space="preserve">llama.cpp: --parallel&#10;Set concurrent request slots. More slots generally require more KV-cache memory; -1 delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_IdleSleepSecondsComboBox" xml:space="preserve">llama.cpp: --sleep-idle-seconds&#10;Unload the model and KV cache after the specified idle seconds; the next request reloads them. -1 disables idle sleep.</sys:String>
+    <sys:String x:Key="ParameterHelp_MoePlacementComboBox" xml:space="preserve">llama.cpp: --cpu-moe / --n-cpu-moe&#10;Place all or the first N MoE expert layers on CPU to reduce VRAM demand, possibly at lower speed. Default leaves placement to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_CpuMoeLayersTextBox" xml:space="preserve">llama.cpp: --n-cpu-moe&#10;Set how many initial layers keep their MoE experts on CPU; used only with first-N-layers CPU placement.</sys:String>
+    <sys:String x:Key="ParameterHelp_MoeLoadModeComboBox" xml:space="preserve">llama.cpp: --load-mode&#10;Choose how model weights are loaded, such as mmap file mapping or mlock memory locking. Default delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_MoeFitComboBox" xml:space="preserve">llama.cpp: --fit&#10;Allow runtime loading adjustments to fit available RAM or VRAM; follow model guidance for compatibility.</sys:String>
+    <sys:String x:Key="ParameterHelp_JinjaCheckBox" xml:space="preserve">llama.cpp: --jinja / --no-jinja&#10;Choose whether Jinja chat templates format conversations and tools. A template does not by itself verify reasoning, vision or MTP.</sys:String>
+    <sys:String x:Key="ParameterHelp_TemplateResourceComboBox" xml:space="preserve">llama.cpp: --chat-template-file&#10;Choose the chat template for this configuration. Built-in selection does not pass an external template file.</sys:String>
+    <sys:String x:Key="ParameterHelp_ThinkingEnabledCheckBox" xml:space="preserve">llama.cpp: --reasoning on/off; off: --reasoning-budget 0&#10;Explicitly enable or disable verified thinking mode. Inheriting the template default omits these switches.</sys:String>
+    <sys:String x:Key="ParameterHelp_InheritThinkingButton" xml:space="preserve">Launcher: ThinkingEnabled (inherit)&#10;Clear the explicit thinking switch and inherit the template's default behavior.</sys:String>
+    <sys:String x:Key="ParameterHelp_ShowThinkingProcessCheckBox" xml:space="preserve">Codex: show_raw_agent_reasoning&#10;Control the display of thinking content without changing whether the model thinks; applied only when thinking is active.</sys:String>
+    <sys:String x:Key="ParameterHelp_ReasoningEffortCheckBox" xml:space="preserve">Codex Catalog: supported_reasoning_levels&#10;Expose verified native reasoning levels for selection in Codex without inventing or remapping levels.</sys:String>
+    <sys:String x:Key="ParameterHelp_ReverseReasoningOrderCheckBox" xml:space="preserve">Launcher: Catalog supported_reasoning_levels order&#10;Reverse the displayed reasoning-level order in Codex without changing values or model capabilities.</sys:String>
+    <sys:String x:Key="ParameterHelp_PreferredReasoningLevelComboBox" xml:space="preserve">Codex: model_reasoning_effort; Catalog: default_reasoning_level&#10;Choose the default reasoning level. Inherit uses the verified template default and existing selection rules.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionEnableCheckBox" xml:space="preserve">llama.cpp: --no-mmproj (off); --mmproj (external source)&#10;Enable the selected vision source. Registration recognizes metadata; actual image compatibility is confirmed during loading and use.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionResourceComboBox" xml:space="preserve">llama.cpp: --mmproj&#10;Choose a registered vision source. External sources pass an mmproj path; built-in sources omit an external file.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionOffloadComboBox" xml:space="preserve">llama.cpp: --mmproj-offload / --no-mmproj-offload&#10;Choose GPU offloading for the vision projector. Disabling can reduce VRAM demand but increases CPU work.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionDeviceTextBox" xml:space="preserve">llama.cpp: --mmproj-device&#10;Specify the vision-projector device; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionImageMinTokensTextBox" xml:space="preserve">llama.cpp: --image-min-tokens&#10;Set the minimum token budget per image; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionImageMaxTokensTextBox" xml:space="preserve">llama.cpp: --image-max-tokens&#10;Set the maximum token budget per image. A larger budget may increase context and memory use.</sys:String>
+    <sys:String x:Key="ParameterHelp_VisionBatchMaxTokensTextBox" xml:space="preserve">llama.cpp: --mtmd-batch-max-tokens&#10;Set the token limit for multimodal processing batches; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpEnableCheckBox" xml:space="preserve">llama.cpp: --spec-type draft-mtp&#10;Use MTP to draft tokens for verification by the main model. Can combine with selected n-gram strategies; speed depends on the model and runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpResourceComboBox" xml:space="preserve">llama.cpp: --spec-draft-model (external source)&#10;Choose embedded or verified external MTP. Embedded selection does not pass an external companion file.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpNMaxTextBox" xml:space="preserve">llama.cpp: --spec-draft-n-max&#10;Set the maximum draft tokens per round; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpNMinTextBox" xml:space="preserve">llama.cpp: --spec-draft-n-min&#10;Set the minimum draft length required for its use; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpPMinTextBox" xml:space="preserve">llama.cpp: --spec-draft-p-min&#10;Minimum draft probability threshold, from 0 to 1. Higher values stop uncertain drafts earlier.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpPSplitTextBox" xml:space="preserve">llama.cpp: --spec-draft-p-split&#10;Set the draft-branch probability threshold, from 0 to 1. Branch behavior depends on the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpBackendSamplingComboBox" xml:space="preserve">llama.cpp: --spec-draft-backend-sampling / --no-spec-draft-backend-sampling&#10;Choose whether supported draft sampling runs on the model backend; Default inherits runtime behavior.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpGpuLayersTextBox" xml:space="preserve">llama.cpp: --spec-draft-ngl&#10;Set external-MTP GPU offload layers: a non-negative integer, auto, all, or blank for the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpDeviceTextBox" xml:space="preserve">llama.cpp: --spec-draft-device&#10;Specify the external-MTP device; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpCacheTypeKComboBox" xml:space="preserve">llama.cpp: --spec-draft-type-k&#10;Set the external-MTP K-cache type. Quantization may save memory but affect compatibility.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpCacheTypeVComboBox" xml:space="preserve">llama.cpp: --spec-draft-type-v&#10;Set the external-MTP V-cache type; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpThreadsTextBox" xml:space="preserve">llama.cpp: --spec-draft-threads&#10;Set CPU threads for external-MTP draft generation; blank delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_MtpBatchThreadsTextBox" xml:space="preserve">llama.cpp: --spec-draft-threads-batch&#10;Set CPU threads for external-MTP batch processing; blank inherits the runtime default.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-draft-n-ubatch" xml:space="preserve">llama.cpp: --spec-draft-n-ubatch&#10;Set the physical batch computed at once by the draft model. 0 inherits the target-model micro batch; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-draft-sampling" xml:space="preserve">llama.cpp: --spec-draft-sampling&#10;Choose draft sampling: greedy selects the most probable token; probabilistic samples by probability. Default inherits the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_moe-cache-mib" xml:space="preserve">llama.cpp: --moe-cache-mib&#10;Cache CPU-resident MoE experts in GPU memory, in MiB. 0 disables the cache; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_DeviceTextBox" xml:space="preserve">llama.cpp: --device&#10;Specify compute devices for the main model. Multiple devices follow runtime list syntax; blank uses defaults.</sys:String>
+    <sys:String x:Key="ParameterHelp_KvOffloadComboBox" xml:space="preserve">llama.cpp: --kv-offload / --no-kv-offload&#10;Choose whether KV cache is offloaded to the GPU. Disabling usually reduces VRAM use but may lower speed.</sys:String>
+    <sys:String x:Key="ParameterHelp_ThreadsTextBox" xml:space="preserve">llama.cpp: --threads&#10;Set CPU threads for main-model generation; blank delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_ThreadsBatchTextBox" xml:space="preserve">llama.cpp: --threads-batch&#10;Set CPU threads for prompt batch processing; blank inherits runtime defaults.</sys:String>
+    <sys:String x:Key="ParameterHelp_DenseLoadModeComboBox" xml:space="preserve">llama.cpp: --load-mode&#10;Choose model-weight loading such as file mapping, memory locking or supported direct reads. Default delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_LazyModeComboBox" xml:space="preserve">llama.cpp: --lazy-mode&#10;Read supported tensors on demand rather than upfront. Requires mmap when enabled; performance depends on storage speed.</sys:String>
+    <sys:String x:Key="ParameterHelp_DenseFitComboBox" xml:space="preserve">llama.cpp: --fit&#10;Allow runtime loading adjustments to fit available RAM or VRAM. Default preserves runtime behavior.</sys:String>
+    <sys:String x:Key="ParameterHelp_FitTargetTextBox" xml:space="preserve">llama.cpp: --fit-target&#10;Set desired free device-memory margins for automatic fitting, in MiB. Multiple devices may specify separate margins.</sys:String>
+    <sys:String x:Key="ParameterHelp_FitContextTextBox" xml:space="preserve">llama.cpp: --fit-ctx&#10;Set the minimum context capacity allowed during automatic fitting; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_CpuFfnLayersTextBox" xml:space="preserve">llama.cpp: --n-cpu-ffn&#10;Keep the first N dense FFN layers on CPU to reduce GPU demand; blank preserves default placement.</sys:String>
+    <sys:String x:Key="ParameterHelp_SplitModeComboBox" xml:space="preserve">llama.cpp: --split-mode&#10;Choose how the model or computation is split across GPUs; available modes and effects depend on the backend.</sys:String>
+    <sys:String x:Key="ParameterHelp_TensorSplitTextBox" xml:space="preserve">llama.cpp: --tensor-split&#10;Set GPU allocation proportions, such as 3,1; blank delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_MainGpuTextBox" xml:space="preserve">llama.cpp: --main-gpu&#10;Specify the main GPU index. Its effect depends on split mode; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_NumaComboBox" xml:space="preserve">llama.cpp: --numa&#10;Adjust thread and memory-access strategies on NUMA systems; ordinary desktops can keep the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_SwaFullComboBox" xml:space="preserve">llama.cpp: --swa-full&#10;Use a full-sized cache for sliding-window attention, potentially increasing KV memory use on relevant models.</sys:String>
+    <sys:String x:Key="ParameterHelp_RepackComboBox" xml:space="preserve">llama.cpp: --repack / --no-repack&#10;Choose weight repacking into layouts suited to the backend; disabling may affect speed.</sys:String>
+    <sys:String x:Key="ParameterHelp_OpOffloadComboBox" xml:space="preserve">llama.cpp: --op-offload / --no-op-offload&#10;Choose whether supported host tensor operations run on the device; Default delegates to the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_NoHostComboBox" xml:space="preserve">llama.cpp: --no-host&#10;Bypass host buffers. This is backend-specific; keep the default when unsure.</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeScalingComboBox" xml:space="preserve">llama.cpp: --rope-scaling&#10;Choose positional-encoding scaling for context length. Incorrect settings may affect output quality.</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeScaleTextBox" xml:space="preserve">llama.cpp: --rope-scale&#10;Set the RoPE context scaling factor. Match model support; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeFreqBaseTextBox" xml:space="preserve">llama.cpp: --rope-freq-base&#10;Set the base frequency for RoPE positional encoding; normally inherit model metadata.</sys:String>
+    <sys:String x:Key="ParameterHelp_RopeFreqScaleTextBox" xml:space="preserve">llama.cpp: --rope-freq-scale&#10;Set the frequency scaling factor for RoPE positional encoding; normally inherit model metadata.</sys:String>
+    <sys:String x:Key="ParameterHelp_CtxCheckpointsTextBox" xml:space="preserve">llama.cpp: --ctx-checkpoints&#10;Set context checkpoint count for reusing long-prefix processing. 0 disables checkpoints; blank uses the default. This does not change Codex compaction.</sys:String>
+    <sys:String x:Key="ParameterHelp_KeepTokensTextBox" xml:space="preserve">llama.cpp: --keep&#10;Set initial tokens retained during context shifting. Must be below an explicit Context size; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_cache-ram" xml:space="preserve">llama.cpp: --cache-ram&#10;Set RAM capacity for prompt-state caching, in MiB. -1 is unlimited, 0 disables it, and blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_cache-prompt" xml:space="preserve">llama.cpp: --cache-prompt / --no-cache-prompt&#10;Choose whether processed prompt prefixes are reused to reduce repeated prefill; Default inherits runtime behavior.</sys:String>
+    <sys:String x:Key="ParameterHelp_cache-idle-slots" xml:space="preserve">llama.cpp: --cache-idle-slots / --no-cache-idle-slots&#10;Choose whether idle-slot prompt states are cached for later reuse; uses cache capacity.</sys:String>
+    <sys:String x:Key="ParameterHelp_kv-unified" xml:space="preserve">llama.cpp: --kv-unified / --no-kv-unified&#10;Choose a unified KV cache across request slots. Memory allocation and compatibility depend on the runtime.</sys:String>
+    <sys:String x:Key="ParameterHelp_checkpoint-min-step" xml:space="preserve">llama.cpp: --checkpoint-min-step&#10;Set the minimum token interval between checkpoints to control how often they are saved; blank uses the default.</sys:String>
+    <sys:String x:Key="ParameterHelp_backend-sampling" xml:space="preserve">llama.cpp: --backend-sampling&#10;Run supported target-model sampling on the model backend. Support and effects depend on the sampler and device.</sys:String>
+    <sys:String x:Key="ParameterHelp_YarnArgumentsTextBox" xml:space="preserve">llama.cpp: --yarn-orig-ctx, --yarn-ext-factor, --yarn-attn-factor, --yarn-beta-slow, --yarn-beta-fast&#10;Tune YaRN long-context scaling. Enter pairs such as orig-ctx=32768;ext-factor=1; blank preserves defaults.</sys:String>
+    <sys:String x:Key="ParameterHelp_OverrideTensorTextBox" xml:space="preserve">llama.cpp: --override-tensor&#10;Assign tensor placement or buffer types by tensor-name rules. Invalid rules may cause loading failures.</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxNetworkCheckBox" xml:space="preserve">Codex: permissions.egg_launcher_active.network&#10;Control network access for commands executed by Codex. The third state inherits existing settings; browsers and connectors are unaffected.</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxCompatibilityCheckBox" xml:space="preserve">Codex: shell_environment_policy.set + developer_instructions&#10;Pass system proxy settings and provide request compatibility helpers. Requires command network access; save and restart the client to apply.</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxPath" xml:space="preserve">Codex: permissions.egg_launcher_active.filesystem&#10;Enter an absolute directory accessible to Codex commands. The adjacent switch selects read-only or read/write permission.</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxWrite" xml:space="preserve">Codex: permissions.egg_launcher_active.filesystem (read / write)&#10;Unchecked permits reading the directory; checked permits both reading and writing.</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxGradle" xml:space="preserve">Codex: shell_environment_policy.set.GRADLE_USER_HOME&#10;Also use this directory as Gradle user home; requires write permission to the directory.</sys:String>
+    <sys:String x:Key="ParameterHelp_SandboxGradleReplace" xml:space="preserve">Launcher: GRADLE_USER_HOME replacement rule&#10;Allow Local mode to replace an existing Gradle user-home setting; switching online follows the existing restoration rules.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomLlamaName" xml:space="preserve">llama.cpp: --option&#10;Enter an actual option name, such as --cache-ram. It must not duplicate fixed options or another custom row.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomLlamaValue" xml:space="preserve">llama.cpp: option value&#10;Enter one argument value without outer quotes. Multi-value commands are unsupported; existing character and format checks still apply.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomNoValue" xml:space="preserve">llama.cpp: --option (without a value)&#10;Pass only the option name when checked; use for switches that take no value.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomCodexName" xml:space="preserve">Codex: configuration key&#10;Enter a configuration key or dotted path without --; launcher-managed settings cannot be overridden.</sys:String>
+    <sys:String x:Key="ParameterHelp_CustomCodexValue" xml:space="preserve">Codex: TOML value&#10;Enter a complete TOML value. Quote strings, for example "value"; the supplied literal determines its type.</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-enabled" xml:space="preserve">llama.cpp: --spec-type&#10;Enable selected n-gram strategies to draft from repeated text patterns. No extra model is needed; can combine with MTP.</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-simple" xml:space="preserve">llama.cpp: --spec-type ngram-simple&#10;Find a matching history fragment and reuse its following text as a draft; low overhead, but depends on repetition.</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-map-k" xml:space="preserve">llama.cpp: --spec-type ngram-map-k&#10;Track repeated keys and continuations, drafting once their hit threshold is met.</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-map-k4v" xml:space="preserve">llama.cpp: --spec-type ngram-map-k4v&#10;Experimental: track up to four continuations per key and draft from the frequent candidate.</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-mod" xml:space="preserve">llama.cpp: --spec-type ngram-mod&#10;Use rolling hashes to look up following tokens repeatedly and build variable-length drafts.</sys:String>
+    <sys:String x:Key="ParameterHelp_ngram-cache" xml:space="preserve">llama.cpp: --spec-type ngram-cache&#10;Draft from n-gram statistics, optionally using a statistics cache matching the model tokenizer.</sys:String>
+    <sys:String x:Key="ParameterHelp_lookup-cache-static" xml:space="preserve">llama.cpp: --lookup-cache-static&#10;Select a prepared n-gram statistics cache matching the model tokenizer, not JSON or GGUF. Optional.</sys:String>
+    <sys:String x:Key="ParameterHelp_lookup-cache-dynamic" xml:space="preserve">llama.cpp: --lookup-cache-dynamic&#10;Select a dynamic statistics cache for the runtime. Write-back depends on the runtime; the launcher does not create or overwrite it.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-simple-size-n" xml:space="preserve">llama.cpp: --spec-ngram-simple-size-n&#10;Set consecutive tokens used to match repeated fragments; longer matches are generally stricter.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-simple-size-m" xml:space="preserve">llama.cpp: --spec-ngram-simple-size-m&#10;Set the draft length taken after a match; longer drafts do not guarantee higher speed.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-simple-min-hits" xml:space="preserve">llama.cpp: --spec-ngram-simple-min-hits&#10;Set minimum hits. Some runtimes only parse this option; its effect depends on implementation.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k-size-n" xml:space="preserve">llama.cpp: --spec-ngram-map-k-size-n&#10;Set consecutive tokens used to match repeated fragments; longer matches are generally stricter.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k-size-m" xml:space="preserve">llama.cpp: --spec-ngram-map-k-size-m&#10;Set the draft length taken after a match; longer drafts do not guarantee higher speed.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k-min-hits" xml:space="preserve">llama.cpp: --spec-ngram-map-k-min-hits&#10;Set the minimum hits required for drafting; a higher threshold excludes infrequent matches.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k4v-size-n" xml:space="preserve">llama.cpp: --spec-ngram-map-k4v-size-n&#10;Set consecutive tokens used to match repeated fragments; longer matches are generally stricter.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k4v-size-m" xml:space="preserve">llama.cpp: --spec-ngram-map-k4v-size-m&#10;Set the draft length taken after a match; longer drafts do not guarantee higher speed.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-map-k4v-min-hits" xml:space="preserve">llama.cpp: --spec-ngram-map-k4v-min-hits&#10;Set the minimum hits required for drafting; a higher threshold excludes infrequent matches.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-mod-n-match" xml:space="preserve">llama.cpp: --spec-ngram-mod-n-match&#10;Set the token length used for rolling-hash lookup.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-mod-n-min" xml:space="preserve">llama.cpp: --spec-ngram-mod-n-min&#10;Set the minimum usable draft length in tokens; must not exceed the maximum draft length.</sys:String>
+    <sys:String x:Key="ParameterHelp_spec-ngram-mod-n-max" xml:space="preserve">llama.cpp: --spec-ngram-mod-n-max&#10;Set the maximum draft length per round in tokens; must not be below the minimum draft length.</sys:String>
 </ResourceDictionary>

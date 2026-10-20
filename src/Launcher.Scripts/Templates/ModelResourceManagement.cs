@@ -13,8 +13,7 @@ public static class ModelResourceManagement
         ModelResourceCatalog.Read(selection, root).Records.FirstOrDefault(record => record.Kind == kind
             && SamePath(record.ResourcePath, new ModelResourceRecord(kind, selection).ResourcePath, root)
             && ModelResourceCatalog.IsCurrent(record, root)
-            && (kind != ModelResourceKind.Vision || (record.Evidence.VisionSource == selection.VisionSource
-                && SamePath(record.Evidence.ChatTemplateRelativePath, selection.ChatTemplateRelativePath, root)))
+            && (kind != ModelResourceKind.Vision || record.Evidence.VisionSource == selection.VisionSource)
             && (kind != ModelResourceKind.Mtp || record.Evidence.MtpSource == selection.MtpSource)
             && (kind != ModelResourceKind.Template || record.Evidence.Jinja == selection.Jinja));
 

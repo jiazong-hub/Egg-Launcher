@@ -84,21 +84,6 @@ public sealed class JsonModelProfileStore
                     profile = profile with
                     {
                         SchemaVersion = ModelProfile.CurrentSchemaVersion,
-                        ReasoningCapabilityStatus = ReasoningCapabilityStatus.Unknown,
-                        SupportedReasoningLevels = [],
-                        DefaultReasoningLevel = null,
-                        ExposeReasoningEffortInChatGpt = false,
-                        ReasoningResponsesVerified = false,
-                        ReasoningClientCompatible = null,
-                        ReasoningClientExecutablePath = null,
-                        SupportsThinkingSwitch = null,
-                        DefaultThinkingEnabled = null,
-                        ThinkingEnabled = null,
-                        ReasoningLevelAliases = new Dictionary<string, string>(),
-                        ReasoningCapabilitySignature = null,
-                        ReasoningCapabilityCheckedAtUtc = null,
-                        ReasoningValidationDetails = "旧版思考验证需要按当前模板重新检测。",
-
                         SourceKind = previousSchemaVersion == 1
                             ? ModelSourceKind.LocalFile
                             : profile.SourceKind,
@@ -121,7 +106,7 @@ public sealed class JsonModelProfileStore
                 var validationProfile = profile.ConfigurationInitialized
                     ? RegistrationValidationProfile(profile)
                     : profile with { ChatTemplateRelativePath = null, DefaultParameters = null };
-                var errors = ModelProfileValidator.Validate(validationProfile, root, validateConversationLimits: false);
+                var errors = ModelProfileValidator.Validate(validationProfile, root, validateConversationLimits: false, requireRuntimeEvidence: false);
                 if (errors.Count > 0)
                 {
                     diagnostics.Add($"{Path.GetFileName(path)}：{string.Join("；", errors)}");
@@ -324,7 +309,6 @@ public sealed class JsonModelProfileStore
                 ? profile
                 : profile with
                 {
-                    MtpEnabled = false,
                     MtpCapabilityStatus = string.IsNullOrWhiteSpace(profile.MtpDraftModelRelativePath)
                         ? MtpCapabilityStatus.Unknown
                         : MtpCapabilityStatus.ExternalConfigured,
@@ -356,7 +340,7 @@ public sealed class JsonModelProfileStore
         {
         }
 
-        return profile.MtpEnabled ? profile with { MtpEnabled = false } : profile;
+        return profile;
     }
 
     private static ModelProfile NormalizeVisionSafety(ModelProfile profile, string runtimeRoot)
@@ -374,7 +358,6 @@ public sealed class JsonModelProfileStore
                     ? profile
                     : profile with
                     {
-                        VisionEnabled = false,
                         VisionCapabilityStatus = profile.VisionSource == VisionSourceKind.External
                             && !string.IsNullOrWhiteSpace(profile.VisionProjectorRelativePath)
                             ? VisionCapabilityStatus.ExternalConfigured
@@ -388,9 +371,7 @@ public sealed class JsonModelProfileStore
             }
         }
 
-        return profile.VisionEnabled
-            ? profile with { VisionEnabled = false }
-            : profile;
+        return profile;
     }
 
     public async Task<int> RecreateMissingProfilesFromBackupsAsync(
@@ -417,6 +398,9 @@ public sealed class JsonModelProfileStore
     // The selected parameter document remains subject to full validation on load/save/startup.
     private static ModelProfile RegistrationValidationProfile(ModelProfile profile) => profile with
     {
+        RuntimeParameters = new(),
+        CustomParameters = new(),
+        Ngram = new(),
         MtpEnabled = false,
         VisionEnabled = false,
         ChatTemplateRelativePath = null,
@@ -460,7 +444,7 @@ public sealed class JsonModelProfileStore
             throw new IOException("模型类型已被其他操作更改，请重新打开管理页面 / Model type changed elsewhere; reopen management.");
         if (registration.ModelType == type) return registration;
         var updated = registration with { ModelType = type, ModelTypeSource = ModelTypeSource.UserSelected };
-        var errors = ModelProfileValidator.Validate(RegistrationValidationProfile(updated), root, validateConversationLimits: false);
+        var errors = ModelProfileValidator.Validate(RegistrationValidationProfile(updated), root, validateConversationLimits: false, requireRuntimeEvidence: false);
         if (errors.Count > 0) throw new InvalidDataException(string.Join(Environment.NewLine, errors));
         var json = JsonNode.Parse(bytes)?.AsObject() ?? throw new InvalidDataException("模型登记格式无效 / Invalid model registration.");
         SetMetadata(nameof(ModelProfile.ModelType), (int)type);
@@ -550,7 +534,7 @@ public sealed class JsonModelProfileStore
                 ? RegistrationValidationProfile(profile)
                 : profile with { ChatTemplateRelativePath = null, DefaultParameters = null }
             : profile;
-        var errors = ModelProfileValidator.Validate(validationProfile, root, validateConversationLimits: !registrationOnly);
+        var errors = ModelProfileValidator.Validate(validationProfile, root, validateConversationLimits: !registrationOnly, requireRuntimeEvidence: !registrationOnly);
         if (errors.Count > 0)
         {
             throw new InvalidDataException(string.Join(Environment.NewLine, errors));
@@ -616,7 +600,7 @@ public sealed class JsonModelProfileStore
         ArgumentException.ThrowIfNullOrWhiteSpace(runtimeRoot);
         ArgumentNullException.ThrowIfNull(profile);
         var root = Path.GetFullPath(runtimeRoot);
-        var errors = ModelProfileValidator.Validate(profile, root, validateConversationLimits: false);
+        var errors = ModelProfileValidator.Validate(profile with { RuntimeParameters = new(), CustomParameters = new(), Ngram = new() }, root, validateConversationLimits: false);
         if (errors.Count > 0 || profile.SourceKind != ModelSourceKind.LlamaCache)
         {
             throw new InvalidDataException("只允许清理来源已经验证的 llama 缓存 Profile。");

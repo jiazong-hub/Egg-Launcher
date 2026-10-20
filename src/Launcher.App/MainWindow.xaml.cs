@@ -1979,6 +1979,7 @@ public partial class MainWindow : Window
             UpdateLlamaBackendStatus(llamaRunning, profile);
             if (endpoint is null || profile is null)
             {
+                ClearSidebarAcceptance();
                 SetTelemetryTarget(null, null);
                 LlamaRuntimeText.Text = llamaRunning
                     ? AppLanguageManager.Text("Running")
@@ -1987,6 +1988,15 @@ public partial class MainWindow : Window
                 UpdateRuntimeActionButtons();
                 return;
             }
+
+            RuntimeState? runtimeState = null;
+            try
+            {
+                runtimeState = JsonSerializer.Deserialize<RuntimeState>(
+                    await File.ReadAllTextAsync(_paths.RuntimeStateFile, _lifetime.Token));
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException) { }
+            UpdateSidebarAcceptance(runtimeState, profile, endpoint);
 
             using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
             http.DefaultRequestHeaders.Authorization =
@@ -2032,19 +2042,8 @@ public partial class MainWindow : Window
             }
 
             LlamaRuntimeText.Text = stateText;
-            string? runtimeShiftDisabledReason = null;
-            try
-            {
-                if (File.Exists(_paths.RuntimeStateFile))
-                {
-                    var state = JsonSerializer.Deserialize<RuntimeState>(
-                        await File.ReadAllTextAsync(_paths.RuntimeStateFile, _lifetime.Token));
-                    if (state?.Phase == RuntimePhase.Running && state.SelectedModelId == profile.Id
-                        && IsFreshRuntimeState(state.UpdatedAtUtc))
-                        runtimeShiftDisabledReason = state.ContextShiftDisabledReason;
-                }
-            }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException) { }
+            var runtimeShiftDisabledReason = runtimeState?.Phase == RuntimePhase.Running && runtimeState.SelectedModelId == profile.Id
+                && IsFreshRuntimeState(runtimeState.UpdatedAtUtc) ? runtimeState.ContextShiftDisabledReason : null;
             if (runtimeShiftDisabledReason is not null)
             {
                 LlamaRuntimeText.Text += AppLanguageManager.Choose(" · 滚动已被禁用", " · Shifting disabled");
@@ -2529,7 +2528,7 @@ public partial class MainWindow : Window
                 return null;
             }
 
-            return new TrustedRouterEndpoint(endpoint, apiKey);
+            return new TrustedRouterEndpoint(endpoint, apiKey, routerPid, routerStartedAtUtc);
         }
         catch (Exception exception) when (
             exception is IOException
@@ -3571,7 +3570,7 @@ public partial class MainWindow : Window
     {
         SidebarSpeedText.Text = value.PredictedTokensPerSecond is null
             ? "–"
-            : $"{value.PredictedTokensPerSecond:0.0} token/s";
+            : $"{value.PredictedTokensPerSecond:0.0} t/s";
         SidebarContextText.Text = value.ContextCapacityTokens is > 0 && value.ContextUsedTokens is not null
             ? $"{FormatContextTokens(value.ContextUsedTokens.Value)}/{FormatContextTokens(value.ContextCapacityTokens.Value)}"
             : "–";
@@ -3721,5 +3720,5 @@ public partial class MainWindow : Window
         string ExecutablePath,
         DateTimeOffset StartedAtUtc);
 
-    private sealed record TrustedRouterEndpoint(Uri BaseUri, string ApiKey);
+    private sealed record TrustedRouterEndpoint(Uri BaseUri, string ApiKey, int? ProcessId = null, DateTimeOffset? StartedAtUtc = null);
 }

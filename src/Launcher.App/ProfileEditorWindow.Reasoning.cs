@@ -21,7 +21,7 @@ public partial class ProfileEditorWindow
     private ModelProfile EnsureCurrentReasoningValidation(ModelProfile profile)
     {
         if (profile.ReasoningCapabilityCheckedAtUtc is null && profile.ThinkingEnabled is null && !profile.ExposeReasoningEffortInChatGpt && !profile.ShowThinkingProcess) return profile;
-        return ReasoningValidationState.Check(profile, _runtimeRoot).ApplyTo(profile);
+        return ReasoningValidationState.Check(profile, _runtimeRoot).ApplyTo(profile, preserveIntent: true);
     }
 
     private void PopulateReasoningCapability(ModelProfile profile)
@@ -202,12 +202,59 @@ public partial class ProfileEditorWindow
         RefreshReasoningUi();
     }
 
+    private bool TryBuildReasoningCandidate(out ModelProfile candidate, bool validateTemplate = true)
+    {
+        candidate = _reasoningProfile;
+        if (!TryGetGpuLayers(out var gpu, out var error)
+            || !TryGetMoePlacement(out var placement, out var layers, out error))
+        {
+            MessageBox.Show(this, error, AppLanguageManager.Text("DetectThinkingCapability"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+        var extra = new Dictionary<string, string?>(StringComparer.Ordinal);
+        AddOptional(extra, "threads", ThreadsTextBox.Text);
+        AddOptional(extra, "threads-batch", ThreadsBatchTextBox.Text);
+        AddOptional(extra, "load-mode", _originalProfile.ModelType == ModelType.MoE ? SelectedValue<string>(MoeLoadModeComboBox) : SelectedValue<string>(DenseLoadModeComboBox));
+        AddOptional(extra, "lazy-mode", SelectedValue<string>(LazyModeComboBox));
+        AddOptional(extra, "fit", _originalProfile.ModelType == ModelType.MoE ? SelectedValue<string>(MoeFitComboBox) : SelectedValue<string>(DenseFitComboBox));
+        AddOptional(extra, "fit-target", FitTargetTextBox.Text);
+        AddOptional(extra, "fit-ctx", FitContextTextBox.Text);
+        if (_originalProfile.ModelType == ModelType.Dense) AddOptional(extra, "n-cpu-ffn", CpuFfnLayersTextBox.Text);
+        AddOptional(extra, "split-mode", SelectedValue<string>(SplitModeComboBox));
+        AddOptional(extra, "tensor-split", TensorSplitTextBox.Text);
+        AddOptional(extra, "main-gpu", MainGpuTextBox.Text);
+        AddOptional(extra, "numa", SelectedValue<string>(NumaComboBox));
+        AddOptional(extra, "override-tensor", OverrideTensorTextBox.Text);
+        AddToggle(extra, KvOffloadComboBox, "kv-offload", "no-kv-offload");
+        AddToggle(extra, RepackComboBox, "repack", "no-repack");
+        AddToggle(extra, OpOffloadComboBox, "op-offload", "no-op-offload");
+        if (SelectedValue<string>(NoHostComboBox) == "on") extra["no-host"] = null;
+        candidate = candidate with
+        {
+            GpuLayers = gpu,
+            Device = NullWhenWhiteSpace(DeviceTextBox.Text),
+            MoeExpertPlacement = placement,
+            CpuMoeLayers = layers,
+            FlashAttention = SelectedValue<string>(FlashAttentionComboBox),
+            CacheTypeK = SelectedValue<string>(CacheTypeKComboBox),
+            CacheTypeV = SelectedValue<string>(CacheTypeVComboBox),
+            Jinja = JinjaCheckBox.IsChecked == true,
+            ChatTemplateRelativePath = NullWhenWhiteSpace(ChatTemplatePathTextBox.Text),
+            ExtraArguments = extra,
+        };
+        if (!validateTemplate) return true;
+        var errors = ModelProfileValidator.Validate(TemplateValidationProfile.Create(candidate), _runtimeRoot);
+        if (errors.Count == 0) return true;
+        MessageBox.Show(this, string.Join(Environment.NewLine, errors), AppLanguageManager.Text("DetectThinkingCapability"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        return false;
+    }
+
     private async void DetectReasoningButton_Click(object sender, RoutedEventArgs e)
     {
         if (_reasoningProbe is null || _reasoningCancellation is not null || _checkingTemplate || _contextShiftCancellation is not null) return;
-        _probeProfile = null;
-        CompleteSave(false, captureForProbe: true);
-        if (_probeProfile is not { } candidate) return;
+        // Read only the model loading controls and active template. Unrelated tabs may
+        // contain stale resource references or unfinished edits and must not block this probe.
+        if (!TryBuildReasoningCandidate(out var candidate)) return;
         if (MessageBox.Show(this, AppLanguageManager.Choose(
             "检测将临时加载当前模型并执行少量受限请求，占用内存和显存。结果点击保存后才应用。继续吗？",
             "Detection temporarily loads this model and makes small bounded requests using memory and VRAM. Results apply only after Save. Continue?"),

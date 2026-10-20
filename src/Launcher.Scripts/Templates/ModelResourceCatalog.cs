@@ -5,7 +5,7 @@ namespace Launcher.Scripts.Templates;
 
 public enum ModelResourceKind { Template, Vision, Mtp, Reasoning }
 
-public sealed record ModelResourceRecord(ModelResourceKind Kind, ModelProfile Evidence, string? TemplateSignature = null)
+public sealed record ModelResourceRecord(ModelResourceKind Kind, ModelProfile Evidence, string? TemplateSignature = null, bool ValidationRejected = false)
 {
     public string? ResourcePath => Kind switch
     {
@@ -51,9 +51,11 @@ public static class ModelResourceCatalog
 
     public static bool IsCurrent(ModelResourceRecord record, string root)
     {
+        if (record.ValidationRejected) return false;
         try
         {
-            if (!string.IsNullOrWhiteSpace(record.Evidence.ChatTemplateRelativePath))
+            if (record.Kind is ModelResourceKind.Template or ModelResourceKind.Reasoning
+                && !string.IsNullOrWhiteSpace(record.Evidence.ChatTemplateRelativePath))
                 ChatTemplateFile.ResolveRelative(record.Evidence.ChatTemplateRelativePath, root);
             return record.Kind switch
             {
@@ -91,6 +93,7 @@ public static class ModelResourceCatalog
 
     public static async Task EnsureMigratedAsync(ModelProfile model, string root, CancellationToken token = default)
     {
+        await UpgradeCurrentEvidenceAsync(model, root, token).ConfigureAwait(false);
         var path = Path.Combine(JsonModelProfileStore.GetProfilesDirectory(root), model.Id + ".json");
         if (!File.Exists(path)) return;
         var legacy = JsonSerializer.Deserialize<ModelProfile>(await File.ReadAllTextAsync(path, token).ConfigureAwait(false));
@@ -112,6 +115,39 @@ public static class ModelResourceCatalog
         }
         if (!legacy.ResourceCatalogInitialized)
             await new JsonModelProfileStore().SaveRegistrationAsync(root, legacy with { ResourceCatalogInitialized = true }, token).ConfigureAwait(false);
+        await UpgradeCurrentEvidenceAsync(model, root, token).ConfigureAwait(false);
+    }
+
+    private static async Task UpgradeCurrentEvidenceAsync(ModelProfile model, string root, CancellationToken token)
+    {
+        var path = FilePath(model, root);
+        if (!File.Exists(path)) return;
+        // Avoid even creating a lock file when there is no exact, verifiable legacy proof to upgrade.
+        if (!Read(model, root).Records.Any(record => IsCurrent(record, root) && NeedsUpgrade(record))) return;
+        await using var gate = await AcquireAsync(path + ".lock", token).ConfigureAwait(false);
+        var previous = Read(model, root);
+        var changed = false;
+        var records = previous.Records.Select(record =>
+        {
+            if (!IsCurrent(record, root)) return record;
+            var evidence = record.Evidence;
+            if (record.Kind == ModelResourceKind.Vision)
+                evidence = evidence with { VisionValidationSignature = VisionValidationFingerprint.Compute(evidence, root) };
+            else if (record.Kind == ModelResourceKind.Reasoning)
+                evidence = ReasoningValidationState.Check(evidence, root).ApplyTo(evidence);
+            if (evidence == record.Evidence) return record;
+            changed = true;
+            return record with { Evidence = evidence };
+        }).ToArray();
+        if (changed)
+            await ModelConfigurationFile.WriteAtomicallyAsync(path, JsonSerializer.Serialize(previous with { Records = records }, Options), token).ConfigureAwait(false);
+
+        bool NeedsUpgrade(ModelResourceRecord record) => record.Kind switch
+        {
+            ModelResourceKind.Vision => record.Evidence.VisionValidationSignature != VisionValidationFingerprint.Compute(record.Evidence, root),
+            ModelResourceKind.Reasoning => record.Evidence.ReasoningCapabilitySignature != ReasoningValidationFingerprint.Compute(record.Evidence, root),
+            _ => false,
+        };
     }
 
     private static string? ProofSignature(ModelResourceRecord record) => record.Kind switch
@@ -152,11 +188,6 @@ public static class ModelResourceCatalog
             ReasoningCapabilityCheckedAtUtc = null,
             ReasoningValidationBasis = null,
         };
-        if (!string.IsNullOrWhiteSpace(candidate.ChatTemplateRelativePath))
-        {
-            try { ChatTemplateFile.ResolveRelative(candidate.ChatTemplateRelativePath, root); }
-            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException) { return result; }
-        }
         foreach (var record in records.Where(r => r.Evidence.Id == candidate.Id && IsCurrent(r, root)))
         {
             var proof = record.Evidence;

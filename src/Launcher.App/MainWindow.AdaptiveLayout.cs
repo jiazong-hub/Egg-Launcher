@@ -122,6 +122,7 @@ public partial class MainWindow
         // Two columns keep all four rings readable while the pane narrows.
         SidebarPerformanceGrid.Columns = width < 220 ? 2 : 4;
         SidebarPerformanceGrid.Margin = new Thickness(0, 0, 0, 12);
+        UpdateSidebarMetricFontSize(width);
         var ringSize = Lerp(40, 48, progress);
         foreach (var ring in new[] { SidebarCpuRing, SidebarMemoryRing, SidebarGpuRing, SidebarVramRing })
             ring.Width = ring.Height = ringSize;
